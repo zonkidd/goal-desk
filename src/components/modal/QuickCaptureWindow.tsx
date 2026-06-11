@@ -22,7 +22,7 @@ export function QuickCaptureWindow() {
   return (
     <main className="mesh-bg flex min-h-screen items-center justify-center p-4 text-slate-800">
       <div className="w-full max-w-[520px]">
-        <QuickCaptureForm value={value} onChange={setValue} onSubmit={() => void submitCapture()} onClose={() => void hideWindow()} />
+        <QuickCaptureForm value={value} onChange={setValue} onSubmit={() => void submitCapture()} />
         {status && <p className="mt-3 px-2 text-xs font-medium text-slate-500">{status}</p>}
       </div>
     </main>

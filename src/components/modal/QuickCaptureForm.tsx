@@ -4,7 +4,7 @@ interface QuickCaptureFormProps {
   value: string
   onChange: (value: string) => void
   onSubmit: () => void
-  onClose: () => void
+  onClose?: () => void
   compact?: boolean
 }
 
@@ -22,9 +22,11 @@ export function QuickCaptureForm({
           <Sparkles className="h-4 w-4 text-indigo-500" />
           <h3 className="font-bold">Quick Capture</h3>
         </div>
-        <button onClick={onClose} className="rounded-full border border-slate-200 bg-white p-1.5 text-slate-500">
-          <X className="h-4 w-4" />
-        </button>
+        {onClose && (
+          <button onClick={onClose} className="rounded-full border border-slate-200 bg-white p-1.5 text-slate-500">
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
       <p className="mb-3 text-sm text-slate-500">先把想法收进来。后面我们再把它解析成具体时间和提醒。</p>
       <input
