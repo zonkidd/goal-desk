@@ -10,7 +10,11 @@
       "Bash(git remote *)",
       "Bash(git push *)",
       "Bash(cat)",
-      "Bash(chmod 600 ~/.ssh/config)"
+      "Bash(chmod 600 ~/.ssh/config)",
+      "Bash(npm install *)",
+      "Bash(npm pkg *)",
+      "Bash(npm run *)",
+      "Bash(npm uninstall *)"
     ]
   }
 }
