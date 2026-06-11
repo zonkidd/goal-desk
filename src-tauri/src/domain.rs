@@ -136,6 +136,7 @@ pub struct DeskTask {
     pub linked_goal_label: Option<String>,
     pub bear_note_id: Option<String>,
     pub system_reminder_id: Option<String>,
+    pub is_ongoing: bool,
     pub activity_logs: Vec<TaskActivityLog>,
 }
 

@@ -361,6 +361,7 @@ fn demo_desk_tasks() -> Vec<DeskTask> {
             linked_goal_label: Some("目标管理软件 MVP 开发".to_string()),
             bear_note_id: None,
             system_reminder_id: None,
+            is_ongoing: true,
             activity_logs: vec![
                 TaskActivityLog {
                     action: TaskActivityAction::Resumed,
@@ -389,6 +390,7 @@ fn demo_desk_tasks() -> Vec<DeskTask> {
             linked_goal_label: None,
             bear_note_id: None,
             system_reminder_id: None,
+            is_ongoing: false,
             activity_logs: vec![TaskActivityLog {
                 action: TaskActivityAction::Created,
                 note: None,
@@ -405,6 +407,7 @@ fn demo_desk_tasks() -> Vec<DeskTask> {
             linked_goal_label: None,
             bear_note_id: Some("F37D308A-B4D1-4B65-9F2D-5C8BE1A12345".to_string()),
             system_reminder_id: None,
+            is_ongoing: false,
             activity_logs: vec![
                 TaskActivityLog {
                     action: TaskActivityAction::Paused,
@@ -428,6 +431,7 @@ fn demo_desk_tasks() -> Vec<DeskTask> {
             linked_goal_label: Some("瘦十斤".to_string()),
             bear_note_id: None,
             system_reminder_id: None,
+            is_ongoing: false,
             activity_logs: vec![
                 TaskActivityLog {
                     action: TaskActivityAction::Completed,
@@ -689,6 +693,7 @@ mod commands {
             linked_goal_label: None,
             bear_note_id: None,
             system_reminder_id,
+            is_ongoing: false,
             activity_logs: vec![TaskActivityLog {
                 action: TaskActivityAction::Created,
                 note: None,

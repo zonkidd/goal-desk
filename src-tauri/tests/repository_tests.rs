@@ -141,6 +141,7 @@ fn sqlite_repository_round_trips_desk_tasks_with_activity_logs() {
         linked_goal_label: Some("Goal Desk MVP".to_string()),
         bear_note_id: Some("F37D308A-B4D1-4B65-9F2D-5C8BE1A12345".to_string()),
         system_reminder_id: Some("eventkit-reminder-id".to_string()),
+        is_ongoing: true,
         activity_logs: vec![
             TaskActivityLog {
                 action: TaskActivityAction::Resumed,

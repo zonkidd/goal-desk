@@ -139,6 +139,7 @@ impl SqliteRepository {
         Self::ensure_column_exists(&connection, "goals", "description", "TEXT NOT NULL DEFAULT ''")?;
         Self::ensure_column_exists(&connection, "goals", "status", "TEXT NOT NULL DEFAULT 'ACTIVE'")?;
         Self::ensure_column_exists(&connection, "desk_tasks", "system_reminder_id", "TEXT NULL")?;
+        Self::ensure_column_exists(&connection, "desk_tasks", "is_ongoing", "INTEGER NOT NULL DEFAULT 0")?;
 
         Ok(())
     }
@@ -355,7 +356,7 @@ impl SqliteRepository {
 
         for task in tasks {
             transaction.execute(
-                "INSERT INTO desk_tasks (id, title, content, status, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                "INSERT INTO desk_tasks (id, title, content, status, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, is_ongoing) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
                     task.id.to_string(),
                     task.title.as_str(),
@@ -365,7 +366,8 @@ impl SqliteRepository {
                     option_uuid(task.linked_goal_id.clone()),
                     task.linked_goal_label.as_deref(),
                     task.bear_note_id.as_deref(),
-                    task.system_reminder_id.as_deref()
+                    task.system_reminder_id.as_deref(),
+                    task.is_ongoing as i64
                 ],
             )?;
 
@@ -410,7 +412,7 @@ impl SqliteRepository {
         }
 
         let mut statement = connection.prepare(
-            "SELECT id, title, content, status, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id FROM desk_tasks ORDER BY title",
+            "SELECT id, title, content, status, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, is_ongoing FROM desk_tasks ORDER BY title",
         )?;
         let mut rows = statement.query([])?;
         let mut tasks = Vec::new();
@@ -427,6 +429,7 @@ impl SqliteRepository {
                 linked_goal_label: row.get(6)?,
                 bear_note_id: row.get(7)?,
                 system_reminder_id: row.get(8)?,
+                is_ongoing: row.get::<_, i64>(9)? != 0,
                 activity_logs: logs_by_task_id.remove(&id).unwrap_or_default(),
             });
         }
