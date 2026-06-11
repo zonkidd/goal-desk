@@ -94,9 +94,9 @@ export function TaskDrawer() {
               <StatusMachineButtons status={task.status} onAction={setPendingStatus} />
               <button
                 onClick={closeTaskDrawer}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:border-slate-300"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </header>
 
@@ -165,7 +165,7 @@ export function TaskDrawer() {
                       ))}
                     </select>
                   </label>
-                  <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600">
+                  <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:border-slate-300 transition-colors cursor-pointer">
                     <input
                       type="checkbox"
                       checked={isOngoingDraft}
@@ -174,7 +174,7 @@ export function TaskDrawer() {
                         setIsOngoingDraft(nextValue)
                         saveTaskFields({ isOngoing: nextValue })
                       }}
-                      className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
                     持续推进
                   </label>
@@ -229,9 +229,9 @@ export function TaskDrawer() {
                     <button
                       type="button"
                       onClick={() => setIsCreatingGoalInline(true)}
-                      className="flex items-center gap-2 text-xs font-bold text-indigo-600"
+                      className="flex items-center gap-2 text-sm font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
                     >
-                      <Plus className="h-3.5 w-3.5" />
+                      <Plus className="h-4 w-4" />
                       快速创建目标并关联
                     </button>
                   )}

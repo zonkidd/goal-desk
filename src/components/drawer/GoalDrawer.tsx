@@ -67,9 +67,9 @@ export function GoalDrawer() {
                         key={item.status}
                         type="button"
                         onClick={() => void updateGoalStatus(goal.id, item.status)}
-                        className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-black transition-colors ${goal.status === item.status ? 'bg-slate-900 text-white' : 'border border-slate-200 bg-white text-slate-500'}`}
+                        className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-black transition-all ${goal.status === item.status ? 'bg-slate-900 text-white' : 'border border-slate-200 bg-white text-slate-500 hover:border-slate-400 hover:bg-slate-50'}`}
                       >
-                        <Icon className="h-3.5 w-3.5" />
+                        <Icon className="h-4 w-4" />
                         {item.label}
                       </button>
                     )
@@ -79,9 +79,9 @@ export function GoalDrawer() {
               </div>
               <button
                 onClick={closeGoalDrawer}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:border-slate-300"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </header>
 
@@ -91,7 +91,8 @@ export function GoalDrawer() {
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   onBlur={() => void updateGoalFields(goal.id, { title, area, description })}
-                  className="w-full border-none bg-transparent p-0 text-2xl font-black text-slate-900 outline-none focus:ring-0"
+                  className="w-full border-none bg-transparent p-0 text-2xl font-black text-slate-900 outline-none focus:ring-0 placeholder-slate-300"
+                  placeholder="目标标题"
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <input

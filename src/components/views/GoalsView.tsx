@@ -63,7 +63,7 @@ export function GoalsView() {
                   setDescription('')
                 })
               }}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3.5 text-base font-bold text-white hover:bg-slate-800 transition-colors"
             >
               <Plus className="h-4 w-4" />
               创建目标
@@ -81,16 +81,16 @@ export function GoalsView() {
 
           <div className="grid grid-cols-2 gap-4">
             {visibleGoals.map((goal) => (
-              <button key={goal.id} type="button" onClick={() => openGoalDrawer(goal.id)} className="block text-left">
-                <GlassCard className="rounded-3xl p-5 transition-transform hover:-translate-y-0.5">
+              <button key={goal.id} type="button" onClick={() => openGoalDrawer(goal.id)} className="block text-left transition-transform hover:-translate-y-1 active:scale-98">
+                <GlassCard className="rounded-3xl p-6 hover:shadow-lg transition-all">
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div>
-                      <div className="mb-2 inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-black uppercase text-indigo-600">
+                      <div className="mb-2 inline-flex rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black uppercase text-indigo-600">
                         {goal.area}
                       </div>
-                      <h2 className="text-lg font-bold text-slate-900">{goal.title}</h2>
+                      <h2 className="text-xl font-bold text-slate-900">{goal.title}</h2>
                     </div>
-                    <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500">
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-500">
                       {goal.status}
                     </span>
                   </div>
@@ -118,7 +118,7 @@ function FilterButton({ active, label, onClick }: { active: boolean; label: stri
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-xs font-black transition-colors ${active ? 'bg-slate-900 text-white' : 'border border-slate-200 bg-white/70 text-slate-500'}`}
+      className={`rounded-full px-4 py-2 text-sm font-black transition-colors ${active ? 'bg-slate-900 text-white' : 'border border-slate-200 bg-white/70 text-slate-500 hover:border-slate-300'}`}
     >
       {label}
     </button>
