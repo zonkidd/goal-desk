@@ -1,4 +1,3 @@
-import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useEffect, useState } from 'react'
 import { captureTask, isTauriRuntime } from '../../lib/desktopApi'
 import { QuickCaptureForm } from './QuickCaptureForm'
@@ -6,35 +5,6 @@ import { QuickCaptureForm } from './QuickCaptureForm'
 export function QuickCaptureWindow() {
   const [value, setValue] = useState('')
   const [status, setStatus] = useState<string>()
-
-  useEffect(() => {
-    if (!isTauriRuntime()) return
-
-    const currentWindow = getCurrentWindow()
-    let disposed = false
-
-    const cleanup = currentWindow.onCloseRequested(async (event) => {
-      if (!disposed) {
-        // 不阻止关闭，让窗口自然关闭
-        // event.preventDefault()
-        // await currentWindow.hide()
-      }
-    })
-
-    return () => {
-      disposed = true
-      void cleanup.then((unlisten) => unlisten())
-    }
-  }, [])
-
-  async function hideWindow() {
-    if (!isTauriRuntime()) return
-    try {
-      await getCurrentWindow().close()
-    } catch (error) {
-      console.error('Close window error:', error)
-    }
-  }
 
   async function submitCapture() {
     const trimmed = value.trim()
@@ -44,7 +14,6 @@ export function QuickCaptureWindow() {
       await captureTask(trimmed)
       setValue('')
       setStatus('已保存到本地收集箱')
-      await hideWindow()
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error))
     }
