@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>Goal Desk needs calendar access to render your upcoming schedule inside the unified timeline.</string>
+  <key>NSRemindersFullAccessUsageDescription</key>
+  <string>Goal Desk needs reminders access to sync Apple Reminders with goal progress and task completion.</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>Goal Desk needs calendar access to render your upcoming schedule inside the unified timeline.</string>
+  <key>NSRemindersUsageDescription</key>
+  <string>Goal Desk needs reminders access to sync Apple Reminders with goal progress and task completion.</string>
+</dict>
+</plist>

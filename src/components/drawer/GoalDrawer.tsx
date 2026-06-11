@@ -1,0 +1,162 @@
+import { AnimatePresence, motion } from 'framer-motion'
+import { Pause, Play, Target, CheckCircle2, Archive, Plus, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { GlassCard } from '../common/GlassCard'
+import { useAppStore, useSelectedGoal } from '../../store/appStore'
+import type { GoalStatus } from '../../types/app'
+
+const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
+
+const statusActions: Array<{ status: GoalStatus; label: string; icon: typeof Play }> = [
+  { status: 'ACTIVE', label: '开启', icon: Play },
+  { status: 'PAUSED', label: '暂停', icon: Pause },
+  { status: 'READY_TO_COMPLETE', label: '待确认', icon: Target },
+  { status: 'COMPLETED', label: '完成', icon: CheckCircle2 },
+  { status: 'ARCHIVED', label: '归档', icon: Archive },
+]
+
+export function GoalDrawer() {
+  const goal = useSelectedGoal()
+  const isOpen = useAppStore((state) => state.isGoalDrawerOpen)
+  const closeGoalDrawer = useAppStore((state) => state.closeGoalDrawer)
+  const updateGoalFields = useAppStore((state) => state.updateGoalFields)
+  const updateGoalStatus = useAppStore((state) => state.updateGoalStatus)
+  const createTaskForGoal = useAppStore((state) => state.createTaskForGoal)
+  const tasks = useAppStore((state) => state.tasks)
+  const [title, setTitle] = useState('')
+  const [area, setArea] = useState('')
+  const [description, setDescription] = useState('')
+  const [taskTitle, setTaskTitle] = useState('')
+
+  useEffect(() => {
+    if (!goal) return
+    setTitle(goal.title)
+    setArea(goal.area)
+    setDescription(goal.description)
+  }, [goal])
+
+  const linkedTasks = useMemo(() => tasks.filter((task) => task.linkedGoalId === goal?.id), [goal?.id, tasks])
+
+  return (
+    <AnimatePresence>
+      {isOpen && goal && (
+        <>
+          <motion.button
+            type="button"
+            aria-label="Close goal drawer backdrop"
+            className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeGoalDrawer}
+          />
+          <motion.aside
+            className="glass-panel fixed bottom-4 right-4 top-4 z-50 flex w-[560px] flex-col rounded-3xl border border-white bg-white/95 shadow-2xl outline-none"
+            initial={{ x: '120%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '120%' }}
+            transition={drawerTransition}
+          >
+            <header className="flex items-start justify-between gap-4 rounded-t-3xl border-b border-slate-100 bg-slate-50/50 p-6">
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {statusActions.map((item) => {
+                    const Icon = item.icon
+                    return (
+                      <button
+                        key={item.status}
+                        type="button"
+                        onClick={() => void updateGoalStatus(goal.id, item.status)}
+                        className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-black transition-colors ${goal.status === item.status ? 'bg-slate-900 text-white' : 'border border-slate-200 bg-white text-slate-500'}`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {item.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="text-xs font-bold uppercase tracking-widest text-slate-400">{goal.taskCount} 个关联任务</div>
+              </div>
+              <button
+                onClick={closeGoalDrawer}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+
+            <div className="flex-1 space-y-6 overflow-y-auto p-8">
+              <div className="space-y-3">
+                <input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  onBlur={() => void updateGoalFields(goal.id, { title, area, description })}
+                  className="w-full border-none bg-transparent p-0 text-2xl font-black text-slate-900 outline-none focus:ring-0"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    value={area}
+                    onChange={(event) => setArea(event.target.value)}
+                    onBlur={() => void updateGoalFields(goal.id, { title, area, description })}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 outline-none focus:border-indigo-500"
+                  />
+                  <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600">
+                    <span>进度</span>
+                    <span>{goal.progress}%</span>
+                  </div>
+                </div>
+                <textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  onBlur={() => void updateGoalFields(goal.id, { title, area, description })}
+                  rows={4}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <GlassCard className="rounded-3xl p-5">
+                <div className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">快速添加任务</div>
+                <div className="flex gap-3">
+                  <input
+                    value={taskTitle}
+                    onChange={(event) => setTaskTitle(event.target.value)}
+                    placeholder="把这个目标拆出一个待办..."
+                    className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium shadow-sm outline-none transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void createTaskForGoal(goal.id, taskTitle)
+                      setTaskTitle('')
+                    }}
+                    className="flex items-center gap-2 rounded-2xl bg-slate-900 px-4 text-sm font-bold text-white"
+                  >
+                    <Plus className="h-4 w-4" />
+                    新建
+                  </button>
+                </div>
+              </GlassCard>
+
+              <div>
+                <div className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">关联任务</div>
+                <div className="space-y-2">
+                  {linkedTasks.map((task) => (
+                    <GlassCard key={task.id} className="rounded-2xl p-4">
+                      <div className="mb-1 text-[10px] font-black uppercase text-slate-400">{task.status}</div>
+                      <div className="text-sm font-bold text-slate-800">{task.title}</div>
+                    </GlassCard>
+                  ))}
+                  {linkedTasks.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm font-medium text-slate-400">
+                      还没有关联任务
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
+  )
+}

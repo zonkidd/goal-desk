@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo test *)",
+      "Bash(chmod +x /tmp/test-goal-cli.sh)",
+      "Bash(/tmp/test-goal-cli.sh)",
+      "Bash(chmod +x /tmp/test-tauri-commands.sh)",
+      "Bash(/tmp/test-tauri-commands.sh)",
+      "Bash(git add *)"
+    ]
+  }
+}
