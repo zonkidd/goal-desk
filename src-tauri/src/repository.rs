@@ -138,6 +138,7 @@ impl SqliteRepository {
 
         Self::ensure_column_exists(&connection, "goals", "description", "TEXT NOT NULL DEFAULT ''")?;
         Self::ensure_column_exists(&connection, "goals", "status", "TEXT NOT NULL DEFAULT 'ACTIVE'")?;
+        Self::ensure_column_exists(&connection, "desk_tasks", "bear_note_id", "TEXT NULL")?;
         Self::ensure_column_exists(&connection, "desk_tasks", "system_reminder_id", "TEXT NULL")?;
         Self::ensure_column_exists(&connection, "desk_tasks", "is_ongoing", "INTEGER NOT NULL DEFAULT 0")?;
 

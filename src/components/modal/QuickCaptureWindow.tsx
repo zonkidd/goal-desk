@@ -14,9 +14,10 @@ export function QuickCaptureWindow() {
     let disposed = false
 
     const cleanup = currentWindow.onCloseRequested(async (event) => {
-      event.preventDefault()
       if (!disposed) {
-        await currentWindow.hide()
+        // 不阻止关闭，让窗口自然关闭
+        // event.preventDefault()
+        // await currentWindow.hide()
       }
     })
 
@@ -28,7 +29,11 @@ export function QuickCaptureWindow() {
 
   async function hideWindow() {
     if (!isTauriRuntime()) return
-    await getCurrentWindow().hide()
+    try {
+      await getCurrentWindow().close()
+    } catch (error) {
+      console.error('Close window error:', error)
+    }
   }
 
   async function submitCapture() {

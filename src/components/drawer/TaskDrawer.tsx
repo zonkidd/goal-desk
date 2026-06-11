@@ -108,8 +108,15 @@ export function TaskDrawer() {
                     autoFocus
                     value={statusNote}
                     onChange={(event) => setStatusNote(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        void updateTaskStatus(task.id, pendingStatus, statusNote)
+                        setPendingStatus(null)
+                        setStatusNote('')
+                      }
+                    }}
                     className="h-10 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20"
-                    placeholder="写一句，后续回看会轻松很多..."
+                    placeholder="写一句，后续回看会轻松很多... (按回车确认)"
                   />
                   <button
                     onClick={() => {
@@ -117,7 +124,7 @@ export function TaskDrawer() {
                       setPendingStatus(null)
                       setStatusNote('')
                     }}
-                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white"
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 transition-colors"
                   >
                     确认
                   </button>

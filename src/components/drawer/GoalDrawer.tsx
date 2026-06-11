@@ -59,17 +59,22 @@ export function GoalDrawer() {
           >
             <header className="flex items-start justify-between gap-4 rounded-t-3xl border-b border-slate-100 bg-slate-50/50 p-6">
               <div className="space-y-3">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2.5">
                   {statusActions.map((item) => {
                     const Icon = item.icon
+                    const isActive = goal.status === item.status
                     return (
                       <button
                         key={item.status}
                         type="button"
                         onClick={() => void updateGoalStatus(goal.id, item.status)}
-                        className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-black transition-all ${goal.status === item.status ? 'bg-slate-900 text-white' : 'border border-slate-200 bg-white text-slate-500 hover:border-slate-400 hover:bg-slate-50'}`}
+                        className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-black transition-all duration-200 ${
+                          isActive
+                            ? 'bg-slate-900 text-white shadow-lg scale-105'
+                            : 'border border-slate-200 bg-white text-slate-500 hover:border-slate-400 hover:bg-slate-50 hover:scale-102'
+                        }`}
                       >
-                        <Icon className="h-4 w-4" />
+                        <Icon className={`h-4 w-4 transition-transform duration-200 ${isActive ? 'scale-110' : ''}`} />
                         {item.label}
                       </button>
                     )
