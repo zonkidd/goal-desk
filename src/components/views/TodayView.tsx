@@ -26,7 +26,7 @@ export function TodayView() {
 
       <div className="grid grid-cols-[1fr_400px] gap-8">
         <div className="flex flex-col gap-6">
-          <GlassPanel className="rounded-3xl p-6">
+          <GlassPanel className="relative z-10 rounded-3xl p-6">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">今日持续推进</h2>
@@ -70,7 +70,7 @@ export function TodayView() {
                     </button>
 
                     {/* Tooltip */}
-                    <div className="pointer-events-none absolute right-0 top-full z-10 mt-2 hidden group-hover:block">
+                    <div className="pointer-events-none absolute right-0 top-full z-[9999] mt-2 hidden group-hover:block">
                       <div className="rounded-xl bg-slate-900 px-4 py-3 text-white shadow-2xl" style={{ minWidth: '200px' }}>
                         <div className="mb-2 text-[10px] font-bold text-slate-400">完整时间线</div>
                         <div className="space-y-1 text-xs font-semibold">
