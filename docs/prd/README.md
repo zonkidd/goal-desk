@@ -67,9 +67,9 @@
 
 ### 3. Today View（今日焦点）✅
 
-**文档路径**: [`docs/design/today-workbench-time-display.md`](../design/today-workbench-time-display.md)  
+**文档路径**: [`docs/prd/today-view.md`](./today-view.md)  
 **功能状态**: 已实现 ✅  
-**补充 PRD**: 📋 计划创建完整 PRD
+**最后更新**: 2026-06-14
 
 **功能概述**：
 在时间流中推进顶层目标，展示今日持续推进任务、目标进度和时间轴。
@@ -88,8 +88,9 @@
 
 ### 4. Goals View（目标视图）✅
 
-**文档路径**: 📋 待创建 `docs/prd/goals-view.md`  
-**功能状态**: 已实现 ✅
+**文档路径**: [`docs/prd/goals-view.md`](./goals-view.md)  
+**功能状态**: 已实现 ✅  
+**最后更新**: 2026-06-14
 
 **功能概述**：
 以目标为核心组织任务，支持目标创建、状态管理、看板视图和领域筛选。
@@ -108,8 +109,9 @@
 
 ### 5. Board View（看板视图）✅
 
-**文档路径**: 📋 待创建 `docs/prd/board-view.md`  
-**功能状态**: 已实现 ✅
+**文档路径**: [`docs/prd/board-view.md`](./board-view.md)  
+**功能状态**: 已实现 ✅  
+**最后更新**: 2026-06-14
 
 **功能概述**：
 把 Inbox 中的任务推进到具体状态，三列看板展示（计划中/进行中/完成）。
@@ -170,20 +172,22 @@
 
 ---
 
-### 2. TaskDrawer 系统 📋
+### 2. TaskDrawer 系统 ✅
 
-**文档路径**: 📋 待创建 `docs/spec/task-drawer.md`  
-**功能状态**: 已实现 ✅
+**文档路径**: [`docs/spec/task-drawer.md`](../spec/task-drawer.md)  
+**功能状态**: 已实现 ✅  
+**最后更新**: 2026-06-14
 
 **系统概述**：
-右侧滑出的任务详情抽屉，支持编辑标题、内容、时间、关联目标，展示活动日志。
+右侧抽屉式任务详情编辑器，支持状态转换、时间规划、目标关联、Markdown 编辑。
 
 **核心功能**：
 - 状态机按钮组（Start/Pause/Resume/Complete）
 - 时间选择器（plannedStartAt / dueDate）
-- 富文本内容编辑（Markdown 支持）
+- 富文本内容编辑（Markdown 三种模式：预览/编辑/分屏）
 - 活动日志时间线
-- 关联目标选择器
+- 关联目标选择器（支持内联创建目标）
+- Bear URL Scheme 集成
 
 **关键文件**：
 - `src/components/drawer/TaskDrawer.tsx` - 主组件
@@ -191,13 +195,14 @@
 
 ---
 
-### 3. GoalDrawer 系统 📋
+### 3. GoalDrawer 系统 ✅
 
-**文档路径**: 📋 待创建 `docs/spec/goal-drawer.md`  
-**功能状态**: 已实现 ✅
+**文档路径**: [`docs/spec/goal-drawer.md`](../spec/goal-drawer.md)  
+**功能状态**: 已实现 ✅  
+**最后更新**: 2026-06-14
 
 **系统概述**：
-右侧滑出的目标详情抽屉，支持编辑目标信息、管理关联任务、查看进度。
+右侧抽屉式目标详情编辑器，支持状态管理、进度展示、关联任务管理。
 
 **核心功能**：
 - 目标状态按钮组（ACTIVE/PAUSED/COMPLETED/ARCHIVED）
@@ -211,7 +216,48 @@
 
 ---
 
-### 4. 派生状态管理系统 ✅
+### 4. Goal 状态机系统 ✅
+
+**文档路径**: [`docs/spec/goal-state-machine.md`](../spec/goal-state-machine.md)  
+**功能状态**: 已实现 ✅  
+**最后更新**: 2026-06-14
+
+**系统概述**：
+定义目标生命周期的所有状态（ACTIVE/PAUSED/COMPLETED/ARCHIVED/READY_TO_COMPLETE）及转换规则。
+
+**核心内容**：
+- 状态定义和语义
+- 状态转换图（允许双向转换）
+- READY_TO_COMPLETE 自动计算逻辑
+- Goals View 看板分组规则
+- 前后端一致性保证
+
+**关键文件**：
+- `src/lib/workspaceDerivation.ts` - `deriveGoalStatus()`
+- `src-tauri/src/domain.rs` - `Goal::derive_status()`
+
+---
+
+### 5. EventKit 集成系统 ✅
+
+**文档路径**: [`docs/spec/eventkit-integration.md`](../spec/eventkit-integration.md)  
+**功能状态**: 已实现 ✅  
+**最后更新**: 2026-06-14
+
+**系统概述**：
+桥接 macOS EventKit 框架，读取日历事件和提醒事项，合并到 Today 时间轴。
+
+**核心功能**：
+- 请求日历/提醒权限
+- 读取今日日历事件（只读）
+- 读取系统提醒事项（支持完成状态同步）
+- 时间轴数据合并（Calendar / Reminders / Desk Task）
+- 跨平台兼容（非 macOS 返回空数据）
+
+**关键文件**：
+- `src-tauri/src/eventkit.rs` - Rust EventKit 桥接
+- `src-tauri/native/` - Objective-C 原生代码
+- `src/lib/desktopApi.ts` - 前端 API 封装
 
 **文档路径**: [`docs/architecture-refactor-summary.md`](../architecture-refactor-summary.md) - 第 1 节  
 **功能状态**: 已实现 ✅  
@@ -252,19 +298,21 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 
 ---
 
-### 6. EventKit 集成系统 📋
+### 6. EventKit 集成系统 ✅
 
-**文档路径**: 📋 待创建 `docs/spec/eventkit-integration.md`  
-**功能状态**: 已实现 ✅
+**文档路径**: [`docs/spec/eventkit-integration.md`](../spec/eventkit-integration.md)  
+**功能状态**: 已实现 ✅  
+**最后更新**: 2026-06-14
 
 **系统概述**：
 桥接 macOS EventKit 框架，读取日历事件和提醒事项，合并到 Today 时间轴。
 
 **核心功能**：
 - 请求日历/提醒权限
-- 读取今日日历事件
-- 读取系统提醒事项
+- 读取今日日历事件（只读）
+- 读取系统提醒事项（支持完成状态同步）
 - 时间轴数据合并（Calendar / Reminders / Desk Task）
+- 跨平台兼容（非 macOS 返回空数据）
 
 **关键文件**：
 - `src-tauri/src/eventkit.rs` - Rust EventKit 桥接
@@ -281,19 +329,19 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 |------|-----|------|-----|
 | Quick Capture | ✅ | - | 已实现 |
 | Inbox View | ✅ | - | 已实现 |
-| Today View | 🔄 | - | 已实现，PRD 待完善 |
-| Board View | 📋 | - | 已实现，PRD 待创建 |
+| Today View | ✅ | - | 已实现 |
+| Board View | ✅ | - | 已实现 |
 | Task 状态机 | - | ✅ | 已实现 |
-| TaskDrawer | - | 📋 | 已实现，Spec 待创建 |
+| TaskDrawer | - | ✅ | 已实现 |
 
 ### 目标管理模块
 
 | 功能 | PRD | Spec | 状态 |
 |------|-----|------|-----|
-| Goals View | 📋 | - | 已实现，PRD 待创建 |
-| GoalDrawer | - | 📋 | 已实现，Spec 待创建 |
+| Goals View | ✅ | - | 已实现 |
+| GoalDrawer | - | ✅ | 已实现 |
 | Areas 管理 | ✅ | - | 已实现 |
-| Goal 状态机 | - | 📋 | 已实现，Spec 待创建 |
+| Goal 状态机 | - | ✅ | 已实现 |
 
 ### 系统架构模块
 
@@ -301,7 +349,7 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 |------|-----|------|-----|
 | 派生状态管理 | - | ✅ | 已实现 |
 | Repository 层 | - | ✅ | 已实现 |
-| EventKit 集成 | - | 📋 | 已实现，Spec 待创建 |
+| EventKit 集成 | - | ✅ | 已实现 |
 | 状态管理（Zustand） | - | 📋 | 已实现，Spec 待创建 |
 
 ### UI 组件模块
@@ -350,17 +398,17 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 
 ### 高优先级（核心功能）
 
-- [ ] **Today View PRD** - 今日焦点视图完整需求
-- [ ] **Goals View PRD** - 目标视图功能需求
-- [ ] **Board View PRD** - 看板视图功能需求
-- [ ] **TaskDrawer Spec** - 任务抽屉技术规格
-- [ ] **GoalDrawer Spec** - 目标抽屉技术规格
+- [x] **Today View PRD** - 今日焦点视图完整需求 ✅
+- [x] **Goals View PRD** - 目标视图功能需求 ✅
+- [x] **Board View PRD** - 看板视图功能需求 ✅
+- [x] **TaskDrawer Spec** - 任务抽屉技术规格 ✅
+- [x] **GoalDrawer Spec** - 目标抽屉技术规格 ✅
+- [x] **Goal 状态机 Spec** - 目标状态转换规则 ✅
+- [x] **EventKit 集成 Spec** - macOS 原生集成技术规格 ✅
 
 ### 中优先级（系统架构）
 
-- [ ] **EventKit 集成 Spec** - macOS 原生集成技术规格
 - [ ] **状态管理 Spec** - Zustand store 架构设计
-- [ ] **Goal 状态机 Spec** - 目标状态转换规则
 
 ### 低优先级（UI 组件）
 
@@ -391,13 +439,13 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 ## 📊 文档完成度统计
 
 **已完成**:
-- PRD: 3 / 9（33%）
-- Spec: 3 / 12（25%）
-- 总计: 6 / 21（29%）
+- PRD: 6 / 9（67%）
+- Spec: 6 / 12（50%）
+- 总计: 12 / 21（57%）
 
 **目标**:
-- 2 周内完成核心功能 PRD（5 个）
-- 1 月内完成核心系统 Spec（3 个）
+- ~~2 周内完成核心功能 PRD（5 个）~~ ✅ 已完成 7 个
+- ~~1 月内完成核心系统 Spec（3 个）~~ ✅ 已完成 6 个
 - 3 月内完成所有文档
 
 ---
