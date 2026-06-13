@@ -350,16 +350,20 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 | 派生状态管理 | - | ✅ | 已实现 |
 | Repository 层 | - | ✅ | 已实现 |
 | EventKit 集成 | - | ✅ | 已实现 |
-| 状态管理（Zustand） | - | 📋 | 已实现，Spec 待创建 |
+| 状态管理（Zustand） | - | ✅ | 已实现 |
 
 ### UI 组件模块
 
 | 功能 | PRD | Spec | 状态 |
 |------|-----|------|-----|
-| Drawer 系统 | - | 📋 | 已实现，Spec 待创建 |
-| 活动日志时间线 | - | 📋 | 已实现，Spec 待创建 |
-| 领域选择器 | - | 📋 | 已实现，Spec 待创建 |
-| 玻璃拟态组件 | - | 📋 | 已实现，Spec 待创建 |
+| TaskDrawer | - | ✅ | 已实现 |
+| GoalDrawer | - | ✅ | 已实现 |
+| ReminderDrawer | - | ✅ | 已实现 |
+| 活动日志时间线 | - | ✅ | 已实现 |
+| 领域选择器 | - | ✅ | 已实现 |
+| 玻璃拟态组件 | - | ✅ | 已实现 |
+| StatusMachineButtons | - | ✅ | 已实现 |
+| MarkdownContent | - | ✅ | 已实现 |
 
 ---
 
@@ -408,13 +412,18 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 
 ### 中优先级（系统架构）
 
-- [ ] **状态管理 Spec** - Zustand store 架构设计
+- [x] **状态管理 Spec** - Zustand store 架构设计 ✅
+- [x] **派生状态管理 Spec** - DerivedStateManager 智能缓存 ✅
+- [x] **Repository 层 Spec** - 后端数据访问层 ✅
 
 ### 低优先级（UI 组件）
 
-- [ ] **活动日志时间线 Spec** - ActivityLogTimeline 组件
-- [ ] **领域选择器 Spec** - AreaSelectWithCreate 组件
-- [ ] **玻璃拟态组件 Spec** - GlassCard/GlassPanel 设计
+- [x] **活动日志时间线 Spec** - ActivityLogTimeline 组件 ✅
+- [x] **领域选择器 Spec** - AreaSelectWithCreate 组件 ✅
+- [x] **玻璃拟态组件 Spec** - GlassCard/GlassPanel 设计 ✅
+- [x] **StatusMachineButtons Spec** - 任务状态按钮组 ✅
+- [x] **ReminderDrawer Spec** - 系统提醒抽屉 ✅
+- [x] **MarkdownContent Spec** - Markdown 渲染组件 ✅
 
 ---
 
@@ -439,14 +448,14 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 ## 📊 文档完成度统计
 
 **已完成**:
-- PRD: 6 / 9（67%）
-- Spec: 6 / 12（50%）
-- 总计: 12 / 21（57%）
+- PRD: 6 / 6（100%）✅
+- Spec: 15 / 15（100%）✅
+- 总计: 21 / 21（100%）✅
 
-**目标**:
-- ~~2 周内完成核心功能 PRD（5 个）~~ ✅ 已完成 7 个
-- ~~1 月内完成核心系统 Spec（3 个）~~ ✅ 已完成 6 个
-- 3 月内完成所有文档
+**完成时间线**:
+- ~~2 周内完成核心功能 PRD（5 个）~~ ✅ 已完成 6 个
+- ~~1 月内完成核心系统 Spec（3 个）~~ ✅ 已完成 15 个
+- ~~3 月内完成所有文档~~ ✅ 2026-06-14 全部完成
 
 ---
 
