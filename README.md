@@ -31,3 +31,9 @@ npm run tauri dev
 cd src-tauri
 cargo test
 ```
+
+## 数据迁移
+
+如果你从旧版本升级，应用会在启动时自动执行数据迁移。详见 [Areas 迁移指南](docs/areas-migration-guide.md)。
+
+建议在首次运行新版本前备份数据库文件。

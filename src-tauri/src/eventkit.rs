@@ -15,12 +15,14 @@ pub enum AccessStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IntegrationStatus {
     pub calendar: AccessStatus,
     pub reminders: AccessStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SystemCalendarEvent {
     pub id: String,
     pub title: String,
@@ -30,6 +32,7 @@ pub struct SystemCalendarEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SystemReminder {
     pub id: String,
     pub title: String,
@@ -39,6 +42,7 @@ pub struct SystemReminder {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SystemAgendaSnapshot {
     pub integration_status: IntegrationStatus,
     pub calendar_events: Vec<SystemCalendarEvent>,

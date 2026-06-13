@@ -2,11 +2,11 @@ pub mod domain;
 pub mod eventkit;
 pub mod repository;
 
-use chrono::{Datelike, Local, TimeZone};
+use chrono::Local;
 use domain::{
     goal_progress, parse_quick_capture, today_timeline, Area, CalendarEvent, DeskTask, Goal,
-    GoalStatus, GoalSummary, Milestone, Project, Reminder, TaskActivityAction, TaskActivityLog,
-    TaskStatus, TimelineItem, Todo, WorkspaceSnapshot,
+    GoalStatus, GoalSummary, TaskActivityAction, TaskActivityLog, TaskStatus, TimelineItem,
+    WorkspaceSnapshot, UNCATEGORIZED_AREA_ID,
 };
 use eventkit::{SystemAgendaSnapshot, SystemReminder};
 use repository::SqliteRepository;
@@ -15,60 +15,69 @@ use uuid::Uuid;
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 
-pub fn today_snapshot_data() -> Vec<TimelineItem> {
-    let snapshot = demo_workspace_snapshot(Local::now());
-    timeline_from_workspace(&snapshot)
+pub fn today_snapshot_data(path: &std::path::Path) -> Result<Vec<TimelineItem>, String> {
+    let repository = SqliteRepository::new(path.to_path_buf());
+    let snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
+    Ok(timeline_from_workspace(&snapshot))
 }
 
-pub fn goal_snapshot_data() -> Vec<GoalSummary> {
-    let snapshot = demo_workspace_snapshot(Local::now());
-    goal_summaries(&snapshot)
-}
-
-pub fn goal_snapshot_data_at_path(path: &std::path::Path) -> Result<Vec<GoalSummary>, String> {
+pub fn goal_snapshot_data(path: &std::path::Path) -> Result<Vec<GoalSummary>, String> {
     let repository = SqliteRepository::new(path.to_path_buf());
     let snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
     Ok(goal_summaries(&snapshot))
 }
 
+fn find_or_create_area(snapshot: &mut WorkspaceSnapshot, area_title: &str) -> Result<Uuid, String> {
+    // 使用 WorkspaceSnapshot 的领域方法
+    Ok(snapshot.find_or_create_area(area_title))
+}
+
 pub fn create_goal_record(
     path: &std::path::Path,
     title: String,
-    area: Option<String>,
+    area: String,
     description: String,
     status: GoalStatus,
 ) -> Result<Goal, String> {
+    use repository::GoalRepository;
+
     let trimmed_title = title.trim();
     if trimmed_title.is_empty() {
         return Err("Goal title cannot be empty".to_string());
     }
 
+    let trimmed_area = area.trim();
+    let area_title = if trimmed_area.is_empty() {
+        "未分类"
+    } else {
+        trimmed_area
+    };
+
     let repository = SqliteRepository::new(path.to_path_buf());
     let mut snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
-    let area_id = area.and_then(|area_title| {
-        let trimmed = area_title.trim().to_string();
-        if trimmed.is_empty() {
-            None
-        } else if let Some(existing) = snapshot.areas.iter().find(|existing| existing.title == trimmed) {
-            Some(existing.id)
-        } else {
-            let id = Uuid::new_v4();
-            snapshot.areas.push(Area { id, title: trimmed });
-            Some(id)
-        }
-    });
+
+    // 强制关联 area (可能会创建新的 area 并添加到 snapshot)
+    let original_area_count = snapshot.areas.len();
+    let area_id = find_or_create_area(&mut snapshot, area_title)?;
+    let area_was_created = snapshot.areas.len() > original_area_count;
 
     let goal = Goal {
         id: Uuid::new_v4(),
-        area_id,
+        area_id: Some(area_id),
         title: trimmed_title.to_string(),
         description,
         status,
     };
 
-    snapshot.goals.push(goal.clone());
-    repository
-        .save_workspace(&snapshot)
+    // 如果创建了新 area，需要先保存 snapshot
+    if area_was_created {
+        repository
+            .save_workspace(&snapshot)
+            .map_err(|error| error.to_string())?;
+    }
+
+    // 使用 GoalRepository trait 创建 goal
+    GoalRepository::create(&repository, &goal)
         .map_err(|error| error.to_string())?;
     Ok(goal)
 }
@@ -77,47 +86,56 @@ pub fn update_goal_record(
     path: &std::path::Path,
     goal_id: String,
     title: String,
-    area: Option<String>,
+    area: String,
     description: String,
     status: GoalStatus,
 ) -> Result<Goal, String> {
+    use repository::GoalRepository;
+
     let trimmed_title = title.trim();
     if trimmed_title.is_empty() {
         return Err("Goal title cannot be empty".to_string());
     }
 
+    let trimmed_area = area.trim();
+    let area_title = if trimmed_area.is_empty() {
+        "未分类"
+    } else {
+        trimmed_area
+    };
+
     let goal_id = Uuid::parse_str(&goal_id).map_err(|error| error.to_string())?;
     let repository = SqliteRepository::new(path.to_path_buf());
-    let mut snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
-    let area_id = area.and_then(|area_title| {
-        let trimmed = area_title.trim().to_string();
-        if trimmed.is_empty() {
-            None
-        } else if let Some(existing) = snapshot.areas.iter().find(|existing| existing.title == trimmed) {
-            Some(existing.id)
-        } else {
-            let id = Uuid::new_v4();
-            snapshot.areas.push(Area { id, title: trimmed });
-            Some(id)
-        }
-    });
 
-    let goal = snapshot
-        .goals
-        .iter_mut()
-        .find(|goal| goal.id == goal_id)
+    // 仍需要全量读取 snapshot 来处理 area
+    let mut snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
+
+    // 强制关联 area (可能会创建新的 area 并添加到 snapshot)
+    let original_area_count = snapshot.areas.len();
+    let area_id = find_or_create_area(&mut snapshot, area_title)?;
+    let area_was_created = snapshot.areas.len() > original_area_count;
+
+    // 使用 GoalRepository trait 读取 goal
+    let mut goal = GoalRepository::find(&repository, goal_id)
+        .map_err(|error| error.to_string())?
         .ok_or_else(|| format!("Goal not found: {goal_id}"))?;
 
     goal.title = trimmed_title.to_string();
-    goal.area_id = area_id;
+    goal.area_id = Some(area_id);
     goal.description = description;
     goal.status = status;
 
-    let updated = goal.clone();
-    repository
-        .save_workspace(&snapshot)
+    // 如果创建了新 area，需要先保存 snapshot
+    if area_was_created {
+        repository
+            .save_workspace(&snapshot)
+            .map_err(|error| error.to_string())?;
+    }
+
+    // 使用 GoalRepository trait 更新 goal
+    GoalRepository::update(&repository, &goal)
         .map_err(|error| error.to_string())?;
-    Ok(updated)
+    Ok(goal)
 }
 
 pub fn update_goal_status_record(
@@ -125,22 +143,61 @@ pub fn update_goal_status_record(
     goal_id: String,
     status: GoalStatus,
 ) -> Result<Goal, String> {
+    use repository::GoalRepository;
+
     let goal_id = Uuid::parse_str(&goal_id).map_err(|error| error.to_string())?;
     let repository = SqliteRepository::new(path.to_path_buf());
-    let mut snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
-    let goal = snapshot
-        .goals
-        .iter_mut()
-        .find(|goal| goal.id == goal_id)
+
+    // 使用 GoalRepository trait 读取单个 goal
+    let mut goal = GoalRepository::find(&repository, goal_id)
+        .map_err(|error| error.to_string())?
         .ok_or_else(|| format!("Goal not found: {goal_id}"))?;
+
+    // 使用领域方法验证状态转换
+    if !goal.can_transition_to(status) {
+        return Err(format!(
+            "Invalid status transition from {:?} to {:?}",
+            goal.status, status
+        ));
+    }
 
     goal.status = status;
 
-    let updated = goal.clone();
-    repository
-        .save_workspace(&snapshot)
+    // 使用 GoalRepository trait 更新单个字段
+    GoalRepository::update(&repository, &goal)
         .map_err(|error| error.to_string())?;
-    Ok(updated)
+    Ok(goal)
+}
+
+pub fn create_task_for_goal_record(
+    path: &std::path::Path,
+    goal_id: String,
+    title: String,
+) -> Result<DeskTask, String> {
+    let trimmed_title = title.trim();
+    if trimmed_title.is_empty() {
+        return Err("Task title cannot be empty".to_string());
+    }
+
+    let goal_id = Uuid::parse_str(&goal_id).map_err(|error| error.to_string())?;
+    let repository = SqliteRepository::new(path.to_path_buf());
+    let snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
+    let goal = snapshot
+        .goals
+        .iter()
+        .find(|goal| goal.id == goal_id)
+        .ok_or_else(|| format!("Goal not found: {goal_id}"))?;
+
+    let mut tasks = repository.load_desk_tasks().map_err(|error| error.to_string())?;
+
+    // 使用 Goal 的领域方法创建任务
+    let task = goal.create_task(trimmed_title.to_string());
+
+    tasks.insert(0, task.clone());
+    repository
+        .save_desk_tasks(&tasks)
+        .map_err(|error| error.to_string())?;
+    Ok(task)
 }
 
 fn timeline_from_workspace(snapshot: &WorkspaceSnapshot) -> Vec<TimelineItem> {
@@ -149,7 +206,7 @@ fn timeline_from_workspace(snapshot: &WorkspaceSnapshot) -> Vec<TimelineItem> {
         now.date_naive(),
         &snapshot.todos,
         &snapshot.reminders,
-        &demo_calendar_events(now),
+        &empty_calendar_events(now),
     )
 }
 
@@ -180,288 +237,175 @@ fn goal_summaries(snapshot: &WorkspaceSnapshot) -> Vec<GoalSummary> {
                     .iter()
                     .find(|todo| todo.goal_id == Some(goal.id) && !todo.completed)
                     .map(|todo| todo.title.clone())
-                    .unwrap_or_else(|| "Keep going".to_string()),
+                    .unwrap_or_default(),
             }
         })
         .collect()
 }
 
-fn demo_workspace_snapshot(now: chrono::DateTime<Local>) -> WorkspaceSnapshot {
-    let health_area_id = Uuid::parse_str("aaaa1111-1111-4111-8111-111111111111").unwrap();
-    let product_area_id = Uuid::parse_str("bbbb2222-2222-4222-8222-222222222222").unwrap();
-    let learning_area_id = Uuid::parse_str("cccc3333-3333-4333-8333-333333333333").unwrap();
-    let health_goal_id = Uuid::parse_str("66666666-6666-4666-8666-666666666666").unwrap();
-    let product_goal_id = Uuid::parse_str("22222222-2222-4222-8222-222222222222").unwrap();
-    let learning_goal_id = Uuid::parse_str("dddd4444-4444-4444-8444-444444444444").unwrap();
-    let health_project_id = Uuid::parse_str("eeee5555-5555-4555-8555-555555555555").unwrap();
-    let product_project_id = Uuid::parse_str("ffff6666-6666-4666-8666-666666666666").unwrap();
-    let learning_project_id = Uuid::parse_str("99999999-9999-4999-8999-999999999999").unwrap();
+pub fn list_areas_with_stats(path: &std::path::Path) -> Result<Vec<domain::AreaWithStats>, String> {
+    let repository = SqliteRepository::new(path.to_path_buf());
+    let snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
 
+    let mut areas_with_stats: Vec<domain::AreaWithStats> = snapshot
+        .areas
+        .iter()
+        .map(|area| {
+            let goals_in_area: Vec<&Goal> = snapshot
+                .goals
+                .iter()
+                .filter(|goal| goal.area_id == Some(area.id))
+                .collect();
+
+            let goal_count = goals_in_area.len();
+            let active_goal_count = goals_in_area
+                .iter()
+                .filter(|goal| goal.status == GoalStatus::Active)
+                .count();
+
+            domain::AreaWithStats {
+                id: area.id,
+                title: area.title.clone(),
+                goal_count,
+                active_goal_count,
+                is_system: area.is_system,
+            }
+        })
+        .collect();
+
+    areas_with_stats.sort_by(|a, b| a.title.cmp(&b.title));
+    Ok(areas_with_stats)
+}
+
+pub fn create_area_record(path: &std::path::Path, title: String) -> Result<Area, String> {
+    use repository::AreaRepository;
+
+    let trimmed_title = title.trim();
+    if trimmed_title.is_empty() {
+        return Err("Area title cannot be empty".to_string());
+    }
+
+    let repository = SqliteRepository::new(path.to_path_buf());
+
+    // 检查是否已存在
+    let existing_areas = AreaRepository::list(&repository).map_err(|error| error.to_string())?;
+    if existing_areas.iter().any(|area| area.title.to_lowercase() == trimmed_title.to_lowercase()) {
+        return Err(format!("Area '{}' already exists", trimmed_title));
+    }
+
+    let area = Area {
+        id: Uuid::new_v4(),
+        title: trimmed_title.to_string(),
+        is_system: false,
+    };
+
+    AreaRepository::create(&repository, &area)
+        .map_err(|error| error.to_string())?;
+    Ok(area)
+}
+
+pub fn rename_area_record(path: &std::path::Path, area_id: String, new_title: String) -> Result<Area, String> {
+    use repository::AreaRepository;
+
+    let trimmed_title = new_title.trim();
+    if trimmed_title.is_empty() {
+        return Err("Area title cannot be empty".to_string());
+    }
+
+    let area_id = Uuid::parse_str(&area_id).map_err(|error| error.to_string())?;
+    let repository = SqliteRepository::new(path.to_path_buf());
+
+    // 检查是否已存在同名 area
+    let existing_areas = AreaRepository::list(&repository).map_err(|error| error.to_string())?;
+    if existing_areas.iter().any(|area| area.id != area_id && area.title.to_lowercase() == trimmed_title.to_lowercase()) {
+        return Err(format!("Area '{}' already exists", trimmed_title));
+    }
+
+    let mut area = AreaRepository::find(&repository, area_id)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("Area not found: {}", area_id))?;
+
+    area.title = trimmed_title.to_string();
+
+    AreaRepository::update(&repository, &area)
+        .map_err(|error| error.to_string())?;
+    Ok(area)
+}
+
+pub fn delete_area_record(path: &std::path::Path, area_id: String, force: bool) -> Result<domain::DeleteAreaResult, String> {
+    use repository::{AreaRepository, GoalRepository};
+
+    let area_id = Uuid::parse_str(&area_id).map_err(|error| error.to_string())?;
+    let repository = SqliteRepository::new(path.to_path_buf());
+
+    // 1. 检查 area 是否存在且不是系统 area
+    let area = AreaRepository::find(&repository, area_id)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("Area not found: {}", area_id))?;
+
+    if area.is_system {
+        return Ok(domain::DeleteAreaResult {
+            success: false,
+            message: "系统领域无法删除".to_string(),
+            affected_goal_count: 0,
+            reassigned_to_area_id: None,
+        });
+    }
+
+    // 2. 统计关联 goals
+    let affected_goals = GoalRepository::list_by_area(&repository, area_id)
+        .map_err(|error| error.to_string())?;
+    let affected_goal_count = affected_goals.len();
+
+    // 3. force=false 且有关联 goals 时拒绝删除
+    if affected_goal_count > 0 && !force {
+        return Ok(domain::DeleteAreaResult {
+            success: false,
+            message: format!("该领域有 {} 个关联目标，请先处理或使用强制删除", affected_goal_count),
+            affected_goal_count,
+            reassigned_to_area_id: None,
+        });
+    }
+
+    // 4. force=true 时将 goals 移动到"未分类"
+    let uncategorized_id = Uuid::parse_str(UNCATEGORIZED_AREA_ID).unwrap();
+    if force && affected_goal_count > 0 {
+        for mut goal in affected_goals {
+            goal.area_id = Some(uncategorized_id);
+            GoalRepository::update(&repository, &goal)
+                .map_err(|error| error.to_string())?;
+        }
+    }
+
+    // 5. 删除 area
+    AreaRepository::delete(&repository, area_id)
+        .map_err(|error| error.to_string())?;
+
+    Ok(domain::DeleteAreaResult {
+        success: true,
+        message: "领域已删除".to_string(),
+        affected_goal_count,
+        reassigned_to_area_id: if affected_goal_count > 0 {
+            Some(uncategorized_id)
+        } else {
+            None
+        },
+    })
+}
+
+fn empty_workspace_snapshot() -> WorkspaceSnapshot {
     WorkspaceSnapshot {
-        areas: vec![
-            Area {
-                id: health_area_id,
-                title: "健康".to_string(),
-            },
-            Area {
-                id: product_area_id,
-                title: "产品".to_string(),
-            },
-            Area {
-                id: learning_area_id,
-                title: "学习".to_string(),
-            },
-        ],
-        projects: vec![
-            Project {
-                id: health_project_id,
-                area_id: Some(health_area_id),
-                goal_id: Some(health_goal_id),
-                title: "六月训练计划".to_string(),
-            },
-            Project {
-                id: product_project_id,
-                area_id: Some(product_area_id),
-                goal_id: Some(product_goal_id),
-                title: "Goal Desk Desktop MVP".to_string(),
-            },
-            Project {
-                id: learning_project_id,
-                area_id: Some(learning_area_id),
-                goal_id: Some(learning_goal_id),
-                title: "Rust Native Integration Study".to_string(),
-            },
-        ],
-        goals: vec![
-            Goal {
-                id: health_goal_id,
-                area_id: Some(health_area_id),
-                title: "瘦十斤".to_string(),
-                description: "通过持续训练和饮食记录推进减脂目标。".to_string(),
-                status: GoalStatus::Active,
-            },
-            Goal {
-                id: product_goal_id,
-                area_id: Some(product_area_id),
-                title: "Goal Desk MVP".to_string(),
-                description: "先把本地任务流、目标入口和今日焦点闭环。".to_string(),
-                status: GoalStatus::Active,
-            },
-            Goal {
-                id: learning_goal_id,
-                area_id: Some(learning_area_id),
-                title: "系统学习 Rust 桌面开发".to_string(),
-                description: "沉淀 Tauri、SQLite 和 macOS 桥接经验。".to_string(),
-                status: GoalStatus::Active,
-            },
-        ],
-        todos: vec![
-            Todo {
-                id: Uuid::new_v4(),
-                goal_id: Some(health_goal_id),
-                project_id: Some(health_project_id),
-                title: "今晚跑步 3 公里".to_string(),
-                scheduled_at: Some(today_at(now, 19, 30)),
-                completed: true,
-            },
-            Todo {
-                id: Uuid::new_v4(),
-                goal_id: Some(health_goal_id),
-                project_id: Some(health_project_id),
-                title: "记录饮食".to_string(),
-                scheduled_at: Some(today_at(now, 11, 30)),
-                completed: false,
-            },
-            Todo {
-                id: Uuid::new_v4(),
-                goal_id: Some(product_goal_id),
-                project_id: Some(product_project_id),
-                title: "完成 Today Timeline core".to_string(),
-                scheduled_at: Some(today_at(now, 9, 30)),
-                completed: true,
-            },
-            Todo {
-                id: Uuid::new_v4(),
-                goal_id: Some(product_goal_id),
-                project_id: Some(product_project_id),
-                title: "接入 Tauri command".to_string(),
-                scheduled_at: None,
-                completed: true,
-            },
-            Todo {
-                id: Uuid::new_v4(),
-                goal_id: Some(product_goal_id),
-                project_id: Some(product_project_id),
-                title: "落地 SQLite repository".to_string(),
-                scheduled_at: Some(today_at(now, 16, 0)),
-                completed: false,
-            },
-            Todo {
-                id: Uuid::new_v4(),
-                goal_id: Some(learning_goal_id),
-                project_id: Some(learning_project_id),
-                title: "整理 EventKit 桥接方案".to_string(),
-                scheduled_at: Some(today_at(now, 18, 0)),
-                completed: false,
-            },
-        ],
-        reminders: vec![Reminder {
-            id: Uuid::new_v4(),
-            title: "复盘周目标".to_string(),
-            due_at: today_at(now, 14, 30),
-            done: false,
-        }],
-        milestones: vec![
-            Milestone {
-                id: Uuid::new_v4(),
-                goal_id: health_goal_id,
-                title: "第一周训练完成".to_string(),
-                completed: false,
-            },
-            Milestone {
-                id: Uuid::new_v4(),
-                goal_id: product_goal_id,
-                title: "原型工作台可运行".to_string(),
-                completed: false,
-            },
-            Milestone {
-                id: Uuid::new_v4(),
-                goal_id: learning_goal_id,
-                title: "理解 EventKit 权限模型".to_string(),
-                completed: true,
-            },
-        ],
+        areas: Vec::new(),
+        projects: Vec::new(),
+        goals: Vec::new(),
+        todos: Vec::new(),
+        reminders: Vec::new(),
+        milestones: Vec::new(),
     }
 }
 
-fn demo_desk_tasks() -> Vec<DeskTask> {
-    vec![
-        DeskTask {
-            id: Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap(),
-            title: "研究 Tauri 与 EventKit 的通信机制".to_string(),
-            content: [
-                "# EventKit 接入路线",
-                "",
-                "这是一个需要在 Mac 上原生的功能。初步查阅了 Apple 的 `EventKit` 文档：",
-                "",
-                "- 需要向用户申请 `NSRemindersUsageDescription` 权限。",
-                "- Tauri 官方没有现成插件，必须自己写 Rust FFI 或嵌入一段 Swift 代码。",
-                "",
-                "`let eventStore = EKEventStore()`",
-                "",
-                "**待验证清单：**",
-                "",
-                "- [x] 写一个最简单的 Swift 脚本拉取提醒",
-                "- [ ] 尝试在 Rust 侧通过 `std::process::Command` 调用",
-            ]
-            .join("\n"),
-            status: TaskStatus::InProgress,
-            due_at: Local.with_ymd_and_hms(2026, 6, 11, 15, 0, 0).single(),
-            linked_goal_id: Some(Uuid::parse_str("22222222-2222-4222-8222-222222222222").unwrap()),
-            linked_goal_label: Some("目标管理软件 MVP 开发".to_string()),
-            bear_note_id: None,
-            system_reminder_id: None,
-            is_ongoing: true,
-            activity_logs: vec![
-                TaskActivityLog {
-                    action: TaskActivityAction::Resumed,
-                    note: Some("找到一个 GitHub 参考实现，继续推进。".to_string()),
-                    timestamp: Local.with_ymd_and_hms(2026, 6, 10, 9, 0, 0).unwrap(),
-                },
-                TaskActivityLog {
-                    action: TaskActivityAction::Paused,
-                    note: Some("卡在 Swift 编译阶段，先去找 Tauri 社区示例。".to_string()),
-                    timestamp: Local.with_ymd_and_hms(2026, 6, 9, 16, 30, 0).unwrap(),
-                },
-                TaskActivityLog {
-                    action: TaskActivityAction::Created,
-                    note: Some("从原型需求拆出第一条技术验证。".to_string()),
-                    timestamp: Local.with_ymd_and_hms(2026, 6, 9, 20, 30, 0).unwrap(),
-                },
-            ],
-        },
-        DeskTask {
-            id: Uuid::parse_str("33333333-3333-4333-8333-333333333333").unwrap(),
-            title: "给新员工发入职邮件并附加上周会议记录".to_string(),
-            content: "把欢迎说明、账号列表和会议记录一起发出。".to_string(),
-            status: TaskStatus::Todo,
-            due_at: Local.with_ymd_and_hms(2026, 6, 10, 18, 0, 0).single(),
-            linked_goal_id: None,
-            linked_goal_label: None,
-            bear_note_id: None,
-            system_reminder_id: None,
-            is_ongoing: false,
-            activity_logs: vec![TaskActivityLog {
-                action: TaskActivityAction::Created,
-                note: None,
-                timestamp: Local.with_ymd_and_hms(2026, 6, 10, 8, 0, 0).unwrap(),
-            }],
-        },
-        DeskTask {
-            id: Uuid::parse_str("44444444-4444-4444-8444-444444444444").unwrap(),
-            title: "集成 Bear App URL Scheme".to_string(),
-            content: "等待 Bear 官方文档确认跨端参数细节。".to_string(),
-            status: TaskStatus::Paused,
-            due_at: None,
-            linked_goal_id: None,
-            linked_goal_label: None,
-            bear_note_id: Some("F37D308A-B4D1-4B65-9F2D-5C8BE1A12345".to_string()),
-            system_reminder_id: None,
-            is_ongoing: false,
-            activity_logs: vec![
-                TaskActivityLog {
-                    action: TaskActivityAction::Paused,
-                    note: Some("等待 Bear 官方 API 更新文档。".to_string()),
-                    timestamp: Local.with_ymd_and_hms(2026, 6, 10, 11, 0, 0).unwrap(),
-                },
-                TaskActivityLog {
-                    action: TaskActivityAction::Created,
-                    note: None,
-                    timestamp: Local.with_ymd_and_hms(2026, 6, 9, 10, 0, 0).unwrap(),
-                },
-            ],
-        },
-        DeskTask {
-            id: Uuid::parse_str("55555555-5555-4555-8555-555555555555").unwrap(),
-            title: "今晚跑步 3 公里".to_string(),
-            content: "完成后记录配速和体感。".to_string(),
-            status: TaskStatus::Done,
-            due_at: Local.with_ymd_and_hms(2026, 6, 10, 20, 0, 0).single(),
-            linked_goal_id: Some(Uuid::parse_str("66666666-6666-4666-8666-666666666666").unwrap()),
-            linked_goal_label: Some("瘦十斤".to_string()),
-            bear_note_id: None,
-            system_reminder_id: None,
-            is_ongoing: false,
-            activity_logs: vec![
-                TaskActivityLog {
-                    action: TaskActivityAction::Completed,
-                    note: Some("配速稳定，状态不错。".to_string()),
-                    timestamp: Local.with_ymd_and_hms(2026, 6, 10, 21, 5, 0).unwrap(),
-                },
-                TaskActivityLog {
-                    action: TaskActivityAction::Created,
-                    note: None,
-                    timestamp: Local.with_ymd_and_hms(2026, 6, 10, 7, 30, 0).unwrap(),
-                },
-            ],
-        },
-    ]
-}
-
-fn demo_calendar_events(now: chrono::DateTime<Local>) -> Vec<CalendarEvent> {
-    vec![CalendarEvent {
-        id: "calendar-1".to_string(),
-        title: "Design review · Work".to_string(),
-        starts_at: today_at(now, 10, 0),
-        ends_at: today_at(now, 11, 0),
-    }]
-}
-
-fn today_at(now: chrono::DateTime<Local>, hour: u32, minute: u32) -> chrono::DateTime<Local> {
-    Local
-        .with_ymd_and_hms(now.year(), now.month(), now.day(), hour, minute, 0)
-        .single()
-        .unwrap_or(now)
+fn empty_calendar_events(_now: chrono::DateTime<Local>) -> Vec<CalendarEvent> {
+    Vec::new()
 }
 
 fn workspace_repository<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<SqliteRepository, String> {
@@ -484,11 +428,11 @@ fn load_or_seed_workspace<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Works
         && snapshot.reminders.is_empty()
         && snapshot.milestones.is_empty()
     {
-        let seeded = demo_workspace_snapshot(Local::now());
+        let empty = empty_workspace_snapshot();
         repository
-            .save_workspace(&seeded)
+            .save_workspace(&empty)
             .map_err(|error| error.to_string())?;
-        Ok(seeded)
+        Ok(empty)
     } else {
         Ok(snapshot)
     }
@@ -499,11 +443,7 @@ fn load_or_seed_desk_tasks<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Vec<
     let tasks = repository.load_desk_tasks().map_err(|error| error.to_string())?;
 
     if tasks.is_empty() {
-        let seeded = demo_desk_tasks();
-        repository
-            .save_desk_tasks(&seeded)
-            .map_err(|error| error.to_string())?;
-        Ok(seeded)
+        Ok(tasks)
     } else {
         Ok(tasks)
     }
@@ -550,11 +490,11 @@ fn show_quick_capture_window_internal<R: tauri::Runtime>(app: &AppHandle<R>) -> 
 
 mod commands {
     use super::{
-        bear_note_url, create_goal_record, eventkit, goal_summaries, load_or_seed_desk_tasks,
-        load_or_seed_workspace, parse_quick_capture, persist_desk_tasks, show_quick_capture_window_internal,
-        timeline_from_workspace, update_goal_record, update_goal_status_record, workspace_repository,
-        DeskTask, GoalStatus, GoalSummary, SystemAgendaSnapshot, SystemReminder, TaskActivityAction,
-        TaskActivityLog, TaskStatus, TimelineItem,
+        bear_note_url, create_goal_record, create_task_for_goal_record, eventkit, goal_summaries,
+        load_or_seed_desk_tasks, load_or_seed_workspace, parse_quick_capture, persist_desk_tasks,
+        show_quick_capture_window_internal, timeline_from_workspace, update_goal_record,
+        update_goal_status_record, workspace_repository, DeskTask, GoalStatus, GoalSummary,
+        SystemAgendaSnapshot, SystemReminder, TaskActivityAction, TaskActivityLog, TaskStatus, TimelineItem,
     };
     use chrono::{Datelike, Duration, Local, TimeZone};
     use tauri::{AppHandle, Emitter};
@@ -635,7 +575,7 @@ mod commands {
     pub fn create_goal(
         app: AppHandle,
         title: String,
-        area: Option<String>,
+        area: String,
         description: String,
         status: GoalStatus,
     ) -> Result<GoalSummary, String> {
@@ -649,7 +589,7 @@ mod commands {
         app: AppHandle,
         goal_id: String,
         title: String,
-        area: Option<String>,
+        area: String,
         description: String,
     ) -> Result<GoalSummary, String> {
         update_goal_record(&workspace_repository(&app)?.path().to_path_buf(), goal_id.clone(), title, area, description, goal_summary_by_id(&app, &goal_id)?.status)?;
@@ -664,6 +604,38 @@ mod commands {
     ) -> Result<GoalSummary, String> {
         update_goal_status_record(&workspace_repository(&app)?.path().to_path_buf(), goal_id.clone(), status)?;
         goal_summary_by_id(&app, &goal_id)
+    }
+
+    #[tauri::command]
+    pub fn list_areas(app: AppHandle) -> Result<Vec<super::domain::AreaWithStats>, String> {
+        let path = workspace_repository(&app)?.path().to_path_buf();
+        super::list_areas_with_stats(&path)
+    }
+
+    #[tauri::command]
+    pub fn create_area(app: AppHandle, title: String) -> Result<super::domain::Area, String> {
+        let path = workspace_repository(&app)?.path().to_path_buf();
+        super::create_area_record(&path, title)
+    }
+
+    #[tauri::command]
+    pub fn rename_area(
+        app: AppHandle,
+        area_id: String,
+        new_title: String,
+    ) -> Result<super::domain::Area, String> {
+        let path = workspace_repository(&app)?.path().to_path_buf();
+        super::rename_area_record(&path, area_id, new_title)
+    }
+
+    #[tauri::command]
+    pub fn delete_area(
+        app: AppHandle,
+        area_id: String,
+        force: bool,
+    ) -> Result<super::domain::DeleteAreaResult, String> {
+        let path = workspace_repository(&app)?.path().to_path_buf();
+        super::delete_area_record(&path, area_id, force)
     }
 
     #[tauri::command]
@@ -688,12 +660,13 @@ mod commands {
             title,
             content: String::new(),
             status: TaskStatus::Todo,
+            planned_start_at: None,
             due_at: draft.scheduled_at,
             linked_goal_id: None,
             linked_goal_label: None,
             bear_note_id: None,
             system_reminder_id,
-            is_ongoing: false,
+            show_in_timeline: false,
             activity_logs: vec![TaskActivityLog {
                 action: TaskActivityAction::Created,
                 note: None,
@@ -703,6 +676,13 @@ mod commands {
 
         tasks.insert(0, task.clone());
         persist_desk_tasks(&app, &tasks)?;
+        let _ = app.emit("desk-task-created", &task);
+        Ok(task)
+    }
+
+    #[tauri::command]
+    pub fn create_task_for_goal(app: AppHandle, goal_id: String, title: String) -> Result<DeskTask, String> {
+        let task = create_task_for_goal_record(&workspace_repository(&app)?.path().to_path_buf(), goal_id, title)?;
         let _ = app.emit("desk-task-created", &task);
         Ok(task)
     }
@@ -725,9 +705,11 @@ mod commands {
         app: AppHandle,
         task_id: String,
         title: String,
+        planned_start_at: Option<String>,
         due_at: Option<String>,
         linked_goal_id: Option<String>,
         linked_goal_label: Option<String>,
+        show_in_timeline: Option<bool>,
     ) -> Result<DeskTask, String> {
         let trimmed_title = title.trim();
         if trimmed_title.is_empty() {
@@ -741,6 +723,10 @@ mod commands {
             .ok_or_else(|| format!("Task not found: {task_id}"))?;
 
         task.title = trimmed_title.to_string();
+        task.planned_start_at = planned_start_at
+            .map(|value| chrono::DateTime::parse_from_rfc3339(&value).map(|parsed| parsed.with_timezone(&Local)))
+            .transpose()
+            .map_err(|error| error.to_string())?;
         task.due_at = due_at
             .map(|value| chrono::DateTime::parse_from_rfc3339(&value).map(|parsed| parsed.with_timezone(&Local)))
             .transpose()
@@ -758,6 +744,7 @@ mod commands {
                 Some(trimmed)
             }
         });
+        task.show_in_timeline = show_in_timeline.unwrap_or(task.show_in_timeline);
 
         let updated = task.clone();
         persist_desk_tasks(&app, &tasks)?;
@@ -777,10 +764,19 @@ mod commands {
             .find(|task| task.id.to_string() == task_id)
             .ok_or_else(|| format!("Task not found: {task_id}"))?;
 
+        // 使用领域方法验证状态转换
+        if !task.can_transition_to(status) {
+            return Err(format!(
+                "Invalid status transition from {:?} to {:?}",
+                task.status, status
+            ));
+        }
+
         if let Some(reminder_id) = task.system_reminder_id.as_deref() {
             eventkit::set_system_reminder_completed(&app, reminder_id, matches!(status, TaskStatus::Done))?;
         }
 
+        let previous_status = task.status;
         task.status = status;
         task.activity_logs.insert(
             0,
@@ -788,7 +784,13 @@ mod commands {
                 action: match status {
                     TaskStatus::Paused => TaskActivityAction::Paused,
                     TaskStatus::Done => TaskActivityAction::Completed,
-                    TaskStatus::InProgress => TaskActivityAction::Resumed,
+                    TaskStatus::InProgress => {
+                        if previous_status == TaskStatus::Paused {
+                            TaskActivityAction::Resumed
+                        } else {
+                            TaskActivityAction::Started
+                        }
+                    }
                     TaskStatus::Todo => TaskActivityAction::NoteAdded,
                 },
                 note: note.and_then(|value| {
@@ -917,8 +919,13 @@ pub fn run() {
             commands::create_goal,
             commands::update_goal_fields,
             commands::update_goal_status,
+            commands::list_areas,
+            commands::create_area,
+            commands::rename_area,
+            commands::delete_area,
             commands::desk_task_list,
             commands::capture_task,
+            commands::create_task_for_goal,
             commands::update_task_content,
             commands::update_task_fields,
             commands::update_task_status,

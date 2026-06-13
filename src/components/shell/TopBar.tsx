@@ -6,6 +6,7 @@ const titles = {
   today: 'Today Workbench',
   board: 'Goal Board',
   goals: 'Goals',
+  areas: '领域管理',
 }
 
 export function TopBar() {

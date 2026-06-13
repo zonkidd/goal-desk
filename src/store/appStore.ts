@@ -1,31 +1,21 @@
 import { create } from 'zustand'
 import {
-  addTaskNote as persistTaskNote,
-  captureTask,
-  createGoal as persistGoal,
   getCurrentWindowLabel,
   isTauriRuntime,
   setSystemReminderCompleted as persistSystemReminderCompleted,
   showQuickCaptureWindow as openNativeQuickCaptureWindow,
-  updateGoalFields as persistGoalFields,
-  updateGoalStatus as persistGoalStatus,
-  updateTaskContent as persistTaskContent,
-  updateTaskFields as persistTaskFields,
-  updateTaskStatus as persistTaskStatus,
 } from '../lib/desktopApi'
-import { parseBrowserQuickCapture } from '../lib/quickCapture'
+import { getRuntimeModeStatusMessage } from '../lib/taskPresentation'
 import {
-  deriveGoalRecords,
-  filterGoalsByArea,
-  filterTasksByArea,
-  filterTimelineByArea,
-  getRuntimeModeStatusMessage,
-  getTodayFocusTasks,
-} from '../lib/taskPresentation'
-import type { AreaFilter, GoalCard, GoalStatus, IntegrationStatus, ReminderItem, TimelineItem, ViewKey } from '../types/app'
+  BROWSER_PREVIEW_STATUS,
+  createBrowserTaskNote,
+  createWorkspaceMutationAdapter,
+} from '../lib/workspaceMutations'
+import { logActionForTransition } from '../lib/taskPresentation'
+import { DerivedStateManager, type ChangeType } from '../lib/DerivedStateManager'
+import type { AreaFilter, AreaOption, AreaWithStats, GoalCard, GoalStatus, IntegrationStatus, ReminderItem, TimelineItem, ViewKey } from '../types/app'
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
-
-const BROWSER_PREVIEW_STATUS = 'Browser preview only · changes stay in memory'
+import type { InboxTaskGroups, TodayAttentionGroups, TodayRelevantGoal } from '../lib/workspaceDerivation'
 
 interface HydratePayload {
   tasks: Task[]
@@ -39,9 +29,14 @@ interface HydratePayload {
 interface AppStoreState {
   currentView: ViewKey
   activeArea: AreaFilter
+  allAreas: AreaWithStats[]
   tasks: Task[]
   todayFocusTasks: Task[]
+  todayAttentionGroups: TodayAttentionGroups
+  todayRelevantGoals: TodayRelevantGoal[]
   timeline: TimelineItem[]
+  inbox: InboxTaskGroups
+  showCompletedTodos: boolean
   baseTimeline: TimelineItem[]
   goals: GoalCard[]
   baseGoals: GoalCard[]
@@ -70,8 +65,12 @@ interface AppStoreState {
   closeReminderDrawer: () => void
   openQuickCapture: () => void
   closeQuickCapture: () => void
+  setShowCompletedTodos: (value: boolean) => void
   addTask: (title: string) => Promise<void>
-  createGoal: (input: { title: string; area: string; description?: string }) => Promise<string | undefined>
+  createGoal: (
+    input: { title: string; area?: string; description?: string },
+    options?: { openGoalWorkspace?: boolean },
+  ) => Promise<string | undefined>
   updateGoalFields: (goalId: string, input: { title: string; area: string; description: string }) => Promise<void>
   updateGoalStatus: (goalId: string, status: GoalStatus) => Promise<void>
   createTaskForGoal: (goalId: string, title: string) => Promise<void>
@@ -82,26 +81,18 @@ interface AppStoreState {
     taskId: string,
     input: {
       title: string
+      plannedStartAt?: Date
       dueDate?: Date
       linkedGoalId?: string
       linkedGoalLabel?: string
-      isOngoing?: boolean
+      showInTimeline?: boolean
     },
   ) => Promise<void>
   toggleSystemReminderDone: (reminderId: string, done: boolean) => Promise<void>
-}
-
-function logActionForStatus(status: TaskStatus): TaskActivityAction {
-  switch (status) {
-    case 'PAUSED':
-      return 'PAUSED'
-    case 'DONE':
-      return 'COMPLETED'
-    case 'IN_PROGRESS':
-      return 'RESUMED'
-    default:
-      return 'NOTE_ADDED'
-  }
+  loadAreas: () => Promise<void>
+  createArea: (title: string) => Promise<void>
+  renameArea: (areaId: string, newTitle: string) => Promise<void>
+  deleteArea: (areaId: string, force?: boolean) => Promise<void>
 }
 
 function replaceTask(tasks: Task[], nextTask: Task) {
@@ -116,81 +107,37 @@ function replaceGoal(goals: GoalCard[], nextGoal: GoalCard) {
   return goals.map((goal) => (goal.id === nextGoal.id ? nextGoal : goal))
 }
 
-function startOfToday() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
+/**
+ * 应用派生状态到当前 state
+ * 根据 changeType 选择性重算受影响的部分
+ */
+function applyDerivedState(
+  state: Pick<AppStoreState, 'baseTimeline' | 'baseGoals' | 'tasks' | 'activeArea' | 'showCompletedTodos'>,
+  changeType: ChangeType,
+) {
+  const manager = new DerivedStateManager(
+    state.baseTimeline,
+    state.baseGoals,
+    state.tasks,
+    state.activeArea,
+    state.showCompletedTodos,
+  )
+  return manager.compute(changeType)
 }
 
-function isSameDay(left: Date, right: Date) {
-  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate()
-}
-
-function formatTimeLabel(date: Date) {
-  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
-}
-
-function timeLabelSortValue(timeLabel: string) {
-  const [hours, minutes] = timeLabel.split(':').map((value) => Number.parseInt(value, 10))
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return Number.MAX_SAFE_INTEGER
-  return hours * 60 + minutes
-}
-
-function mergeTimelineWithDeskTasks(baseTimeline: TimelineItem[], tasks: Task[]): TimelineItem[] {
-  const today = startOfToday()
-  const taskItems = tasks
-    .filter((task) => task.dueDate && isSameDay(task.dueDate, today))
-    .map((task) => ({
-      id: task.id,
-      title: task.title,
-      timeLabel: formatTimeLabel(task.dueDate as Date),
-      source: 'todo' as const,
-      readonly: false,
-      done: task.status === 'DONE',
-      sourceLabel: task.linkedGoalLabel || 'Desk Task',
-    }))
-
-  const merged = [...baseTimeline.filter((item) => !taskItems.some((task) => task.id === item.id)), ...taskItems]
-  return merged.sort((left, right) => timeLabelSortValue(left.timeLabel) - timeLabelSortValue(right.timeLabel))
-}
-
-function mergeGoalsWithTasks(baseGoals: GoalCard[], tasks: Task[]): GoalCard[] {
-  return baseGoals.map((goal) => {
-    const linkedTasks = tasks.filter((task) => task.linkedGoalId === goal.id)
-    if (linkedTasks.length === 0) return goal
-
-    const completedTasks = linkedTasks.filter((task) => task.status === 'DONE').length
-    const nextTask =
-      linkedTasks
-        .filter((task) => task.status !== 'DONE')
-        .sort((left, right) => {
-          const leftTime = left.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER
-          const rightTime = right.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER
-          return leftTime - rightTime
-        })[0]?.title || 'Keep going'
-
-    return {
-      ...goal,
-      progress: Math.round((completedTasks / linkedTasks.length) * 100),
-      nextTodo: nextTask,
-    }
-  })
-}
-
-function buildDerivedState(baseTimeline: TimelineItem[], baseGoals: GoalCard[], tasks: Task[]) {
-  return buildDerivedStateForArea(baseTimeline, baseGoals, tasks, 'ALL')
-}
-
-function buildDerivedStateForArea(baseTimeline: TimelineItem[], baseGoals: GoalCard[], tasks: Task[], activeArea: AreaFilter) {
-  const derivedGoals = deriveGoalRecords(baseGoals, tasks)
-  const visibleGoals = filterGoalsByArea(derivedGoals, activeArea)
-  const visibleTasks = filterTasksByArea(tasks, derivedGoals, activeArea)
+function replaceTaskState(state: AppStoreState, nextTask: Task) {
+  const nextTasks = state.tasks.map((task) => (task.id === nextTask.id ? nextTask : task))
   return {
-    todayFocusTasks: activeArea === 'ALL' ? getTodayFocusTasks(tasks) : filterTasksByArea(getTodayFocusTasks(tasks), derivedGoals, activeArea),
-    timeline:
-      activeArea === 'ALL'
-        ? mergeTimelineWithDeskTasks(baseTimeline, tasks)
-        : filterTimelineByArea(mergeTimelineWithDeskTasks(baseTimeline, tasks), visibleTasks),
-    goals: visibleGoals,
+    tasks: nextTasks,
+    ...applyDerivedState({ ...state, tasks: nextTasks }, 'tasks'),
+  }
+}
+
+function replaceGoalState(state: AppStoreState, nextGoal: GoalCard) {
+  const nextGoals = replaceGoal(state.baseGoals, nextGoal)
+  return {
+    baseGoals: nextGoals,
+    ...applyDerivedState({ ...state, baseGoals: nextGoals }, 'goals'),
   }
 }
 
@@ -219,9 +166,22 @@ function syncTasksForSystemReminder(tasks: Task[], reminderId: string, done: boo
 export const useAppStore = create<AppStoreState>((set, get) => ({
   currentView: 'inbox',
   activeArea: 'ALL',
+  allAreas: [],
   tasks: [],
   todayFocusTasks: [],
+  todayAttentionGroups: { overdue: [], dueToday: [], ongoing: [] },
+  todayRelevantGoals: [],
   timeline: [],
+  inbox: {
+    activeTasks: [],
+    pausedTasks: [],
+    completed: {
+      totalCount: 0,
+      visibleTasks: [],
+      isCollapsedByDefault: true,
+    },
+  },
+  showCompletedTodos: false,
   baseTimeline: [],
   goals: [],
   baseGoals: [],
@@ -240,15 +200,27 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   setActiveArea: (area) =>
     set((state) => ({
       activeArea: area,
-      ...buildDerivedStateForArea(state.baseTimeline, state.baseGoals, state.tasks, area),
+      ...applyDerivedState({ ...state, activeArea: area }, 'area-filter'),
     })),
   hydrateApp: (payload) =>
     set((state) => {
-      const derived = buildDerivedStateForArea(payload.timeline, payload.goals, payload.tasks, state.activeArea)
+      const derived = applyDerivedState(
+        {
+          baseTimeline: payload.timeline,
+          baseGoals: payload.goals,
+          tasks: payload.tasks,
+          activeArea: state.activeArea,
+          showCompletedTodos: state.showCompletedTodos,
+        },
+        'full-refresh',
+      )
       return {
         tasks: payload.tasks,
         todayFocusTasks: derived.todayFocusTasks,
+        todayAttentionGroups: derived.todayAttentionGroups,
+        todayRelevantGoals: derived.todayRelevantGoals,
         timeline: derived.timeline,
+        inbox: derived.inbox,
         baseTimeline: payload.timeline,
         goals: derived.goals,
         baseGoals: payload.goals,
@@ -259,12 +231,17 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     }),
   setLoading: (value) => set({ isLoading: value }),
   setStatusMessage: (value) => set({ statusMessage: value }),
+  setShowCompletedTodos: (value) =>
+    set((state) => ({
+      showCompletedTodos: value,
+      ...applyDerivedState({ ...state, showCompletedTodos: value }, 'show-completed'),
+    })),
   receiveExternalTask: (task) =>
     set((state) => {
       const nextTasks = replaceTask(state.tasks, task)
       return {
         tasks: nextTasks,
-        ...buildDerivedStateForArea(state.baseTimeline, state.baseGoals, nextTasks, state.activeArea),
+        ...applyDerivedState({ ...state, tasks: nextTasks }, 'tasks'),
         statusMessage: 'Quick capture synced',
       }
     }),
@@ -290,122 +267,92 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   },
   closeQuickCapture: () => set({ isQuickCaptureOpen: false }),
   addTask: async (title) => {
-    const trimmed = title.trim()
-    if (!trimmed) return
+    const adapter = createWorkspaceMutationAdapter()
 
     try {
-      const nextTask = isTauriRuntime()
-        ? await captureTask(trimmed)
-        : (() => {
-            const draft = parseBrowserQuickCapture(trimmed)
-            return {
-              id: crypto.randomUUID(),
-              title: draft.title,
-              content: '',
-              status: 'TODO' as const,
-              dueDate: draft.dueDate,
-              isOngoing: false,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              activityLogs: [{ action: 'CREATED' as const, timestamp: new Date() }],
-            }
-          })()
+      const { task: nextTask, statusMessage } = await adapter.createTask(title)
+      if (!nextTask) return
 
       set((state) => ({
         tasks: replaceTask(state.tasks, nextTask),
-        ...buildDerivedStateForArea(state.baseTimeline, state.baseGoals, replaceTask(state.tasks, nextTask), state.activeArea),
+        ...applyDerivedState(
+          { ...state, tasks: replaceTask(state.tasks, nextTask) },
+          'tasks',
+        ),
         selectedTaskId: nextTask.id,
         isTaskDrawerOpen: true,
         currentView: 'inbox',
-        statusMessage: isTauriRuntime() ? 'Saved to local database' : BROWSER_PREVIEW_STATUS,
+        statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
       }))
     } catch (error) {
       set({ statusMessage: `Unable to save task · ${error instanceof Error ? error.message : String(error)}` })
     }
   },
-  createGoal: async (input) => {
-    const title = input.title.trim()
-    const area = input.area.trim()
-    if (!title || !area) return undefined
-
-    const nextGoal = isTauriRuntime()
-      ? await persistGoal({
-          title,
-          area,
-          description: input.description?.trim() || '',
-          status: 'ACTIVE',
-        })
-      : (() => {
-          const goalId = crypto.randomUUID()
-          const now = new Date()
-          return {
-            id: goalId,
-            title,
-            area,
-            description: input.description?.trim() || '',
-            status: 'ACTIVE' as const,
-            progress: 0,
-            nextTodo: 'Keep going',
-            taskCount: 0,
-            createdAt: now,
-            updatedAt: now,
-          }
-        })()
+  createGoal: async (input, options) => {
+    const adapter = createWorkspaceMutationAdapter()
+    // 确保 area 非空，默认使用"未分类"
+    const normalizedInput = {
+      ...input,
+      area: input.area?.trim() || '未分类',
+    }
+    const { goal: nextGoal, statusMessage, openGoalWorkspace } = await adapter.createGoal(normalizedInput, options)
+    if (!nextGoal) return undefined
 
     set((state) => {
-      const nextGoals = replaceGoal(state.baseGoals, nextGoal)
       return {
-        baseGoals: nextGoals,
-        ...buildDerivedStateForArea(state.baseTimeline, nextGoals, state.tasks, state.activeArea),
-        selectedGoalId: nextGoal.id,
-        isGoalDrawerOpen: true,
-        currentView: 'goals',
-        statusMessage: isTauriRuntime() ? 'Goal saved to local database' : BROWSER_PREVIEW_STATUS,
+        ...replaceGoalState(state, nextGoal),
+        selectedGoalId: openGoalWorkspace ? nextGoal.id : state.selectedGoalId,
+        isGoalDrawerOpen: openGoalWorkspace,
+        currentView: openGoalWorkspace ? 'goals' : state.currentView,
+        statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
       }
     })
+
+    // 刷新领域列表
+    void get().loadAreas()
 
     return nextGoal.id
   },
   updateGoalFields: async (goalId, input) => {
-    const title = input.title.trim()
-    const area = input.area.trim()
-    if (!title || !area) return
-
-    const updatedGoal = isTauriRuntime()
-      ? await persistGoalFields(goalId, {
-          title,
-          area,
-          description: input.description.trim(),
-        })
-      : undefined
+    const adapter = createWorkspaceMutationAdapter()
+    const { goal: updatedGoal, statusMessage } = await adapter.updateGoalFields(goalId, input)
+    if (!updatedGoal && isTauriRuntime()) return
 
     set((state) => {
-      const nextGoals = isTauriRuntime()
-        ? replaceGoal(state.baseGoals, updatedGoal as GoalCard)
+      const nextGoal = isTauriRuntime()
+        ? (updatedGoal as GoalCard)
         : state.baseGoals.map((goal) =>
             goal.id === goalId
               ? {
                   ...goal,
-                  title,
-                  area,
+                  title: input.title.trim(),
+                  area: input.area.trim(),
                   description: input.description.trim(),
                   updatedAt: new Date(),
                 }
               : goal,
-          )
+          ).find((goal) => goal.id === goalId) as GoalCard
       return {
-        baseGoals: nextGoals,
-        ...buildDerivedStateForArea(state.baseTimeline, nextGoals, state.tasks, state.activeArea),
-        statusMessage: isTauriRuntime() ? 'Goal details saved' : BROWSER_PREVIEW_STATUS,
+        ...replaceGoalState(state, nextGoal),
+        statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
       }
     })
+
+    // 刷新领域列表
+    void get().loadAreas()
   },
   updateGoalStatus: async (goalId, status) => {
-    const updatedGoal = isTauriRuntime() ? await persistGoalStatus(goalId, status) : undefined
+    if (status === 'READY_TO_COMPLETE') {
+      set({ statusMessage: 'READY_TO_COMPLETE is auto-computed and cannot be set manually' })
+      return
+    }
+
+    const adapter = createWorkspaceMutationAdapter()
+    const { goal: updatedGoal, statusMessage } = await adapter.updateGoalStatus(goalId, status)
 
     set((state) => {
-      const nextGoals = isTauriRuntime()
-        ? replaceGoal(state.baseGoals, updatedGoal as GoalCard)
+      const nextGoal = isTauriRuntime()
+        ? (updatedGoal as GoalCard)
         : state.baseGoals.map((goal) =>
             goal.id === goalId
               ? {
@@ -414,64 +361,44 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
                   updatedAt: new Date(),
                 }
               : goal,
-          )
+          ).find((goal) => goal.id === goalId) as GoalCard
       return {
-        baseGoals: nextGoals,
-        ...buildDerivedStateForArea(state.baseTimeline, nextGoals, state.tasks, state.activeArea),
-        statusMessage: isTauriRuntime() ? 'Goal status saved' : BROWSER_PREVIEW_STATUS,
+        ...replaceGoalState(state, nextGoal),
+        statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
       }
     })
   },
   createTaskForGoal: async (goalId, title) => {
-    const trimmed = title.trim()
-    if (!trimmed) return
+    const adapter = createWorkspaceMutationAdapter()
 
     const goal = get().baseGoals.find((item) => item.id === goalId)
     if (!goal) return
-
-    const nextTask: Task = {
-      id: crypto.randomUUID(),
-      title: trimmed,
-      content: '',
-      status: 'TODO',
-      linkedGoalId: goal.id,
-      linkedGoalLabel: goal.title,
-      isOngoing: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      activityLogs: [{ action: 'CREATED', timestamp: new Date() }],
-    }
+    const { task: nextTask, statusMessage } = await adapter.createTaskForGoal(goal, title)
+    if (!nextTask) return
 
     set((state) => {
       const nextTasks = replaceTask(state.tasks, nextTask)
       return {
         tasks: nextTasks,
-        ...buildDerivedStateForArea(state.baseTimeline, state.baseGoals, nextTasks, state.activeArea),
+        ...applyDerivedState({ ...state, tasks: nextTasks }, 'tasks'),
         selectedTaskId: nextTask.id,
         isTaskDrawerOpen: true,
         isGoalDrawerOpen: false,
-        statusMessage: isTauriRuntime()
-          ? 'TODO: Goal persistence is not wired to SQLite yet'
-          : BROWSER_PREVIEW_STATUS,
+        statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
       }
     })
   },
   addTaskNote: async (taskId, note) => {
     const trimmed = note.trim()
     if (!trimmed) return
+    const adapter = createWorkspaceMutationAdapter()
 
     try {
       if (isTauriRuntime()) {
-        const updatedTask = await persistTaskNote(taskId, trimmed)
+        const { task: updatedTask, statusMessage } = await adapter.addTaskNote(taskId, trimmed)
         set((state) => ({
-          tasks: state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
-          ...buildDerivedStateForArea(
-            state.baseTimeline,
-            state.baseGoals,
-            state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
-            state.activeArea,
-          ),
-          statusMessage: 'Activity log updated',
+          ...replaceTaskState(state, updatedTask as Task),
+          statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
         }))
         return
       }
@@ -482,15 +409,25 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
             ? {
                 ...task,
                 activityLogs: [
-                  {
-                    action: 'NOTE_ADDED',
-                    note: trimmed,
-                    timestamp: new Date(),
-                  },
+                  createBrowserTaskNote(trimmed),
                   ...task.activityLogs,
                 ],
               }
             : task,
+        ),
+        ...applyDerivedState(
+          {
+            ...state,
+            tasks: state.tasks.map((task) =>
+              task.id === taskId
+                ? {
+                    ...task,
+                    activityLogs: [createBrowserTaskNote(trimmed), ...task.activityLogs],
+                  }
+                : task,
+            ),
+          },
+          'tasks',
         ),
         statusMessage: BROWSER_PREVIEW_STATUS,
       }))
@@ -499,58 +436,76 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     }
   },
   updateTaskStatus: async (taskId, status, note) => {
+    const adapter = createWorkspaceMutationAdapter()
     try {
       if (isTauriRuntime()) {
-        const updatedTask = await persistTaskStatus(taskId, status, note)
+        const { task: updatedTask, statusMessage } = await adapter.updateTaskStatus(taskId, status, note)
         set((state) => ({
-          tasks: state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
-          ...buildDerivedStateForArea(
-            state.baseTimeline,
-            state.baseGoals,
-            state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
-            state.activeArea,
-          ),
-          statusMessage: 'Task status saved',
+          ...replaceTaskState(state, updatedTask as Task),
+          statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
         }))
         return
       }
 
-      set((state) => ({
-        tasks: state.tasks.map((task) =>
-          task.id === taskId
-            ? {
-                ...task,
-                status,
-                activityLogs: [
-                  {
-                    action: logActionForStatus(status),
-                    note: note?.trim() || undefined,
-                    timestamp: new Date(),
-                  },
-                  ...task.activityLogs,
-                ],
-              }
-            : task,
-        ),
-        statusMessage: BROWSER_PREVIEW_STATUS,
-      }))
+      set((state) => {
+        const currentTask = state.tasks.find((task) => task.id === taskId)
+        const fromStatus = currentTask?.status || 'TODO'
+        const action = logActionForTransition(fromStatus, status)
+
+        return {
+          tasks: state.tasks.map((task) =>
+            task.id === taskId
+              ? {
+                  ...task,
+                  status,
+                  activityLogs: [
+                    {
+                      action,
+                      note: note?.trim() || undefined,
+                      timestamp: new Date(),
+                    },
+                    ...task.activityLogs,
+                  ],
+                }
+              : task,
+          ),
+          ...applyDerivedState(
+            {
+              ...state,
+              tasks: state.tasks.map((task) =>
+                task.id === taskId
+                  ? {
+                      ...task,
+                      status,
+                      activityLogs: [
+                        {
+                          action,
+                          note: note?.trim() || undefined,
+                          timestamp: new Date(),
+                        },
+                        ...task.activityLogs,
+                      ],
+                    }
+                  : task,
+              ),
+            },
+            'tasks',
+          ),
+          statusMessage: BROWSER_PREVIEW_STATUS,
+        }
+      })
     } catch (error) {
       set({ statusMessage: `Unable to save task status · ${error instanceof Error ? error.message : String(error)}` })
     }
   },
   updateTaskContent: async (taskId, content) => {
+    const adapter = createWorkspaceMutationAdapter()
     try {
       if (isTauriRuntime()) {
-        const updatedTask = await persistTaskContent(taskId, content)
+        const { task: updatedTask, statusMessage } = await adapter.updateTaskContent(taskId, content)
         set((state) => ({
-          tasks: state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
-          ...buildDerivedStateForArea(
-            state.baseTimeline,
-            state.baseGoals,
-            state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
-            state.activeArea,
-          ),
-          statusMessage: 'Markdown notes saved',
+          ...replaceTaskState(state, updatedTask as Task),
+          statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
         }))
         return
       }
@@ -564,6 +519,20 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
               }
             : task,
         ),
+        ...applyDerivedState(
+          {
+            ...state,
+            tasks: state.tasks.map((task) =>
+              task.id === taskId
+                ? {
+                    ...task,
+                    content,
+                  }
+                : task,
+            ),
+          },
+          'tasks',
+        ),
         statusMessage: BROWSER_PREVIEW_STATUS,
       }))
     } catch (error) {
@@ -573,25 +542,21 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   updateTaskFields: async (taskId, input) => {
     const trimmedTitle = input.title.trim()
     if (!trimmedTitle) return
+    const adapter = createWorkspaceMutationAdapter()
 
     try {
       if (isTauriRuntime()) {
-        const updatedTask = await persistTaskFields(taskId, {
+        const { task: updatedTask, statusMessage } = await adapter.updateTaskFields(taskId, {
           title: trimmedTitle,
-          dueAt: input.dueDate,
+          plannedStartAt: input.plannedStartAt,
+          dueDate: input.dueDate,
           linkedGoalId: input.linkedGoalId,
-          linkedGoalLabel: input.linkedGoalLabel,
-          isOngoing: input.isOngoing,
+          availableGoals: get().baseGoals,
+          showInTimeline: input.showInTimeline,
         })
         set((state) => ({
-          tasks: state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
-          ...buildDerivedStateForArea(
-            state.baseTimeline,
-            state.baseGoals,
-            state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
-            state.activeArea,
-          ),
-          statusMessage: 'Task details saved',
+          ...replaceTaskState(state, updatedTask as Task),
+          statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
         }))
         return
       }
@@ -602,17 +567,20 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
             ? {
                 ...task,
                 title: trimmedTitle,
+                plannedStartAt: input.plannedStartAt,
                 dueDate: input.dueDate,
                 linkedGoalId: input.linkedGoalId,
-                linkedGoalLabel: input.linkedGoalLabel,
-                isOngoing: input.isOngoing ?? task.isOngoing,
+                linkedGoalLabel: input.linkedGoalId
+                  ? state.baseGoals.find((goal) => goal.id === input.linkedGoalId)?.title
+                  : undefined,
+                showInTimeline: input.showInTimeline ?? task.showInTimeline,
                 updatedAt: new Date(),
               }
             : task,
         )
         return {
           tasks: nextTasks,
-          ...buildDerivedStateForArea(state.baseTimeline, state.baseGoals, nextTasks, state.activeArea),
+          ...applyDerivedState({ ...state, tasks: nextTasks }, 'tasks'),
           statusMessage: BROWSER_PREVIEW_STATUS,
         }
       })
@@ -639,30 +607,124 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       }
 
       const updatedReminder = await persistSystemReminderCompleted(reminderId, done)
-      set((state) => ({
-        systemReminders: state.systemReminders.map((reminder) =>
-          reminder.id === reminderId ? updatedReminder : reminder,
-        ),
-        tasks: syncTasksForSystemReminder(state.tasks, reminderId, updatedReminder.done),
-        ...buildDerivedState(
-          state.baseTimeline,
-          state.baseGoals,
-          syncTasksForSystemReminder(state.tasks, reminderId, updatedReminder.done),
-        ),
-        timeline: state.timeline.map((item) =>
-          item.id === reminderId
-            ? {
-                ...item,
-                done: updatedReminder.done,
-              }
-            : item,
-        ),
-        statusMessage: updatedReminder.done ? 'Apple Reminder completed' : 'Apple Reminder reopened',
-      }))
+      set((state) => {
+        const syncedTasks = syncTasksForSystemReminder(state.tasks, reminderId, updatedReminder.done)
+        return {
+          systemReminders: state.systemReminders.map((reminder) =>
+            reminder.id === reminderId ? updatedReminder : reminder,
+          ),
+          tasks: syncedTasks,
+          ...applyDerivedState(
+            { ...state, tasks: syncedTasks },
+            'tasks',
+          ),
+          timeline: state.timeline.map((item) =>
+            item.id === reminderId
+              ? {
+                  ...item,
+                  done: updatedReminder.done,
+                }
+              : item,
+          ),
+          statusMessage: updatedReminder.done ? 'Apple Reminder completed' : 'Apple Reminder reopened',
+        }
+      })
     } catch (error) {
       set({
         statusMessage: `Unable to update Apple Reminder · ${error instanceof Error ? error.message : String(error)}`,
       })
+    }
+  },
+  loadAreas: async () => {
+    const adapter = createWorkspaceMutationAdapter()
+    try {
+      const { areas, statusMessage } = await adapter.listAreas()
+
+      set({
+        allAreas: areas || [],
+        statusMessage: statusMessage || '',
+      })
+    } catch (error) {
+      set({
+        statusMessage: `Unable to load areas · ${error instanceof Error ? error.message : String(error)}`,
+      })
+    }
+  },
+  createArea: async (title) => {
+    const adapter = createWorkspaceMutationAdapter()
+    try {
+      const { area, statusMessage } = await adapter.createArea(title)
+      if (area) {
+        set((state) => {
+          const withoutDuplicate = state.allAreas.filter((a) => a.id !== area.id && a.title !== area.title)
+          return {
+            allAreas: [...withoutDuplicate, area].sort((a, b) => a.title.localeCompare(b.title)),
+            statusMessage: statusMessage || '',
+          }
+        })
+      }
+    } catch (error) {
+      set({ statusMessage: `Unable to create area · ${error instanceof Error ? error.message : String(error)}` })
+    }
+  },
+  renameArea: async (areaId, newTitle) => {
+    const adapter = createWorkspaceMutationAdapter()
+    try {
+      const { area, statusMessage } = await adapter.renameArea(areaId, newTitle)
+      if (area) {
+        set((state) => ({
+          allAreas: state.allAreas.map((a) => (a.id === areaId ? { ...a, title: area.title } : a)).sort((a, b) => a.title.localeCompare(b.title)),
+          statusMessage: statusMessage || '',
+        }))
+
+        // 重新加载工作区以更新 Goal 的显示
+        if (isTauriRuntime()) {
+          const { hydrateApp } = get()
+          const { loadDesktopSnapshot } = await import('../lib/desktopApi')
+          const snapshot = await loadDesktopSnapshot()
+          hydrateApp({
+            goals: snapshot.goals,
+            timeline: snapshot.timeline,
+            tasks: snapshot.tasks,
+            systemReminders: snapshot.systemReminders,
+            integrationStatus: snapshot.integrationStatus,
+            statusMessage: statusMessage || '',
+          })
+        }
+      }
+    } catch (error) {
+      set({ statusMessage: `Unable to rename area · ${error instanceof Error ? error.message : String(error)}` })
+    }
+  },
+  deleteArea: async (areaId, force = false) => {
+    const adapter = createWorkspaceMutationAdapter()
+    try {
+      const { success, message, statusMessage } = await adapter.deleteArea(areaId, force)
+      if (success) {
+        set((state) => ({
+          allAreas: state.allAreas.filter((a) => a.id !== areaId),
+          statusMessage: statusMessage || '',
+        }))
+
+        // 重新加载工作区以更新 Goal 的 area
+        if (isTauriRuntime()) {
+          const { hydrateApp } = get()
+          const { loadDesktopSnapshot } = await import('../lib/desktopApi')
+          const snapshot = await loadDesktopSnapshot()
+          hydrateApp({
+            goals: snapshot.goals,
+            timeline: snapshot.timeline,
+            tasks: snapshot.tasks,
+            systemReminders: snapshot.systemReminders,
+            integrationStatus: snapshot.integrationStatus,
+            statusMessage: statusMessage || '',
+          })
+        }
+      } else {
+        set({ statusMessage: message })
+      }
+    } catch (error) {
+      set({ statusMessage: `Unable to delete area · ${error instanceof Error ? error.message : String(error)}` })
     }
   },
 }))

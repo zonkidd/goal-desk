@@ -14,13 +14,14 @@ const navItems: Array<{ key: ViewKey; label: string; icon: typeof Inbox }> = [
 export function Sidebar() {
   const currentView = useAppStore((state) => state.currentView)
   const activeArea = useAppStore((state) => state.activeArea)
+  const allAreas = useAppStore((state) => state.allAreas)
   const setView = useAppStore((state) => state.setView)
   const setActiveArea = useAppStore((state) => state.setActiveArea)
   const openQuickCapture = useAppStore((state) => state.openQuickCapture)
   const goals = useAppStore((state) => state.baseGoals)
   const inboxCount = useAppStore((state) => state.tasks.filter((task) => task.status === 'TODO' || task.status === 'IN_PROGRESS').length)
   const pausedCount = useAppStore((state) => state.tasks.filter((task) => task.status === 'PAUSED').length)
-  const areas = ['ALL', ...new Set(goals.map((goal) => goal.area))]
+  const areaSummary = allAreas.slice(0, 3)
 
   return (
     <aside className="glass-panel relative z-20 flex h-full w-[260px] shrink-0 flex-col justify-between border-r border-white/50">
@@ -62,25 +63,53 @@ export function Sidebar() {
 
         <p className="mb-3 mt-8 flex items-center justify-between px-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">
           <span>Areas 领域</span>
-          <Plus className="h-3 w-3 cursor-pointer hover:text-indigo-500" />
+          <button
+            onClick={() => setView('areas')}
+            className="rounded px-2 py-0.5 text-[10px] font-bold text-indigo-600 transition-colors hover:bg-indigo-50"
+          >
+            管理
+          </button>
         </p>
-        {areas.map((area, index) => {
-          const swatch = area === 'ALL' ? 'bg-slate-400' : index === 1 ? 'bg-blue-500' : index === 2 ? 'bg-amber-500' : 'bg-emerald-500'
-          const label = area === 'ALL' ? '全部领域' : area
-          const count = area === 'ALL' ? goals.length : goals.filter((goal) => goal.area === area).length
-          const active = activeArea === area
+        <motion.button
+          whileHover={{ x: 2 }}
+          onClick={() => {
+            setActiveArea('ALL')
+            setView('goals')
+          }}
+          className={cn(
+            'flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-all hover:bg-white/60',
+            activeArea === 'ALL' ? 'bg-white/70 text-indigo-600 shadow-sm ring-1 ring-indigo-200' : 'text-slate-600',
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-2 w-2 rounded-full bg-slate-400" /> 全部领域
+          </div>
+          <span className="text-xs text-slate-400">{goals.length}</span>
+        </motion.button>
+        {allAreas.map((area, index) => {
+          const swatch = index === 0 ? 'bg-blue-500' : index === 1 ? 'bg-amber-500' : 'bg-emerald-500'
+          const active = activeArea === area.title
           return (
             <motion.button
-              key={area}
+              key={area.id}
               whileHover={{ x: 2 }}
-              onClick={() => setActiveArea(area)}
+              onClick={() => {
+                setActiveArea(area.title)
+                setView('goals')
+              }}
               className={cn(
                 'flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-all hover:bg-white/60',
-                active ? 'bg-white/70 text-indigo-600 shadow-sm' : 'text-slate-600',
+                active ? 'bg-white/70 text-indigo-600 shadow-sm ring-1 ring-indigo-200' : 'text-slate-600',
               )}
             >
-              <div className="flex items-center gap-3"><div className={`h-2 w-2 rounded-full ${swatch}`} /> {label}</div>
-              <span className="text-xs text-slate-400">{count}</span>
+              <div className="flex items-center gap-3">
+                <div className={`h-2 w-2 rounded-full ${swatch}`} /> {area.title}
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <span>{area.goalCount}</span>
+                <span>·</span>
+                <span>{area.activeGoalCount}</span>
+              </div>
             </motion.button>
           )
         })}

@@ -16,13 +16,13 @@ fn today_timeline_mixes_todos_reminders_and_calendar_events_by_time() {
         id: todo_id,
         goal_id: Some(goal_id),
         project_id: None,
-        title: "整理本周目标".to_string(),
+        title: "Review weekly goals".to_string(),
         scheduled_at: Some(Local.with_ymd_and_hms(2026, 6, 9, 11, 30, 0).unwrap()),
         completed: false,
     }];
     let reminders = vec![Reminder {
         id: reminder_id,
-        title: "复盘周目标".to_string(),
+        title: "Weekly goal review".to_string(),
         due_at: Local.with_ymd_and_hms(2026, 6, 9, 14, 30, 0).unwrap(),
         done: false,
     }];
@@ -53,7 +53,7 @@ fn goal_progress_counts_linked_todos_and_milestones() {
             id: Uuid::new_v4(),
             goal_id: Some(goal_id),
             project_id: None,
-            title: "今晚跑步 3 公里".to_string(),
+            title: "Complete daily activity".to_string(),
             scheduled_at: None,
             completed: true,
         },
@@ -61,7 +61,7 @@ fn goal_progress_counts_linked_todos_and_milestones() {
             id: Uuid::new_v4(),
             goal_id: Some(goal_id),
             project_id: None,
-            title: "记录饮食".to_string(),
+            title: "Track nutrition".to_string(),
             scheduled_at: None,
             completed: false,
         },
@@ -69,7 +69,7 @@ fn goal_progress_counts_linked_todos_and_milestones() {
             id: Uuid::new_v4(),
             goal_id: Some(other_goal_id),
             project_id: None,
-            title: "无关任务".to_string(),
+            title: "Unrelated task".to_string(),
             scheduled_at: None,
             completed: true,
         },
@@ -78,13 +78,13 @@ fn goal_progress_counts_linked_todos_and_milestones() {
         Milestone {
             id: Uuid::new_v4(),
             goal_id,
-            title: "完成第一周训练".to_string(),
+            title: "Complete first week training".to_string(),
             completed: true,
         },
         Milestone {
             id: Uuid::new_v4(),
             goal_id,
-            title: "体重下降 2kg".to_string(),
+            title: "Weight loss target 2kg".to_string(),
             completed: false,
         },
     ];
@@ -109,9 +109,9 @@ fn goal_without_linked_work_has_zero_progress() {
 fn quick_capture_parses_tomorrow_afternoon_three_oclock() {
     let now = Local.with_ymd_and_hms(2026, 6, 10, 9, 0, 0).unwrap();
 
-    let draft = parse_quick_capture("明天下午三点看熊掌记的总结笔记", now);
+    let draft = parse_quick_capture("明天下午三点 review notes", now);
 
-    assert_eq!(draft.title, "看熊掌记的总结笔记");
+    assert_eq!(draft.title, "review notes".to_string());
     assert_eq!(draft.scheduled_at, Some(Local.with_ymd_and_hms(2026, 6, 11, 15, 0, 0).unwrap()));
 }
 
@@ -119,9 +119,9 @@ fn quick_capture_parses_tomorrow_afternoon_three_oclock() {
 fn quick_capture_parses_tonight_as_eight_pm() {
     let now = Local.with_ymd_and_hms(2026, 6, 10, 9, 0, 0).unwrap();
 
-    let draft = parse_quick_capture("今晚跑步3公里", now);
+    let draft = parse_quick_capture("今晚 activity", now);
 
-    assert_eq!(draft.title, "跑步3公里");
+    assert_eq!(draft.title, "activity");
     assert_eq!(draft.scheduled_at, Some(Local.with_ymd_and_hms(2026, 6, 10, 20, 0, 0).unwrap()));
 }
 
@@ -129,8 +129,8 @@ fn quick_capture_parses_tonight_as_eight_pm() {
 fn quick_capture_without_time_phrase_stays_in_inbox() {
     let now = Local.with_ymd_and_hms(2026, 6, 10, 9, 0, 0).unwrap();
 
-    let draft = parse_quick_capture("整理年度目标", now);
+    let draft = parse_quick_capture("Review annual goals", now);
 
-    assert_eq!(draft.title, "整理年度目标");
+    assert_eq!(draft.title, "Review annual goals");
     assert_eq!(draft.scheduled_at, None);
 }

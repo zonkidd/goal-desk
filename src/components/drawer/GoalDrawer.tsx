@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Pause, Play, Target, CheckCircle2, Archive, Plus, X } from 'lucide-react'
+import { Pause, Play, CheckCircle2, Archive, Plus, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { GlassCard } from '../common/GlassCard'
+import { AreaSelectWithCreate } from '../shared/AreaSelectWithCreate'
 import { useAppStore, useSelectedGoal } from '../../store/appStore'
 import type { GoalStatus } from '../../types/app'
 
@@ -10,7 +11,6 @@ const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as cons
 const statusActions: Array<{ status: GoalStatus; label: string; icon: typeof Play }> = [
   { status: 'ACTIVE', label: '开启', icon: Play },
   { status: 'PAUSED', label: '暂停', icon: Pause },
-  { status: 'READY_TO_COMPLETE', label: '待确认', icon: Target },
   { status: 'COMPLETED', label: '完成', icon: CheckCircle2 },
   { status: 'ARCHIVED', label: '归档', icon: Archive },
 ]
@@ -22,6 +22,8 @@ export function GoalDrawer() {
   const updateGoalFields = useAppStore((state) => state.updateGoalFields)
   const updateGoalStatus = useAppStore((state) => state.updateGoalStatus)
   const createTaskForGoal = useAppStore((state) => state.createTaskForGoal)
+  const allAreas = useAppStore((state) => state.allAreas)
+  const createArea = useAppStore((state) => state.createArea)
   const tasks = useAppStore((state) => state.tasks)
   const [title, setTitle] = useState('')
   const [area, setArea] = useState('')
@@ -99,17 +101,26 @@ export function GoalDrawer() {
                   className="w-full border-none bg-transparent p-0 text-2xl font-black text-slate-900 outline-none focus:ring-0 placeholder-slate-300"
                   placeholder="目标标题"
                 />
-                <div className="grid grid-cols-2 gap-3">
-                  <input
+                <div className="space-y-1">
+                  <label className="px-1 text-xs font-bold text-slate-500">领域分类</label>
+                  <AreaSelectWithCreate
                     value={area}
-                    onChange={(event) => setArea(event.target.value)}
-                    onBlur={() => void updateGoalFields(goal.id, { title, area, description })}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 outline-none focus:border-indigo-500"
+                    areas={allAreas}
+                    onChange={(value) => {
+                      setArea(value)
+                      void updateGoalFields(goal.id, { title, area: value, description })
+                    }}
+                    onCreateArea={async (title) => {
+                      await createArea(title)
+                    }}
+                    placeholder="选择或创建领域"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 outline-none focus:border-indigo-500"
                   />
-                  <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600">
-                    <span>进度</span>
-                    <span>{goal.progress}%</span>
-                  </div>
+                  <p className="px-1 text-xs text-slate-400">用于组织和筛选相关目标</p>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
+                  <span>进度</span>
+                  <span>{goal.progress}%</span>
                 </div>
                 <textarea
                   value={description}

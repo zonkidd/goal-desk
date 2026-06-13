@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>今日焦点 - 时间展示设计原型</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+    }
+
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
+    }
+
+    .progress-bar {
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .task-card {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .task-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.25);
+    }
+
+    .section-divider {
+      border-top: 2px solid #e2e8f0;
+      margin: 3rem 0;
+      position: relative;
+    }
+
+    .section-divider::after {
+      content: attr(data-label);
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      padding: 0 1rem;
+      font-weight: 700;
+      font-size: 0.875rem;
+      color: #64748b;
+    }
+
+    .tooltip {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .group:hover .tooltip {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="max-w-7xl mx-auto">
+    <!-- 标题 -->
+    <div class="text-center mb-12">
+      <h1 class="text-5xl font-black text-white mb-4">今日焦点 - 时间展示设计原型</h1>
+      <p class="text-xl font-semibold text-indigo-100">三种设计方案对比</p>
+    </div>
+
+    <!-- 方案 A：相对时间 + 紧急度视觉提示（推荐） -->
+    <div class="glass-panel rounded-3xl p-8 mb-8">
+      <div class="mb-6">
+        <div class="flex items-center gap-3 mb-2">
+          <h2 class="text-2xl font-black text-slate-900">方案 A：相对时间 + 紧急度视觉提示</h2>
+          <span class="rounded-full bg-green-500 px-4 py-1 text-xs font-black text-white">推荐</span>
+        </div>
+        <p class="text-sm font-semibold text-slate-600">展示已推进天数 + 剩余天数，通过颜色编码表达紧急度</p>
+      </div>
+
+      <div class="space-y-4">
+        <!-- 任务 1：还剩2天 - 紧急 -->
+        <button class="task-card glass-card flex w-full items-center justify-between rounded-2xl p-5 text-left">
+          <div>
+            <div class="text-base font-bold text-slate-900">完成项目原型设计</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">Q2 产品迭代</div>
+          </div>
+          <div class="text-right text-xs font-bold">
+            <div class="text-slate-500 mb-1">已推进 3天</div>
+            <div class="flex items-center gap-1 text-red-600">
+              <span>还剩 2天</span>
+              <span class="text-lg">🔥</span>
+            </div>
+          </div>
+        </button>
+
+        <!-- 任务 2：还剩6天 - 正常 -->
+        <button class="task-card glass-card flex w-full items-center justify-between rounded-2xl p-5 text-left">
+          <div>
+            <div class="text-base font-bold text-slate-900">研究竞品分析报告</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">行业研究</div>
+          </div>
+          <div class="text-right text-xs font-bold">
+            <div class="text-slate-500 mb-1">已推进 1天</div>
+            <div class="flex items-center gap-1 text-orange-600">
+              <span>还剩 6天</span>
+              <span class="text-lg">⏰</span>
+            </div>
+          </div>
+        </button>
+
+        <!-- 任务 3：还剩15天 - 充裕 -->
+        <button class="task-card glass-card flex w-full items-center justify-between rounded-2xl p-5 text-left">
+          <div>
+            <div class="text-base font-bold text-slate-900">编写技术文档</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">技术架构</div>
+          </div>
+          <div class="text-right text-xs font-bold">
+            <div class="text-slate-500 mb-1">已推进 2天</div>
+            <div class="flex items-center gap-1 text-green-600">
+              <span>还剩 15天</span>
+              <span class="text-lg">✅</span>
+            </div>
+          </div>
+        </button>
+
+        <!-- 任务 4：无截止日期 -->
+        <button class="task-card glass-card flex w-full items-center justify-between rounded-2xl p-5 text-left">
+          <div>
+            <div class="text-base font-bold text-slate-900">搭建测试环境</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">技术架构</div>
+          </div>
+          <div class="text-right text-xs font-bold">
+            <div class="text-slate-500 mb-1">已推进 5天</div>
+            <div class="flex items-center gap-1 text-slate-400">
+              <span>无截止日期</span>
+              <span class="text-lg">∞</span>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <div class="mt-6 rounded-xl bg-indigo-50 p-4">
+        <div class="text-xs font-bold text-indigo-900 mb-2">✨ 设计亮点</div>
+        <ul class="text-xs font-semibold text-indigo-700 space-y-1">
+          <li>• 🔥 红色 = 还剩 ≤2天（紧急）</li>
+          <li>• ⏰ 橙色 = 还剩 3-7天（需关注）</li>
+          <li>• ✅ 绿色 = 还剩 >7天（充裕）</li>
+          <li>• ∞ 灰色 = 无截止日期（持续推进）</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-divider" data-label="对比其他方案"></div>
+
+    <!-- 方案 B：进度条 + 相对时间 -->
+    <div class="glass-panel rounded-3xl p-8 mb-8">
+      <div class="mb-6">
+        <h2 class="text-2xl font-black text-slate-900 mb-2">方案 B：进度条 + 相对时间</h2>
+        <p class="text-sm font-semibold text-slate-600">通过进度条直观展示任务时间进度</p>
+      </div>
+
+      <div class="space-y-4">
+        <!-- 任务 1：60% 进度 -->
+        <button class="task-card glass-card rounded-2xl p-5 text-left w-full">
+          <div class="mb-3">
+            <div class="text-base font-bold text-slate-900">完成项目原型设计</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">Q2 产品迭代</div>
+          </div>
+          <div>
+            <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200 mb-2">
+              <div class="progress-bar h-2 rounded-full bg-indigo-500" style="width: 60%"></div>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-black text-indigo-600">60%</span>
+              <span class="text-xs font-bold text-slate-500">已推进3天 · 还剩2天</span>
+            </div>
+          </div>
+        </button>
+
+        <!-- 任务 2：14% 进度 -->
+        <button class="task-card glass-card rounded-2xl p-5 text-left w-full">
+          <div class="mb-3">
+            <div class="text-base font-bold text-slate-900">研究竞品分析报告</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">行业研究</div>
+          </div>
+          <div>
+            <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200 mb-2">
+              <div class="progress-bar h-2 rounded-full bg-indigo-500" style="width: 14%"></div>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-black text-indigo-600">14%</span>
+              <span class="text-xs font-bold text-slate-500">已推进1天 · 还剩6天</span>
+            </div>
+          </div>
+        </button>
+
+        <!-- 任务 3：无截止日期 -->
+        <button class="task-card glass-card rounded-2xl p-5 text-left w-full">
+          <div class="mb-3">
+            <div class="text-base font-bold text-slate-900">搭建测试环境</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">技术架构</div>
+          </div>
+          <div class="text-xs font-bold text-slate-500">
+            已推进 5天 · 持续中
+          </div>
+        </button>
+      </div>
+
+      <div class="mt-6 rounded-xl bg-amber-50 p-4">
+        <div class="text-xs font-bold text-amber-900 mb-2">⚠️ 权衡考虑</div>
+        <ul class="text-xs font-semibold text-amber-700 space-y-1">
+          <li>• ✅ 进度条视觉直观，一眼看出时间进度</li>
+          <li>• ❌ 占用更多垂直空间</li>
+          <li>• ❌ 无截止日期的任务无法显示进度条</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 方案 C：极简 - 只显示关键信息 -->
+    <div class="glass-panel rounded-3xl p-8 mb-8">
+      <div class="mb-6">
+        <h2 class="text-2xl font-black text-slate-900 mb-2">方案 C：极简风格</h2>
+        <p class="text-sm font-semibold text-slate-600">只展示最关键的时间信息，最小化视觉干扰</p>
+      </div>
+
+      <div class="space-y-4">
+        <!-- 任务 1 -->
+        <button class="task-card glass-card flex w-full items-center justify-between rounded-2xl p-5 text-left">
+          <div>
+            <div class="text-base font-bold text-slate-900">完成项目原型设计</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">Q2 产品迭代</div>
+          </div>
+          <div class="text-right">
+            <div class="text-sm font-black text-red-600 flex items-center gap-1">
+              <span>还剩2天</span>
+              <span class="text-base">🔥</span>
+            </div>
+          </div>
+        </button>
+
+        <!-- 任务 2 -->
+        <button class="task-card glass-card flex w-full items-center justify-between rounded-2xl p-5 text-left">
+          <div>
+            <div class="text-base font-bold text-slate-900">研究竞品分析报告</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">行业研究</div>
+          </div>
+          <div class="text-right">
+            <div class="text-sm font-black text-slate-600">还剩6天</div>
+          </div>
+        </button>
+
+        <!-- 任务 3 -->
+        <button class="task-card glass-card flex w-full items-center justify-between rounded-2xl p-5 text-left">
+          <div>
+            <div class="text-base font-bold text-slate-900">搭建测试环境</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">技术架构</div>
+          </div>
+          <div class="text-right">
+            <div class="text-sm font-black text-slate-400 flex items-center gap-1">
+              <span>第5天</span>
+              <span class="text-base">∞</span>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <div class="mt-6 rounded-xl bg-slate-50 p-4">
+        <div class="text-xs font-bold text-slate-900 mb-2">💡 适用场景</div>
+        <ul class="text-xs font-semibold text-slate-700 space-y-1">
+          <li>• ✅ 视觉最简洁，适合任务数量较多的情况</li>
+          <li>• ❌ 丢失"已推进天数"信息</li>
+          <li>• ❌ 缺少进度感知</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-divider" data-label="增强特性演示"></div>
+
+    <!-- 方案 A 增强版：带 Tooltip -->
+    <div class="glass-panel rounded-3xl p-8">
+      <div class="mb-6">
+        <div class="flex items-center gap-3 mb-2">
+          <h2 class="text-2xl font-black text-slate-900">方案 A 增强版</h2>
+          <span class="rounded-full bg-indigo-500 px-4 py-1 text-xs font-black text-white">最终推荐</span>
+        </div>
+        <p class="text-sm font-semibold text-slate-600">悬停时显示完整时间线 + 按紧急度排序</p>
+      </div>
+
+      <div class="space-y-4">
+        <!-- 任务 1：最紧急 -->
+        <button class="task-card glass-card flex w-full items-center justify-between rounded-2xl p-5 text-left group relative">
+          <div>
+            <div class="text-base font-bold text-slate-900">完成项目原型设计</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">Q2 产品迭代</div>
+          </div>
+          <div class="text-right text-xs font-bold">
+            <div class="text-slate-500 mb-1">已推进 3天</div>
+            <div class="flex items-center gap-1 text-red-600">
+              <span>还剩 2天</span>
+              <span class="text-lg">🔥</span>
+            </div>
+          </div>
+
+          <!-- Tooltip -->
+          <div class="tooltip absolute right-0 top-full mt-2 z-10">
+            <div class="rounded-xl bg-slate-900 px-4 py-3 text-white shadow-2xl min-w-[200px]">
+              <div class="text-[10px] font-bold text-slate-400 mb-2">完整时间线</div>
+              <div class="space-y-1 text-xs font-semibold">
+                <div class="flex justify-between">
+                  <span class="text-slate-400">开始</span>
+                  <span>6月10日</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">今天</span>
+                  <span class="text-green-400">6月13日 (第3天)</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">截止</span>
+                  <span class="text-red-400">6月15日</span>
+                </div>
+                <div class="mt-2 pt-2 border-t border-slate-700">
+                  <div class="text-[10px] text-slate-400">总计：5天 · 完成 60%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </button>
+
+        <!-- 任务 2 -->
+        <button class="task-card glass-card flex w-full items-center justify-between rounded-2xl p-5 text-left group relative">
+          <div>
+            <div class="text-base font-bold text-slate-900">研究竞品分析报告</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">行业研究</div>
+          </div>
+          <div class="text-right text-xs font-bold">
+            <div class="text-slate-500 mb-1">已推进 1天</div>
+            <div class="flex items-center gap-1 text-orange-600">
+              <span>还剩 6天</span>
+              <span class="text-lg">⏰</span>
+            </div>
+          </div>
+
+          <!-- Tooltip -->
+          <div class="tooltip absolute right-0 top-full mt-2 z-10">
+            <div class="rounded-xl bg-slate-900 px-4 py-3 text-white shadow-2xl min-w-[200px]">
+              <div class="text-[10px] font-bold text-slate-400 mb-2">完整时间线</div>
+              <div class="space-y-1 text-xs font-semibold">
+                <div class="flex justify-between">
+                  <span class="text-slate-400">开始</span>
+                  <span>6月12日</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">今天</span>
+                  <span class="text-green-400">6月13日 (第1天)</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">截止</span>
+                  <span>6月19日</span>
+                </div>
+                <div class="mt-2 pt-2 border-t border-slate-700">
+                  <div class="text-[10px] text-slate-400">总计：7天 · 完成 14%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </button>
+
+        <!-- 任务 3 -->
+        <button class="task-card glass-card flex w-full items-center justify-between rounded-2xl p-5 text-left group relative">
+          <div>
+            <div class="text-base font-bold text-slate-900">搭建测试环境</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">技术架构</div>
+          </div>
+          <div class="text-right text-xs font-bold">
+            <div class="text-slate-500 mb-1">已推进 5天</div>
+            <div class="flex items-center gap-1 text-slate-400">
+              <span>无截止日期</span>
+              <span class="text-lg">∞</span>
+            </div>
+          </div>
+
+          <!-- Tooltip -->
+          <div class="tooltip absolute right-0 top-full mt-2 z-10">
+            <div class="rounded-xl bg-slate-900 px-4 py-3 text-white shadow-2xl min-w-[200px]">
+              <div class="text-[10px] font-bold text-slate-400 mb-2">完整时间线</div>
+              <div class="space-y-1 text-xs font-semibold">
+                <div class="flex justify-between">
+                  <span class="text-slate-400">开始</span>
+                  <span>6月8日</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">今天</span>
+                  <span class="text-green-400">6月13日 (第5天)</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">截止</span>
+                  <span class="text-slate-500">未设置</span>
+                </div>
+                <div class="mt-2 pt-2 border-t border-slate-700">
+                  <div class="text-[10px] text-slate-400">持续推进中...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <div class="mt-6 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 p-4 border-2 border-indigo-200">
+        <div class="text-xs font-bold text-indigo-900 mb-2">🎯 最终推荐理由</div>
+        <ul class="text-xs font-semibold text-indigo-700 space-y-1">
+          <li>• 信息完整：展示已推进 + 剩余时间</li>
+          <li>• 视觉直观：颜色编码快速识别紧急度</li>
+          <li>• 交互增强：悬停显示完整时间线（可选）</li>
+          <li>• 智能排序：按剩余天数升序，优先关注紧急任务</li>
+          <li>• 空间高效：不需要进度条，保持界面简洁</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 底部说明 -->
+    <div class="mt-12 text-center">
+      <p class="text-sm font-semibold text-indigo-100">
+        💡 提示：悬停任务卡片查看完整时间线 Tooltip（仅方案 A 增强版）
+      </p>
+    </div>
+  </div>
+</body>
+</html>

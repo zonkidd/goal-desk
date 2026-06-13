@@ -2,6 +2,7 @@ export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'PAUSED' | 'DONE'
 
 export type TaskActivityAction =
   | 'CREATED'
+  | 'STARTED'
   | 'PAUSED'
   | 'RESUMED'
   | 'COMPLETED'
@@ -18,8 +19,9 @@ export interface Task {
   title: string
   content: string
   status: TaskStatus
+  plannedStartAt?: Date
   dueDate?: Date
-  isOngoing?: boolean
+  showInTimeline?: boolean
   linkedGoalId?: string
   linkedGoalLabel?: string
   bearNoteId?: string

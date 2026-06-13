@@ -1,6 +1,6 @@
 use crate::domain::{
     Area, DeskTask, Goal, GoalStatus, Milestone, Project, Reminder, TaskActivityAction,
-    TaskActivityLog, TaskStatus, Todo, WorkspaceSnapshot,
+    TaskActivityLog, TaskStatus, Todo, WorkspaceSnapshot, UNCATEGORIZED_AREA_ID,
 };
 use chrono::{DateTime, Local};
 use rusqlite::{params, Connection};
@@ -140,7 +140,20 @@ impl SqliteRepository {
         Self::ensure_column_exists(&connection, "goals", "status", "TEXT NOT NULL DEFAULT 'ACTIVE'")?;
         Self::ensure_column_exists(&connection, "desk_tasks", "bear_note_id", "TEXT NULL")?;
         Self::ensure_column_exists(&connection, "desk_tasks", "system_reminder_id", "TEXT NULL")?;
-        Self::ensure_column_exists(&connection, "desk_tasks", "is_ongoing", "INTEGER NOT NULL DEFAULT 0")?;
+        Self::ensure_column_exists(&connection, "desk_tasks", "show_in_timeline", "INTEGER NOT NULL DEFAULT 0")?;
+        Self::ensure_column_exists(&connection, "desk_tasks", "planned_start_at", "TEXT NULL")?;
+
+        // 确保"未分类"系统 area 存在
+        connection.execute(
+            "INSERT OR IGNORE INTO areas (id, title) VALUES (?1, ?2)",
+            params![UNCATEGORIZED_AREA_ID, "未分类"],
+        )?;
+
+        // 清理孤儿 goals：将 area_id IS NULL 或指向不存在的 area 的 goals 移动到"未分类"
+        connection.execute(
+            "UPDATE goals SET area_id = ?1 WHERE area_id IS NULL OR area_id NOT IN (SELECT id FROM areas)",
+            params![UNCATEGORIZED_AREA_ID],
+        )?;
 
         Ok(())
     }
@@ -244,9 +257,11 @@ impl SqliteRepository {
             let mut rows = statement.query([])?;
             let mut items = Vec::new();
             while let Some(row) = rows.next()? {
+                let title: String = row.get(1)?;
                 items.push(Area {
                     id: parse_uuid(row.get::<_, String>(0)?)?,
-                    title: row.get(1)?,
+                    title: title.clone(),
+                    is_system: title == "未分类",
                 });
             }
             items
@@ -357,18 +372,19 @@ impl SqliteRepository {
 
         for task in tasks {
             transaction.execute(
-                "INSERT INTO desk_tasks (id, title, content, status, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, is_ongoing) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                "INSERT INTO desk_tasks (id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 params![
                     task.id.to_string(),
                     task.title.as_str(),
                     task.content.as_str(),
                     task_status_as_str(task.status),
+                    option_datetime(task.planned_start_at.clone()),
                     option_datetime(task.due_at.clone()),
                     option_uuid(task.linked_goal_id.clone()),
                     task.linked_goal_label.as_deref(),
                     task.bear_note_id.as_deref(),
                     task.system_reminder_id.as_deref(),
-                    task.is_ongoing as i64
+                    task.show_in_timeline as i64
                 ],
             )?;
 
@@ -413,7 +429,7 @@ impl SqliteRepository {
         }
 
         let mut statement = connection.prepare(
-            "SELECT id, title, content, status, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, is_ongoing FROM desk_tasks ORDER BY title",
+            "SELECT id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline FROM desk_tasks ORDER BY title",
         )?;
         let mut rows = statement.query([])?;
         let mut tasks = Vec::new();
@@ -425,12 +441,13 @@ impl SqliteRepository {
                 title: row.get(1)?,
                 content: row.get(2)?,
                 status: parse_task_status(row.get::<_, String>(3)?)?,
-                due_at: parse_optional_datetime(row.get::<_, Option<String>>(4)?)?,
-                linked_goal_id: parse_optional_uuid(row.get::<_, Option<String>>(5)?)?,
-                linked_goal_label: row.get(6)?,
-                bear_note_id: row.get(7)?,
-                system_reminder_id: row.get(8)?,
-                is_ongoing: row.get::<_, i64>(9)? != 0,
+                planned_start_at: parse_optional_datetime(row.get::<_, Option<String>>(4)?)?,
+                due_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
+                linked_goal_id: parse_optional_uuid(row.get::<_, Option<String>>(6)?)?,
+                linked_goal_label: row.get(7)?,
+                bear_note_id: row.get(8)?,
+                system_reminder_id: row.get(9)?,
+                show_in_timeline: row.get::<_, i64>(10)? != 0,
                 activity_logs: logs_by_task_id.remove(&id).unwrap_or_default(),
             });
         }
@@ -479,6 +496,7 @@ fn task_status_as_str(value: TaskStatus) -> &'static str {
 fn task_activity_action_as_str(value: TaskActivityAction) -> &'static str {
     match value {
         TaskActivityAction::Created => "CREATED",
+        TaskActivityAction::Started => "STARTED",
         TaskActivityAction::Paused => "PAUSED",
         TaskActivityAction::Resumed => "RESUMED",
         TaskActivityAction::Completed => "COMPLETED",
@@ -520,6 +538,7 @@ fn parse_task_status(value: String) -> Result<TaskStatus, RepositoryError> {
 fn parse_task_activity_action(value: String) -> Result<TaskActivityAction, RepositoryError> {
     match value.as_str() {
         "CREATED" => Ok(TaskActivityAction::Created),
+        "STARTED" => Ok(TaskActivityAction::Started),
         "PAUSED" => Ok(TaskActivityAction::Paused),
         "RESUMED" => Ok(TaskActivityAction::Resumed),
         "COMPLETED" => Ok(TaskActivityAction::Completed),
@@ -549,5 +568,1035 @@ fn parse_optional_datetime(value: Option<String>) -> Result<Option<DateTime<Loca
     match value {
         Some(inner) => Ok(Some(parse_datetime(inner)?)),
         None => Ok(None),
+    }
+}
+
+// ============================================================================
+// Repository Traits - 分层抽象
+// ============================================================================
+
+/// GoalRepository - 单个 Goal 的增删改查
+pub trait GoalRepository {
+    fn find(&self, id: Uuid) -> Result<Option<Goal>, RepositoryError>;
+    fn list(&self) -> Result<Vec<Goal>, RepositoryError>;
+    fn list_by_area(&self, area_id: Uuid) -> Result<Vec<Goal>, RepositoryError>;
+    fn create(&self, goal: &Goal) -> Result<(), RepositoryError>;
+    fn update(&self, goal: &Goal) -> Result<(), RepositoryError>;
+    fn update_status(&self, id: Uuid, status: GoalStatus) -> Result<(), RepositoryError>;
+    fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
+}
+
+impl GoalRepository for SqliteRepository {
+    fn find(&self, id: Uuid) -> Result<Option<Goal>, RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        let result = connection.query_row(
+            "SELECT id, area_id, title, description, status FROM goals WHERE id = ?1",
+            params![id.to_string()],
+            |row| {
+                Ok(Goal {
+                    id: row.get::<_, String>(0).and_then(|s| Uuid::parse_str(&s).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))))?,
+                    area_id: row.get::<_, Option<String>>(1)?.and_then(|s| Uuid::parse_str(&s).ok()),
+                    title: row.get(2)?,
+                    description: row.get(3)?,
+                    status: row.get::<_, String>(4).and_then(|s| match s.as_str() {
+                        "ACTIVE" => Ok(GoalStatus::Active),
+                        "PAUSED" => Ok(GoalStatus::Paused),
+                        "READY_TO_COMPLETE" => Ok(GoalStatus::ReadyToComplete),
+                        "COMPLETED" => Ok(GoalStatus::Completed),
+                        "ARCHIVED" => Ok(GoalStatus::Archived),
+                        _ => Err(rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid goal status")))),
+                    })?,
+                })
+            },
+        );
+
+        match result {
+            Ok(goal) => Ok(Some(goal)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn list(&self) -> Result<Vec<Goal>, RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        let mut statement = connection.prepare(
+            "SELECT id, area_id, title, description, status FROM goals ORDER BY title"
+        )?;
+        let mut rows = statement.query([])?;
+        let mut goals = Vec::new();
+
+        while let Some(row) = rows.next()? {
+            goals.push(Goal {
+                id: parse_uuid(row.get::<_, String>(0)?)?,
+                area_id: parse_optional_uuid(row.get::<_, Option<String>>(1)?)?,
+                title: row.get(2)?,
+                description: row.get(3)?,
+                status: parse_goal_status(row.get::<_, String>(4)?)?,
+            });
+        }
+
+        Ok(goals)
+    }
+
+    fn list_by_area(&self, area_id: Uuid) -> Result<Vec<Goal>, RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        let mut statement = connection.prepare(
+            "SELECT id, area_id, title, description, status FROM goals WHERE area_id = ?1 ORDER BY title"
+        )?;
+        let mut rows = statement.query(params![area_id.to_string()])?;
+        let mut goals = Vec::new();
+
+        while let Some(row) = rows.next()? {
+            goals.push(Goal {
+                id: parse_uuid(row.get::<_, String>(0)?)?,
+                area_id: parse_optional_uuid(row.get::<_, Option<String>>(1)?)?,
+                title: row.get(2)?,
+                description: row.get(3)?,
+                status: parse_goal_status(row.get::<_, String>(4)?)?,
+            });
+        }
+
+        Ok(goals)
+    }
+
+    fn create(&self, goal: &Goal) -> Result<(), RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        connection.execute(
+            "INSERT INTO goals (id, area_id, title, description, status) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                goal.id.to_string(),
+                option_uuid(goal.area_id),
+                &goal.title,
+                &goal.description,
+                goal_status_as_str(goal.status)
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn update(&self, goal: &Goal) -> Result<(), RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        connection.execute(
+            "UPDATE goals SET area_id = ?1, title = ?2, description = ?3, status = ?4 WHERE id = ?5",
+            params![
+                option_uuid(goal.area_id),
+                &goal.title,
+                &goal.description,
+                goal_status_as_str(goal.status),
+                goal.id.to_string(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn update_status(&self, id: Uuid, status: GoalStatus) -> Result<(), RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        connection.execute(
+            "UPDATE goals SET status = ?1 WHERE id = ?2",
+            params![goal_status_as_str(status), id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        connection.execute(
+            "DELETE FROM goals WHERE id = ?1",
+            params![id.to_string()],
+        )?;
+        Ok(())
+    }
+}
+
+/// TaskRepository - 单个 Task 的增删改查
+pub trait TaskRepository {
+    fn find(&self, id: Uuid) -> Result<Option<DeskTask>, RepositoryError>;
+    fn list(&self) -> Result<Vec<DeskTask>, RepositoryError>;
+    fn list_by_goal(&self, goal_id: Uuid) -> Result<Vec<DeskTask>, RepositoryError>;
+    fn list_by_status(&self, status: TaskStatus) -> Result<Vec<DeskTask>, RepositoryError>;
+    fn create(&self, task: &DeskTask) -> Result<(), RepositoryError>;
+    fn update(&self, task: &DeskTask) -> Result<(), RepositoryError>;
+    fn update_status(&self, id: Uuid, status: TaskStatus) -> Result<(), RepositoryError>;
+    fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
+}
+
+impl TaskRepository for SqliteRepository {
+    fn find(&self, id: Uuid) -> Result<Option<DeskTask>, RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+
+        // 先查询 activity logs
+        let mut logs = Vec::new();
+        {
+            let mut statement = connection.prepare(
+                "SELECT action, note, timestamp FROM desk_task_activity_logs WHERE task_id = ?1 ORDER BY timestamp DESC"
+            )?;
+            let mut rows = statement.query(params![id.to_string()])?;
+
+            while let Some(row) = rows.next()? {
+                logs.push(TaskActivityLog {
+                    action: parse_task_activity_action(row.get::<_, String>(0)?)?,
+                    note: row.get(1)?,
+                    timestamp: parse_datetime(row.get::<_, String>(2)?)?,
+                });
+            }
+        }
+
+        // 查询任务
+        let result = connection.query_row(
+            "SELECT id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline FROM desk_tasks WHERE id = ?1",
+            params![id.to_string()],
+            |row| {
+                Ok(DeskTask {
+                    id: row.get::<_, String>(0).and_then(|s| Uuid::parse_str(&s).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))))?,
+                    title: row.get(1)?,
+                    content: row.get(2)?,
+                    status: row.get::<_, String>(3).and_then(|s| match s.as_str() {
+                        "TODO" => Ok(TaskStatus::Todo),
+                        "IN_PROGRESS" => Ok(TaskStatus::InProgress),
+                        "PAUSED" => Ok(TaskStatus::Paused),
+                        "DONE" => Ok(TaskStatus::Done),
+                        _ => Err(rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid task status")))),
+                    })?,
+                    planned_start_at: row.get::<_, Option<String>>(4)?.and_then(|s| DateTime::parse_from_rfc3339(&s).ok().map(|dt| dt.with_timezone(&Local))),
+                    due_at: row.get::<_, Option<String>>(5)?.and_then(|s| DateTime::parse_from_rfc3339(&s).ok().map(|dt| dt.with_timezone(&Local))),
+                    linked_goal_id: row.get::<_, Option<String>>(6)?.and_then(|s| Uuid::parse_str(&s).ok()),
+                    linked_goal_label: row.get(7)?,
+                    bear_note_id: row.get(8)?,
+                    system_reminder_id: row.get(9)?,
+                    show_in_timeline: row.get::<_, i64>(10)? != 0,
+                    activity_logs: logs.clone(),
+                })
+            },
+        );
+
+        match result {
+            Ok(task) => Ok(Some(task)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn list(&self) -> Result<Vec<DeskTask>, RepositoryError> {
+        self.load_desk_tasks()
+    }
+
+    fn list_by_goal(&self, goal_id: Uuid) -> Result<Vec<DeskTask>, RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+
+        // 先加载所有 logs
+        let mut logs_by_task_id: HashMap<String, Vec<TaskActivityLog>> = HashMap::new();
+        {
+            let mut statement = connection.prepare(
+                "SELECT task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC"
+            )?;
+            let mut rows = statement.query([])?;
+
+            while let Some(row) = rows.next()? {
+                let task_id: String = row.get(0)?;
+                let log = TaskActivityLog {
+                    action: parse_task_activity_action(row.get::<_, String>(1)?)?,
+                    note: row.get(2)?,
+                    timestamp: parse_datetime(row.get::<_, String>(3)?)?,
+                };
+                logs_by_task_id.entry(task_id).or_default().push(log);
+            }
+        }
+
+        // 查询该 goal 的任务
+        let mut statement = connection.prepare(
+            "SELECT id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline FROM desk_tasks WHERE linked_goal_id = ?1 ORDER BY title"
+        )?;
+        let mut rows = statement.query(params![goal_id.to_string()])?;
+        let mut tasks = Vec::new();
+
+        while let Some(row) = rows.next()? {
+            let id = row.get::<_, String>(0)?;
+            tasks.push(DeskTask {
+                id: parse_uuid(id.clone())?,
+                title: row.get(1)?,
+                content: row.get(2)?,
+                status: parse_task_status(row.get::<_, String>(3)?)?,
+                planned_start_at: parse_optional_datetime(row.get::<_, Option<String>>(4)?)?,
+                due_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
+                linked_goal_id: parse_optional_uuid(row.get::<_, Option<String>>(6)?)?,
+                linked_goal_label: row.get(7)?,
+                bear_note_id: row.get(8)?,
+                system_reminder_id: row.get(9)?,
+                show_in_timeline: row.get::<_, i64>(10)? != 0,
+                activity_logs: logs_by_task_id.remove(&id).unwrap_or_default(),
+            });
+        }
+
+        Ok(tasks)
+    }
+
+    fn list_by_status(&self, status: TaskStatus) -> Result<Vec<DeskTask>, RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+
+        // 先加载所有 logs
+        let mut logs_by_task_id: HashMap<String, Vec<TaskActivityLog>> = HashMap::new();
+        {
+            let mut statement = connection.prepare(
+                "SELECT task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC"
+            )?;
+            let mut rows = statement.query([])?;
+
+            while let Some(row) = rows.next()? {
+                let task_id: String = row.get(0)?;
+                let log = TaskActivityLog {
+                    action: parse_task_activity_action(row.get::<_, String>(1)?)?,
+                    note: row.get(2)?,
+                    timestamp: parse_datetime(row.get::<_, String>(3)?)?,
+                };
+                logs_by_task_id.entry(task_id).or_default().push(log);
+            }
+        }
+
+        // 查询指定状态的任务
+        let mut statement = connection.prepare(
+            "SELECT id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline FROM desk_tasks WHERE status = ?1 ORDER BY title"
+        )?;
+        let mut rows = statement.query(params![task_status_as_str(status)])?;
+        let mut tasks = Vec::new();
+
+        while let Some(row) = rows.next()? {
+            let id = row.get::<_, String>(0)?;
+            tasks.push(DeskTask {
+                id: parse_uuid(id.clone())?,
+                title: row.get(1)?,
+                content: row.get(2)?,
+                status: parse_task_status(row.get::<_, String>(3)?)?,
+                planned_start_at: parse_optional_datetime(row.get::<_, Option<String>>(4)?)?,
+                due_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
+                linked_goal_id: parse_optional_uuid(row.get::<_, Option<String>>(6)?)?,
+                linked_goal_label: row.get(7)?,
+                bear_note_id: row.get(8)?,
+                system_reminder_id: row.get(9)?,
+                show_in_timeline: row.get::<_, i64>(10)? != 0,
+                activity_logs: logs_by_task_id.remove(&id).unwrap_or_default(),
+            });
+        }
+
+        Ok(tasks)
+    }
+
+    fn create(&self, task: &DeskTask) -> Result<(), RepositoryError> {
+        let mut connection = Connection::open(&self.path)?;
+        let transaction = connection.transaction()?;
+
+        transaction.execute(
+            "INSERT INTO desk_tasks (id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                task.id.to_string(),
+                &task.title,
+                &task.content,
+                task_status_as_str(task.status),
+                option_datetime(task.planned_start_at),
+                option_datetime(task.due_at),
+                option_uuid(task.linked_goal_id),
+                task.linked_goal_label.as_deref(),
+                task.bear_note_id.as_deref(),
+                task.system_reminder_id.as_deref(),
+                task.show_in_timeline as i64
+            ],
+        )?;
+
+        for log in &task.activity_logs {
+            transaction.execute(
+                "INSERT INTO desk_task_activity_logs (id, task_id, action, note, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    Uuid::new_v4().to_string(),
+                    task.id.to_string(),
+                    task_activity_action_as_str(log.action),
+                    log.note.as_deref(),
+                    log.timestamp.to_rfc3339()
+                ],
+            )?;
+        }
+
+        transaction.commit()?;
+        Ok(())
+    }
+
+    fn update(&self, task: &DeskTask) -> Result<(), RepositoryError> {
+        let mut connection = Connection::open(&self.path)?;
+        let transaction = connection.transaction()?;
+
+        transaction.execute(
+            "UPDATE desk_tasks SET title = ?1, content = ?2, status = ?3, planned_start_at = ?4, due_at = ?5, linked_goal_id = ?6, linked_goal_label = ?7, bear_note_id = ?8, system_reminder_id = ?9, show_in_timeline = ?10 WHERE id = ?11",
+            params![
+                &task.title,
+                &task.content,
+                task_status_as_str(task.status),
+                option_datetime(task.planned_start_at),
+                option_datetime(task.due_at),
+                option_uuid(task.linked_goal_id),
+                task.linked_goal_label.as_deref(),
+                task.bear_note_id.as_deref(),
+                task.system_reminder_id.as_deref(),
+                task.show_in_timeline as i64,
+                task.id.to_string(),
+            ],
+        )?;
+
+        // 删除旧的 activity logs
+        transaction.execute(
+            "DELETE FROM desk_task_activity_logs WHERE task_id = ?1",
+            params![task.id.to_string()],
+        )?;
+
+        // 插入新的 activity logs
+        for log in &task.activity_logs {
+            transaction.execute(
+                "INSERT INTO desk_task_activity_logs (id, task_id, action, note, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    Uuid::new_v4().to_string(),
+                    task.id.to_string(),
+                    task_activity_action_as_str(log.action),
+                    log.note.as_deref(),
+                    log.timestamp.to_rfc3339()
+                ],
+            )?;
+        }
+
+        transaction.commit()?;
+        Ok(())
+    }
+
+    fn update_status(&self, id: Uuid, status: TaskStatus) -> Result<(), RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        connection.execute(
+            "UPDATE desk_tasks SET status = ?1 WHERE id = ?2",
+            params![task_status_as_str(status), id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
+        let mut connection = Connection::open(&self.path)?;
+        let transaction = connection.transaction()?;
+
+        transaction.execute(
+            "DELETE FROM desk_task_activity_logs WHERE task_id = ?1",
+            params![id.to_string()],
+        )?;
+
+        transaction.execute(
+            "DELETE FROM desk_tasks WHERE id = ?1",
+            params![id.to_string()],
+        )?;
+
+        transaction.commit()?;
+        Ok(())
+    }
+}
+
+/// AreaRepository - 单个 Area 的增删改查
+pub trait AreaRepository {
+    fn find(&self, id: Uuid) -> Result<Option<Area>, RepositoryError>;
+    fn list(&self) -> Result<Vec<Area>, RepositoryError>;
+    fn create(&self, area: &Area) -> Result<(), RepositoryError>;
+    fn update(&self, area: &Area) -> Result<(), RepositoryError>;
+    fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
+}
+
+impl AreaRepository for SqliteRepository {
+    fn find(&self, id: Uuid) -> Result<Option<Area>, RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        let result = connection.query_row(
+            "SELECT id, title FROM areas WHERE id = ?1",
+            params![id.to_string()],
+            |row| {
+                let title: String = row.get(1)?;
+                let id_str: String = row.get(0)?;
+                Ok(Area {
+                    id: Uuid::parse_str(&id_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+                    title: title.clone(),
+                    is_system: title == "未分类",
+                })
+            },
+        );
+
+        match result {
+            Ok(area) => Ok(Some(area)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn list(&self) -> Result<Vec<Area>, RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        let mut statement = connection.prepare("SELECT id, title FROM areas ORDER BY title")?;
+        let mut rows = statement.query([])?;
+        let mut areas = Vec::new();
+
+        while let Some(row) = rows.next()? {
+            let title: String = row.get(1)?;
+            areas.push(Area {
+                id: parse_uuid(row.get::<_, String>(0)?)?,
+                title: title.clone(),
+                is_system: title == "未分类",
+            });
+        }
+
+        Ok(areas)
+    }
+
+    fn create(&self, area: &Area) -> Result<(), RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        connection.execute(
+            "INSERT INTO areas (id, title) VALUES (?1, ?2)",
+            params![area.id.to_string(), &area.title],
+        )?;
+        Ok(())
+    }
+
+    fn update(&self, area: &Area) -> Result<(), RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        connection.execute(
+            "UPDATE areas SET title = ?1 WHERE id = ?2",
+            params![&area.title, area.id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
+        let connection = Connection::open(&self.path)?;
+        connection.execute(
+            "DELETE FROM areas WHERE id = ?1",
+            params![id.to_string()],
+        )?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::{Area, UNCATEGORIZED_AREA_ID};
+    use tempfile::TempDir;
+
+    fn create_test_repository() -> (SqliteRepository, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.sqlite");
+        let repo = SqliteRepository::new(db_path);
+        (repo, temp_dir)
+    }
+
+    #[test]
+    fn test_initialize_creates_uncategorized_area() {
+        let (repo, _temp_dir) = create_test_repository();
+
+        // 执行初始化
+        repo.initialize().unwrap();
+
+        // 加载 workspace 验证"未分类" area 存在
+        let snapshot = repo.load_workspace().unwrap();
+
+        let uncategorized = snapshot.areas.iter()
+            .find(|area| area.id.to_string() == UNCATEGORIZED_AREA_ID);
+
+        assert!(uncategorized.is_some(), "未分类 area 应该存在");
+        let uncategorized = uncategorized.unwrap();
+        assert_eq!(uncategorized.title, "未分类");
+        assert!(uncategorized.is_system, "未分类 area 应该标记为系统 area");
+    }
+
+    #[test]
+    fn test_initialize_cleans_orphan_goals() {
+        let (repo, _temp_dir) = create_test_repository();
+
+        // 先初始化创建表
+        repo.initialize().unwrap();
+
+        // 创建一些孤儿 goals（area_id 为 NULL 或指向不存在的 area）
+        let connection = Connection::open(repo.path()).unwrap();
+        let orphan_goal_id_1 = Uuid::new_v4().to_string();
+        let orphan_goal_id_2 = Uuid::new_v4().to_string();
+        let non_existent_area_id = Uuid::new_v4().to_string();
+
+        connection.execute(
+            "INSERT INTO goals (id, area_id, title, description, status) VALUES (?1, NULL, ?2, ?3, ?4)",
+            params![orphan_goal_id_1, "Orphan Goal 1", "", "ACTIVE"],
+        ).unwrap();
+
+        connection.execute(
+            "INSERT INTO goals (id, area_id, title, description, status) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![orphan_goal_id_2, non_existent_area_id, "Orphan Goal 2", "", "ACTIVE"],
+        ).unwrap();
+
+        drop(connection);
+
+        // 再次执行初始化，应该清理孤儿 goals
+        repo.initialize().unwrap();
+
+        // 验证孤儿 goals 的 area_id 被更新为"未分类"
+        let connection = Connection::open(repo.path()).unwrap();
+
+        let area_id_1: String = connection.query_row(
+            "SELECT area_id FROM goals WHERE id = ?1",
+            params![orphan_goal_id_1],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(area_id_1, UNCATEGORIZED_AREA_ID);
+
+        let area_id_2: String = connection.query_row(
+            "SELECT area_id FROM goals WHERE id = ?1",
+            params![orphan_goal_id_2],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(area_id_2, UNCATEGORIZED_AREA_ID);
+    }
+
+    #[test]
+    fn test_initialize_idempotent() {
+        let (repo, _temp_dir) = create_test_repository();
+
+        // 第一次初始化
+        repo.initialize().unwrap();
+        let snapshot1 = repo.load_workspace().unwrap();
+        let uncategorized_count_1 = snapshot1.areas.iter()
+            .filter(|area| area.id.to_string() == UNCATEGORIZED_AREA_ID)
+            .count();
+
+        assert_eq!(uncategorized_count_1, 1, "应该只有一个未分类 area");
+
+        // 第二次初始化
+        repo.initialize().unwrap();
+        let snapshot2 = repo.load_workspace().unwrap();
+        let uncategorized_count_2 = snapshot2.areas.iter()
+            .filter(|area| area.id.to_string() == UNCATEGORIZED_AREA_ID)
+            .count();
+
+        assert_eq!(uncategorized_count_2, 1, "重复初始化不应该创建重复的未分类 area");
+    }
+
+    #[test]
+    fn test_load_workspace_marks_uncategorized_as_system() {
+        let (repo, _temp_dir) = create_test_repository();
+
+        repo.initialize().unwrap();
+
+        // 创建一个普通 area
+        let mut snapshot = repo.load_workspace().unwrap();
+        let normal_area = Area {
+            id: Uuid::new_v4(),
+            title: "工作".to_string(),
+            is_system: false,
+        };
+        snapshot.areas.push(normal_area.clone());
+        repo.save_workspace(&snapshot).unwrap();
+
+        // 重新加载并验证
+        let loaded_snapshot = repo.load_workspace().unwrap();
+
+        let uncategorized = loaded_snapshot.areas.iter()
+            .find(|area| area.title == "未分类")
+            .expect("未分类 area 应该存在");
+        assert!(uncategorized.is_system, "未分类 area 应该标记为系统 area");
+
+        let work_area = loaded_snapshot.areas.iter()
+            .find(|area| area.title == "工作")
+            .expect("工作 area 应该存在");
+        assert!(!work_area.is_system, "普通 area 不应该标记为系统 area");
+    }
+
+    // ============================================================================
+    // GoalRepository Trait Tests
+    // ============================================================================
+
+    #[test]
+    fn test_goal_repository_crud() {
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        // Create
+        let goal = Goal {
+            id: Uuid::new_v4(),
+            area_id: None,
+            title: "Test Goal".to_string(),
+            description: "Test Description".to_string(),
+            status: GoalStatus::Active,
+        };
+        GoalRepository::create(&repo, &goal).unwrap();
+
+        // Read - find
+        let found = GoalRepository::find(&repo, goal.id).unwrap().expect("Goal should exist");
+        assert_eq!(found.title, "Test Goal");
+        assert_eq!(found.description, "Test Description");
+        assert_eq!(found.status, GoalStatus::Active);
+
+        // Update
+        let mut updated = found;
+        updated.title = "Updated Goal".to_string();
+        updated.description = "Updated Description".to_string();
+        GoalRepository::update(&repo, &updated).unwrap();
+
+        let found = GoalRepository::find(&repo, goal.id).unwrap().expect("Goal should exist");
+        assert_eq!(found.title, "Updated Goal");
+        assert_eq!(found.description, "Updated Description");
+
+        // Delete
+        GoalRepository::delete(&repo, goal.id).unwrap();
+        assert!(GoalRepository::find(&repo, goal.id).unwrap().is_none(), "Goal should be deleted");
+    }
+
+    #[test]
+    fn test_goal_repository_list() {
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        // Create multiple goals
+        let goal1 = Goal {
+            id: Uuid::new_v4(),
+            area_id: None,
+            title: "Alpha Goal".to_string(),
+            description: String::new(),
+            status: GoalStatus::Active,
+        };
+        let goal2 = Goal {
+            id: Uuid::new_v4(),
+            area_id: None,
+            title: "Beta Goal".to_string(),
+            description: String::new(),
+            status: GoalStatus::Active,
+        };
+
+        GoalRepository::create(&repo, &goal1).unwrap();
+        GoalRepository::create(&repo, &goal2).unwrap();
+
+        // List all
+        let goals = GoalRepository::list(&repo).unwrap();
+        assert_eq!(goals.len(), 2);
+        // 验证排序（按 title）
+        assert_eq!(goals[0].title, "Alpha Goal");
+        assert_eq!(goals[1].title, "Beta Goal");
+    }
+
+    #[test]
+    fn test_goal_repository_list_by_area() {
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        let area_id = Uuid::new_v4();
+        let other_area_id = Uuid::new_v4();
+
+        // Create goals in different areas
+        let goal1 = Goal {
+            id: Uuid::new_v4(),
+            area_id: Some(area_id),
+            title: "Goal in Area 1".to_string(),
+            description: String::new(),
+            status: GoalStatus::Active,
+        };
+        let goal2 = Goal {
+            id: Uuid::new_v4(),
+            area_id: Some(area_id),
+            title: "Another Goal in Area 1".to_string(),
+            description: String::new(),
+            status: GoalStatus::Active,
+        };
+        let goal3 = Goal {
+            id: Uuid::new_v4(),
+            area_id: Some(other_area_id),
+            title: "Goal in Area 2".to_string(),
+            description: String::new(),
+            status: GoalStatus::Active,
+        };
+
+        GoalRepository::create(&repo, &goal1).unwrap();
+        GoalRepository::create(&repo, &goal2).unwrap();
+        GoalRepository::create(&repo, &goal3).unwrap();
+
+        // List by area
+        let goals_in_area1 = GoalRepository::list_by_area(&repo, area_id).unwrap();
+        assert_eq!(goals_in_area1.len(), 2);
+        assert!(goals_in_area1.iter().all(|g| g.area_id == Some(area_id)));
+    }
+
+    #[test]
+    fn test_goal_repository_update_status_only() {
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        let goal = Goal {
+            id: Uuid::new_v4(),
+            area_id: None,
+            title: "Test Goal".to_string(),
+            description: "Original Description".to_string(),
+            status: GoalStatus::Active,
+        };
+        GoalRepository::create(&repo, &goal).unwrap();
+
+        // Update only status
+        GoalRepository::update_status(&repo, goal.id, GoalStatus::Paused).unwrap();
+
+        let updated = GoalRepository::find(&repo, goal.id).unwrap().expect("Goal should exist");
+        assert_eq!(updated.status, GoalStatus::Paused);
+        assert_eq!(updated.title, "Test Goal", "Title should not change");
+        assert_eq!(updated.description, "Original Description", "Description should not change");
+    }
+
+    // ============================================================================
+    // TaskRepository Trait Tests
+    // ============================================================================
+
+    #[test]
+    fn test_task_repository_crud() {
+        use crate::domain::{TaskActivityAction, TaskActivityLog, TaskStatus};
+
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        // Create
+        let task = DeskTask {
+            id: Uuid::new_v4(),
+            title: "Test Task".to_string(),
+            content: "Test Content".to_string(),
+            status: TaskStatus::Todo,
+            planned_start_at: None,
+            due_at: None,
+            linked_goal_id: None,
+            linked_goal_label: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![TaskActivityLog {
+                action: TaskActivityAction::Created,
+                note: None,
+                timestamp: chrono::Local::now(),
+            }],
+        };
+        TaskRepository::create(&repo, &task).unwrap();
+
+        // Read
+        let found = TaskRepository::find(&repo, task.id).unwrap().expect("Task should exist");
+        assert_eq!(found.title, "Test Task");
+        assert_eq!(found.content, "Test Content");
+        assert_eq!(found.status, TaskStatus::Todo);
+        assert_eq!(found.activity_logs.len(), 1);
+
+        // Update
+        let mut updated = found;
+        updated.title = "Updated Task".to_string();
+        updated.status = TaskStatus::InProgress;
+        TaskRepository::update(&repo, &updated).unwrap();
+
+        let found = TaskRepository::find(&repo, task.id).unwrap().expect("Task should exist");
+        assert_eq!(found.title, "Updated Task");
+        assert_eq!(found.status, TaskStatus::InProgress);
+
+        // Delete
+        TaskRepository::delete(&repo, task.id).unwrap();
+        assert!(TaskRepository::find(&repo, task.id).unwrap().is_none(), "Task should be deleted");
+    }
+
+    #[test]
+    fn test_task_repository_list_by_goal() {
+        use crate::domain::TaskStatus;
+
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        let goal_id = Uuid::new_v4();
+        let other_goal_id = Uuid::new_v4();
+
+        let task1 = DeskTask {
+            id: Uuid::new_v4(),
+            title: "Task 1".to_string(),
+            content: String::new(),
+            status: TaskStatus::Todo,
+            planned_start_at: None,
+            due_at: None,
+            linked_goal_id: Some(goal_id),
+            linked_goal_label: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![],
+        };
+
+        let task2 = DeskTask {
+            id: Uuid::new_v4(),
+            title: "Task 2".to_string(),
+            content: String::new(),
+            status: TaskStatus::Todo,
+            planned_start_at: None,
+            due_at: None,
+            linked_goal_id: Some(goal_id),
+            linked_goal_label: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![],
+        };
+
+        let task3 = DeskTask {
+            id: Uuid::new_v4(),
+            title: "Task 3".to_string(),
+            content: String::new(),
+            status: TaskStatus::Todo,
+            planned_start_at: None,
+            due_at: None,
+            linked_goal_id: Some(other_goal_id),
+            linked_goal_label: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![],
+        };
+
+        TaskRepository::create(&repo, &task1).unwrap();
+        TaskRepository::create(&repo, &task2).unwrap();
+        TaskRepository::create(&repo, &task3).unwrap();
+
+        let tasks = TaskRepository::list_by_goal(&repo, goal_id).unwrap();
+        assert_eq!(tasks.len(), 2);
+        assert!(tasks.iter().all(|t| t.linked_goal_id == Some(goal_id)));
+    }
+
+    #[test]
+    fn test_task_repository_list_by_status() {
+        use crate::domain::TaskStatus;
+
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        let task1 = DeskTask {
+            id: Uuid::new_v4(),
+            title: "Todo Task".to_string(),
+            content: String::new(),
+            status: TaskStatus::Todo,
+            planned_start_at: None,
+            due_at: None,
+            linked_goal_id: None,
+            linked_goal_label: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![],
+        };
+
+        let task2 = DeskTask {
+            id: Uuid::new_v4(),
+            title: "Done Task".to_string(),
+            content: String::new(),
+            status: TaskStatus::Done,
+            planned_start_at: None,
+            due_at: None,
+            linked_goal_id: None,
+            linked_goal_label: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![],
+        };
+
+        TaskRepository::create(&repo, &task1).unwrap();
+        TaskRepository::create(&repo, &task2).unwrap();
+
+        let todo_tasks = TaskRepository::list_by_status(&repo, TaskStatus::Todo).unwrap();
+        assert_eq!(todo_tasks.len(), 1);
+        assert_eq!(todo_tasks[0].title, "Todo Task");
+
+        let done_tasks = TaskRepository::list_by_status(&repo, TaskStatus::Done).unwrap();
+        assert_eq!(done_tasks.len(), 1);
+        assert_eq!(done_tasks[0].title, "Done Task");
+    }
+
+    #[test]
+    fn test_task_repository_update_status_only() {
+        use crate::domain::TaskStatus;
+
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        let task = DeskTask {
+            id: Uuid::new_v4(),
+            title: "Test Task".to_string(),
+            content: "Original Content".to_string(),
+            status: TaskStatus::Todo,
+            planned_start_at: None,
+            due_at: None,
+            linked_goal_id: None,
+            linked_goal_label: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![],
+        };
+        TaskRepository::create(&repo, &task).unwrap();
+
+        // Update only status
+        TaskRepository::update_status(&repo, task.id, TaskStatus::InProgress).unwrap();
+
+        let updated = TaskRepository::find(&repo, task.id).unwrap().expect("Task should exist");
+        assert_eq!(updated.status, TaskStatus::InProgress);
+        assert_eq!(updated.title, "Test Task", "Title should not change");
+        assert_eq!(updated.content, "Original Content", "Content should not change");
+    }
+
+    // ============================================================================
+    // AreaRepository Trait Tests
+    // ============================================================================
+
+    #[test]
+    fn test_area_repository_crud() {
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        // Create
+        let area = Area {
+            id: Uuid::new_v4(),
+            title: "Test Area".to_string(),
+            is_system: false,
+        };
+        AreaRepository::create(&repo, &area).unwrap();
+
+        // Read
+        let found = AreaRepository::find(&repo, area.id).unwrap().expect("Area should exist");
+        assert_eq!(found.title, "Test Area");
+        assert!(!found.is_system);
+
+        // Update
+        let mut updated = found;
+        updated.title = "Updated Area".to_string();
+        AreaRepository::update(&repo, &updated).unwrap();
+
+        let found = AreaRepository::find(&repo, area.id).unwrap().expect("Area should exist");
+        assert_eq!(found.title, "Updated Area");
+
+        // Delete
+        AreaRepository::delete(&repo, area.id).unwrap();
+        assert!(AreaRepository::find(&repo, area.id).unwrap().is_none(), "Area should be deleted");
+    }
+
+    #[test]
+    fn test_area_repository_list() {
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        // Create areas
+        let area1 = Area {
+            id: Uuid::new_v4(),
+            title: "Work".to_string(),
+            is_system: false,
+        };
+        let area2 = Area {
+            id: Uuid::new_v4(),
+            title: "Personal".to_string(),
+            is_system: false,
+        };
+
+        AreaRepository::create(&repo, &area1).unwrap();
+        AreaRepository::create(&repo, &area2).unwrap();
+
+        // List all (including system "未分类")
+        let areas = AreaRepository::list(&repo).unwrap();
+        assert!(areas.len() >= 3); // At least 2 created + 1 system
+
+        let uncategorized = areas.iter().find(|a| a.title == "未分类");
+        assert!(uncategorized.is_some());
+        assert!(uncategorized.unwrap().is_system);
     }
 }

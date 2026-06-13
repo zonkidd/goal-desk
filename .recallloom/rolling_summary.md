@@ -1,62 +1,41 @@
----
-recallloom: rolling-summary
----
+<!-- recallloom:file=rolling_summary version=1.0 lang=en -->
+<!-- last-writer: [RecallLoom] | 2026-06-11 -->
+<!-- file-state: revision=4 | updated-at=2026-06-11T22:20:37+08:00 | writer-id=RecallLoom | base-workspace-revision=6 -->
 
-# Goal Desk 当前状态
+<!-- section: current_state -->
+# Current State
 
-## 最新进展 (2026-06-11)
+- 任务详情抽屉已经完成一轮可用性升级，并通过浏览器端回归验证：
+  - Markdown 区改为 `编辑 / 预览 / 分屏`
+  - 截止时间改为紧凑触发器，点击后展开大编辑卡
+  - 所属目标改为紧凑触发器，点击后展开大列表选择面板
+  - “快速创建目标并关联”已并入目标选择面板
+- 新的 RecallLoom `.recallloom/` 已由官方 helper 重建、通过 `validate_context.py`，并已迁回项目的有效上下文
+- 旧的损坏 sidecar 仍保留在 `.recallloom.damaged-2026-06-11/` 作为备份
 
-### ✅ 已完成功能
+<!-- section: active_judgments -->
+# Active Judgments
 
-**Issue 006-011 完整闭环**:
-- Goal CRUD 持久化 (SQLite + Repository + Commands)
-- Goal Drawer 编辑自动保存
-- Task-Goal 链接和内联创建
-- Ongoing 任务 Today 显示逻辑
-- Goal 进度自动派生和状态转换
-- 端到端烟雾测试通过
+- 抽屉整体视觉保持紧凑，不做厚重卡片化页面重排。
+- 交互上采用“静态轻、编辑态大”的策略，而不是一直展示大输入控件。
+- Markdown 继续使用原生 `textarea`，避免为这一轮体验优化引入新编辑器依赖。
+- RecallLoom 恢复优先走官方 helper；旧 sidecar 不再继续点修。
 
-**UI 可用性优化**:
-- 按钮尺寸增大 50%+ (px-3→px-4, py-1.5→py-2)
-- 图标尺寸增大 (h-3.5→h-4/h-5)
-- 状态切换动画 (scale-105, shadow-lg, duration-200)
-- 回车键确认功能
-- Goal 卡片交互增强
+<!-- section: risks_open_questions -->
+# Risks / Open Questions
 
-**Bug 修复**:
-- bear_note_id 列缺失 → 数据库迁移
-- 快速捕获窗口权限 → 移除 window.hide/close
+- 新生成的 RecallLoom sidecar workspace language 当前是 `en`，但迁回的连续性内容主要用中文；结构合法，但后续如果要严格统一语言风格，可以再做一次受控迁移。
+- 仓库里的 `@tauri-apps/cli` 仍存在 optional native binding 缺失问题，直接走 `npm run tauri:dev` 或默认 Playwright `webServer` 可能失败。
+- 旧 sidecar 备份目录还在，后续可以在确认无额外信息需要迁回后手动归档或删除。
 
-## 技术状态
+<!-- section: next_step -->
+# Next Step
 
-### 测试覆盖
-- 15 个测试全部通过
-- Repository 测试完整
-- Goal/Task CRUD 验证通过
+如果继续当前产品工作，优先从任务详情页的进一步细节打磨或下一个 issue 垂直切片开始；如果继续基础设施工作，优先修复本地 Tauri CLI optional binding 问题，减少后续测试和开发启动摩擦。
 
-### 数据库结构
-- `goals`: id, area_id, title, description, status
-- `desk_tasks`: id, title, content, status, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, is_ongoing
-- `areas`: id, title
+<!-- section: recent_pivots -->
+# Recent Pivots
 
-### 核心逻辑
-- `deriveGoalStatus`: 自动状态转换
-- `deriveGoalRecords`: 进度计算
-- `getTodayFocusTasks`: Today 过滤
-
-## 下一步
-
-### 可能的优化方向
-- 增强测试覆盖（UI 集成测试）
-- 性能优化（大数据量场景）
-- 更多动画效果
-- 键盘快捷键支持
-
-### 已知限制
-- EventKit 集成未完成（Issue 005）
-- Bear Note 集成基础完成
-- 浏览器预览模式功能完整但无持久化
-
-## 当前运行状态
-
-应用正常运行，所有核心功能可用，UI 交互流畅。
+- 原本尝试最小修补旧 RecallLoom `config.json`，验证后确认整套 sidecar 都已过时，不适合继续点修。
+- 前端 TDD 从系统 Node 14 切换到线程自带的新 Node runtime，并使用独立的 `playwright.local.config.ts` 规避默认 `tauri:dev` 启动链路问题。
+- 当前任务从“仅恢复上下文”升级为“完成 UI 改版、回归验证，并修复连续性系统”。

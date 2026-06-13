@@ -1,29 +1,15 @@
-import { AlignLeft, Pause, PauseCircle, PlusCircle } from 'lucide-react'
+import { AlignLeft, Calendar, ChevronDown, ChevronRight, CheckCircle2, Pause, PauseCircle, PlusCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { GlassPanel } from '../common/GlassPanel'
 import { useAppStore } from '../../store/appStore'
 import { getTaskContentBadgeLabel } from '../../lib/taskPresentation'
-import type { Task } from '../../types/task'
-
-function sortByRecent(tasks: Task[]) {
-  return [...tasks].sort((a, b) => {
-    const aTime = Math.max(...a.activityLogs.map((log) => log.timestamp.getTime()), 0)
-    const bTime = Math.max(...b.activityLogs.map((log) => log.timestamp.getTime()), 0)
-    return bTime - aTime
-  })
-}
 
 export function InboxView() {
-  const tasks = useAppStore((state) => state.tasks)
-  const goals = useAppStore((state) => state.baseGoals)
-  const activeArea = useAppStore((state) => state.activeArea)
+  const groupedTasks = useAppStore((state) => state.inbox)
+  const showCompleted = useAppStore((state) => state.showCompletedTodos)
   const openTaskDrawer = useAppStore((state) => state.openTaskDrawer)
   const addTask = useAppStore((state) => state.addTask)
-  const visibleTasks =
-    activeArea === 'ALL' ? tasks : tasks.filter((task) => task.linkedGoalId && goals.some((goal) => goal.id === task.linkedGoalId && goal.area === activeArea))
-
-  const activeTasks = sortByRecent(visibleTasks.filter((task) => task.status === 'TODO' || task.status === 'IN_PROGRESS'))
-  const pausedTasks = sortByRecent(visibleTasks.filter((task) => task.status === 'PAUSED'))
+  const setShowCompleted = useAppStore((state) => state.setShowCompletedTodos)
 
   return (
     <section id="inbox" className="screen active">
@@ -41,7 +27,7 @@ export function InboxView() {
           <div>
             <h3 className="mb-4 px-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Recently Added & Todo</h3>
             <div className="space-y-2">
-              {activeTasks.map((task) => (
+              {groupedTasks.activeTasks.map((task) => (
                 <motion.button
                   key={task.id}
                   whileHover={{ y: -2 }}
@@ -49,14 +35,21 @@ export function InboxView() {
                   className="glass-card flex w-full items-center gap-4 rounded-xl p-4 text-left hover:border-indigo-300"
                 >
                   <div className="h-5 w-5 shrink-0 rounded-[6px] border-2 border-slate-300 bg-white" />
-                  <div className="flex-1">
-                    <div className="text-sm font-bold text-slate-800">{task.title}</div>
-                    <div className="mt-1 flex gap-3 text-xs text-slate-500">
-                      <span className="flex items-center gap-1 text-indigo-600">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-slate-800">{task.title}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                      <span className="inline-flex items-center gap-1 text-indigo-600">
                         <AlignLeft className="h-3 w-3" />
                         {getTaskContentBadgeLabel(task.content)}
                       </span>
-                      <span>{task.dueDate ? task.dueDate.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'No date'}</span>
+                      {task.dueDate ? (
+                        <span className="inline-flex items-center gap-1 rounded border border-emerald-100 bg-emerald-50 px-1.5 text-emerald-600">
+                          <Calendar className="h-3 w-3" />
+                          {task.dueDate.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      ) : (
+                        <span>No date</span>
+                      )}
                     </div>
                   </div>
                 </motion.button>
@@ -70,7 +63,7 @@ export function InboxView() {
               Paused (已暂停)
             </h3>
             <div className="space-y-2 opacity-80">
-              {pausedTasks.map((task) => (
+              {groupedTasks.pausedTasks.map((task) => (
                 <motion.button
                   key={task.id}
                   whileHover={{ y: -2 }}
@@ -89,6 +82,45 @@ export function InboxView() {
                 </motion.button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowCompleted(!showCompleted)}
+              className="mb-4 flex w-full items-center justify-between px-2 text-left text-[11px] font-bold uppercase tracking-widest text-emerald-600"
+            >
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Completed (已完成)
+              </span>
+              <span className="flex items-center gap-2 text-emerald-500">
+                {groupedTasks.completed.totalCount}
+                {showCompleted ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </span>
+            </button>
+            {showCompleted && (
+              <div className="space-y-2 opacity-80">
+                {groupedTasks.completed.visibleTasks.map((task) => (
+                  <motion.button
+                    key={task.id}
+                    whileHover={{ y: -2 }}
+                    onClick={() => openTaskDrawer(task.id)}
+                    className="glass-card flex w-full items-center gap-4 rounded-xl border-l-4 border-l-emerald-400 p-4 text-left"
+                  >
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border-2 border-emerald-300 bg-emerald-50 text-emerald-500">
+                      <CheckCircle2 className="h-3 w-3 fill-current" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-bold text-slate-700">{task.title}</div>
+                      <div className="mt-1 inline-block rounded border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-600">
+                        完成记录: {task.activityLogs.find((log) => log.action === 'COMPLETED')?.note || '已完成'}
+                      </div>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </GlassPanel>

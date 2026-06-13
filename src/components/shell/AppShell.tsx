@@ -4,6 +4,7 @@ import { InboxView } from '../views/InboxView'
 import { TodayView } from '../views/TodayView'
 import { BoardView } from '../views/BoardView'
 import { GoalsView } from '../views/GoalsView'
+import { AreasView } from '../views/AreasView'
 import { TaskDrawer } from '../drawer/TaskDrawer'
 import { GoalDrawer } from '../drawer/GoalDrawer'
 import { ReminderDrawer } from '../drawer/ReminderDrawer'
@@ -38,6 +39,7 @@ export function AppShell() {
           {currentView === 'today' && <TodayView />}
           {currentView === 'board' && <BoardView />}
           {currentView === 'goals' && <GoalsView />}
+          {currentView === 'areas' && <AreasView />}
         </div>
       </section>
 

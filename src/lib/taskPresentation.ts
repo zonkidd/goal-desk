@@ -1,6 +1,4 @@
-import type { GoalCard, GoalStatus, TimelineItem } from '../types/app'
-import type { TaskStatus } from '../types/task'
-import type { Task } from '../types/task'
+import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 
 export function getRuntimeModeStatusMessage(isTauri: boolean) {
   return isTauri ? 'Rust + Tauri data' : 'Browser preview only · no SQLite or Tauri IPC'
@@ -11,86 +9,122 @@ export function getTaskPrimaryStatusLabel(status: TaskStatus) {
     case 'PAUSED':
       return 'Resume'
     case 'DONE':
-      return 'Reopen'
+      return ''
     case 'IN_PROGRESS':
-      return 'In Progress'
+      return 'Pause'
     default:
       return 'Start'
   }
+}
+
+export function getTaskStatusActions(status: TaskStatus): TaskStatus[] {
+  switch (status) {
+    case 'TODO':
+      return ['IN_PROGRESS', 'DONE']
+    case 'IN_PROGRESS':
+      return ['PAUSED', 'DONE']
+    case 'PAUSED':
+      return ['IN_PROGRESS', 'DONE']
+    case 'DONE':
+      return []
+    default:
+      return []
+  }
+}
+
+export function logActionForTransition(fromStatus: TaskStatus, toStatus: TaskStatus): TaskActivityAction {
+  if (toStatus === 'IN_PROGRESS') {
+    return fromStatus === 'PAUSED' ? 'RESUMED' : 'STARTED'
+  }
+  if (toStatus === 'PAUSED') return 'PAUSED'
+  if (toStatus === 'DONE') return 'COMPLETED'
+  return 'NOTE_ADDED'
 }
 
 export function getTaskContentBadgeLabel(content: string) {
   return content.trim() ? '包含 Markdown 笔记' : '暂无笔记'
 }
 
-export function filterGoalsByArea(goals: GoalCard[], activeArea: string) {
-  if (activeArea === 'ALL') return goals
-  return goals.filter((goal) => goal.area === activeArea)
-}
-
-export function filterTasksByArea(tasks: Task[], goals: GoalCard[], activeArea: string) {
-  if (activeArea === 'ALL') return tasks
-
-  const goalIds = new Set(filterGoalsByArea(goals, activeArea).map((goal) => goal.id))
-  return tasks.filter((task) => task.linkedGoalId && goalIds.has(task.linkedGoalId))
-}
-
-export function filterTimelineByArea(timeline: TimelineItem[], visibleTasks: Task[]) {
-  const visibleTaskIds = new Set(visibleTasks.map((task) => task.id))
-  return timeline.filter((item) => item.source !== 'todo' || visibleTaskIds.has(item.id))
-}
-
-function isSameDay(left: Date, right: Date) {
-  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate()
-}
-
 function startOfDay(value: Date) {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate())
 }
 
-function deriveGoalStatus(goal: GoalCard, linkedTasks: Task[]): GoalStatus {
-  if (goal.status === 'ARCHIVED') return 'ARCHIVED'
-  if (goal.status === 'PAUSED') return 'PAUSED'
-  if (goal.status === 'COMPLETED' && linkedTasks.some((task) => task.status !== 'DONE')) return 'ACTIVE'
-  if (linkedTasks.length > 0 && linkedTasks.every((task) => task.status === 'DONE')) return 'READY_TO_COMPLETE'
-  if (goal.status === 'READY_TO_COMPLETE' && linkedTasks.some((task) => task.status !== 'DONE')) return 'ACTIVE'
-  return goal.status === 'COMPLETED' ? 'COMPLETED' : 'ACTIVE'
+export type TaskUrgency = 'critical' | 'warning' | 'normal' | 'none'
+
+export interface TaskTimeInfo {
+  daysElapsed: number
+  daysRemaining: number | null
+  urgency: TaskUrgency
+  startDate: Date
+  todayDate: Date
+  endDate: Date | null
+  totalDays: number | null
+  progressPercent: number | null
 }
 
-export function deriveGoalRecords(goals: GoalCard[], tasks: Task[]): GoalCard[] {
-  return goals.map((goal) => {
-    const linkedTasks = tasks.filter((task) => task.linkedGoalId === goal.id)
-    const completedTaskCount = linkedTasks.filter((task) => task.status === 'DONE').length
-    const nextTodo =
-      linkedTasks
-        .filter((task) => task.status !== 'DONE')
-        .sort((left, right) => {
-          const leftTime = left.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER
-          const rightTime = right.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER
-          return leftTime - rightTime
-        })[0]?.title || 'Keep going'
-
-    return {
-      ...goal,
-      progress: linkedTasks.length === 0 ? 0 : Math.round((completedTaskCount / linkedTasks.length) * 100),
-      nextTodo,
-      taskCount: linkedTasks.length,
-      status: deriveGoalStatus(goal, linkedTasks),
-      updatedAt: linkedTasks[0]?.updatedAt || goal.updatedAt,
-    }
-  })
-}
-
-export function getTodayFocusTasks(tasks: Task[], now = new Date()) {
+export function getTaskTimeInfo(task: Task, now = new Date()): TaskTimeInfo {
   const today = startOfDay(now)
-  return tasks.filter((task) => {
-    if (task.status === 'DONE' || task.status === 'PAUSED') return false
-    if (task.isOngoing) {
-      const createdAt = startOfDay(task.createdAt || now)
-      const dueDay = task.dueDate ? startOfDay(task.dueDate) : undefined
-      return createdAt.getTime() <= today.getTime() && (!dueDay || today.getTime() <= dueDay.getTime())
-    }
+  const startDate = task.plannedStartAt || task.createdAt || now
+  const startDay = startOfDay(startDate)
 
-    return task.dueDate ? isSameDay(task.dueDate, today) : false
-  })
+  // 计算已推进天数
+  const daysElapsed = Math.max(0, Math.floor((today.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)))
+
+  // 计算剩余天数和紧急度
+  let daysRemaining: number | null = null
+  let urgency: TaskUrgency = 'none'
+  let endDate: Date | null = null
+  let totalDays: number | null = null
+  let progressPercent: number | null = null
+
+  if (task.dueDate) {
+    endDate = task.dueDate
+    const dueDay = startOfDay(task.dueDate)
+    daysRemaining = Math.floor((dueDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (daysRemaining <= 2) urgency = 'critical'
+    else if (daysRemaining <= 7) urgency = 'warning'
+    else urgency = 'normal'
+
+    // 计算总天数和进度百分比
+    totalDays = Math.max(1, Math.floor((dueDay.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)))
+    progressPercent = Math.min(100, Math.max(0, Math.round((daysElapsed / totalDays) * 100)))
+  }
+
+  return {
+    daysElapsed,
+    daysRemaining,
+    urgency,
+    startDate: startDay,
+    todayDate: today,
+    endDate,
+    totalDays,
+    progressPercent,
+  }
+}
+
+export function getUrgencyColor(urgency: TaskUrgency): string {
+  switch (urgency) {
+    case 'critical':
+      return 'text-red-600'
+    case 'warning':
+      return 'text-orange-600'
+    case 'normal':
+      return 'text-green-600'
+    case 'none':
+      return 'text-slate-400'
+  }
+}
+
+export function getUrgencyIcon(urgency: TaskUrgency): string {
+  switch (urgency) {
+    case 'critical':
+      return '🔥'
+    case 'warning':
+      return '⏰'
+    case 'normal':
+      return '✅'
+    case 'none':
+      return '∞'
+  }
 }

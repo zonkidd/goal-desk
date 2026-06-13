@@ -20,9 +20,8 @@ test.describe('Goal Desk - 冒烟测试', () => {
   })
 
   test('显示 Today 任务列表', async ({ page }) => {
-    // 查找 Today 区域
-    const todaySection = page.locator('text=Today').first()
-    await expect(todaySection).toBeVisible({ timeout: 5000 })
+    await page.getByRole('button', { name: '今日焦点' }).click()
+    await expect(page.getByRole('heading', { name: '今日焦点' })).toBeVisible({ timeout: 5000 })
   })
 
   test('可以打开 Goal Drawer', async ({ page }) => {

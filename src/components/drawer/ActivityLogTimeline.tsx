@@ -5,6 +5,7 @@ function iconForAction(action: TaskActivityLog['action']) {
   switch (action) {
     case 'PAUSED':
       return <Pause className="h-3 w-3 fill-current" />
+    case 'STARTED':
     case 'RESUMED':
       return <Play className="h-3 w-3 fill-current" />
     case 'COMPLETED':
@@ -18,6 +19,7 @@ function iconForAction(action: TaskActivityLog['action']) {
 
 const labelMap: Record<TaskActivityLog['action'], string> = {
   CREATED: 'Created',
+  STARTED: 'Started',
   PAUSED: 'Paused',
   RESUMED: 'Resumed',
   COMPLETED: 'Completed',

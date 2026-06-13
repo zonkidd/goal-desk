@@ -3,15 +3,20 @@ import assert from 'node:assert/strict'
 
 import { parseBrowserQuickCapture } from './quickCapture.ts'
 import {
-  deriveGoalRecords,
-  filterGoalsByArea,
-  getTodayFocusTasks,
-  filterTasksByArea,
-  filterTimelineByArea,
+  getTaskStatusActions,
   getRuntimeModeStatusMessage,
   getTaskContentBadgeLabel,
   getTaskPrimaryStatusLabel,
+  logActionForTransition,
 } from './taskPresentation.ts'
+import {
+  deriveGoalRecords,
+  filterGoalsByArea,
+  filterTasksByArea,
+  filterTimelineByArea,
+  getInboxTaskGroups,
+  getTodayFocusTasks,
+} from './workspaceDerivation.ts'
 
 test('browser preview quick capture parses tomorrow afternoon three oclock', () => {
   const now = new Date('2026-06-10T09:00:00+08:00')
@@ -24,6 +29,29 @@ test('browser preview quick capture parses tomorrow afternoon three oclock', () 
 
 test('paused tasks expose a resume label instead of todo', () => {
   assert.equal(getTaskPrimaryStatusLabel('PAUSED'), 'Resume')
+})
+
+test('todo status actions only expose valid next moves for each state', () => {
+  assert.deepEqual(getTaskStatusActions('TODO'), ['IN_PROGRESS', 'DONE'])
+  assert.deepEqual(getTaskStatusActions('IN_PROGRESS'), ['PAUSED', 'DONE'])
+  assert.deepEqual(getTaskStatusActions('PAUSED'), ['IN_PROGRESS', 'DONE'])
+  assert.deepEqual(getTaskStatusActions('DONE'), [])
+})
+
+test('task primary status labels match the action semantics for visible transitions', () => {
+  assert.equal(getTaskPrimaryStatusLabel('TODO'), 'Start')
+  assert.equal(getTaskPrimaryStatusLabel('PAUSED'), 'Resume')
+  assert.equal(getTaskPrimaryStatusLabel('IN_PROGRESS'), 'Pause')
+  assert.equal(getTaskPrimaryStatusLabel('DONE'), '')
+})
+
+test('TODO to IN_PROGRESS logs STARTED, PAUSED to IN_PROGRESS logs RESUMED', () => {
+  assert.equal(logActionForTransition('TODO', 'IN_PROGRESS'), 'STARTED')
+  assert.equal(logActionForTransition('PAUSED', 'IN_PROGRESS'), 'RESUMED')
+  assert.equal(logActionForTransition('IN_PROGRESS', 'PAUSED'), 'PAUSED')
+  assert.equal(logActionForTransition('TODO', 'DONE'), 'COMPLETED')
+  assert.equal(logActionForTransition('IN_PROGRESS', 'DONE'), 'COMPLETED')
+  assert.equal(logActionForTransition('PAUSED', 'DONE'), 'COMPLETED')
 })
 
 test('browser runtime exposes a preview-only status message', () => {
@@ -124,4 +152,63 @@ test('today focus includes ongoing tasks before their deadline', () => {
   const focusTasks = getTodayFocusTasks(tasks, now)
 
   assert.deepEqual(focusTasks.map((task) => task.id), ['task-ongoing'])
+})
+
+test('inbox groups completed todos separately and keeps them collapsed by default', () => {
+  const tasks = [
+    {
+      id: 'task-todo',
+      title: 'Write proposal',
+      status: 'TODO',
+      activityLogs: [{ action: 'CREATED', timestamp: new Date('2026-06-11T09:00:00+08:00') }],
+    },
+    {
+      id: 'task-progress',
+      title: 'Review prototype',
+      status: 'IN_PROGRESS',
+      activityLogs: [{ action: 'RESUMED', timestamp: new Date('2026-06-11T10:00:00+08:00') }],
+    },
+    {
+      id: 'task-paused',
+      title: 'Wait on feedback',
+      status: 'PAUSED',
+      activityLogs: [{ action: 'PAUSED', timestamp: new Date('2026-06-11T08:00:00+08:00') }],
+    },
+    {
+      id: 'task-done',
+      title: 'Ship patch',
+      status: 'DONE',
+      activityLogs: [{ action: 'COMPLETED', timestamp: new Date('2026-06-11T11:00:00+08:00') }],
+    },
+  ]
+
+  const grouped = getInboxTaskGroups(tasks)
+
+  assert.deepEqual(grouped.activeTasks.map((task) => task.id), ['task-progress', 'task-todo'])
+  assert.deepEqual(grouped.pausedTasks.map((task) => task.id), ['task-paused'])
+  assert.equal(grouped.completed.isCollapsedByDefault, true)
+  assert.equal(grouped.completed.totalCount, 1)
+  assert.deepEqual(grouped.completed.visibleTasks, [])
+})
+
+test('inbox can expand completed todos in recent-first order', () => {
+  const tasks = [
+    {
+      id: 'task-done-older',
+      title: 'Older done',
+      status: 'DONE',
+      activityLogs: [{ action: 'COMPLETED', timestamp: new Date('2026-06-11T09:00:00+08:00') }],
+    },
+    {
+      id: 'task-done-newer',
+      title: 'Newer done',
+      status: 'DONE',
+      activityLogs: [{ action: 'COMPLETED', timestamp: new Date('2026-06-11T11:00:00+08:00') }],
+    },
+  ]
+
+  const grouped = getInboxTaskGroups(tasks, true)
+
+  assert.equal(grouped.completed.totalCount, 2)
+  assert.deepEqual(grouped.completed.visibleTasks.map((task) => task.id), ['task-done-newer', 'task-done-older'])
 })

@@ -23,7 +23,21 @@ export interface GoalCard {
   updatedAt: Date
 }
 
-export type ViewKey = 'inbox' | 'today' | 'board' | 'goals'
+export interface AreaOption {
+  value: string
+  label: string
+  goalCount: number
+}
+
+export interface AreaWithStats {
+  id: string
+  title: string
+  goalCount: number
+  activeGoalCount: number
+  isSystem: boolean
+}
+
+export type ViewKey = 'inbox' | 'today' | 'board' | 'goals' | 'areas'
 export type AreaFilter = 'ALL' | string
 
 export type AccessStatus = 'granted' | 'denied' | 'restricted' | 'not_determined' | 'error'

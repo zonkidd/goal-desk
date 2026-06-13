@@ -23,7 +23,12 @@ export function QuickCaptureForm({
           <h3 className="font-bold">Quick Capture</h3>
         </div>
         {onClose && (
-          <button onClick={onClose} className="rounded-full border border-slate-200 bg-white p-1.5 text-slate-500">
+          <button
+            type="button"
+            aria-label="Close quick capture"
+            onClick={onClose}
+            className="rounded-full border border-slate-200 bg-white p-1.5 text-slate-500"
+          >
             <X className="h-4 w-4" />
           </button>
         )}
