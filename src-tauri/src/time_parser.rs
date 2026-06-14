@@ -385,6 +385,37 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
         title = title.trim().to_string();
     }
 
+    // 如果没有解析到时间，但有"点"表达式（没有日期词），默认为今天
+    if parsed_time.is_none() && trimmed.contains("点") {
+        let today = now.date_naive();
+
+        if let Some(hour) = parse_hour_expression(trimmed) {
+            let time = NaiveTime::from_hms_opt(hour, 0, 0).unwrap();
+            parsed_time = Some(today.and_time(time).and_local_timezone(Local).unwrap());
+
+            // 清理标题：移除时间点表达式
+            title = trimmed.to_string();
+            if let Some(dot_char_pos) = title.chars().position(|c| c == '点') {
+                let chars: Vec<char> = title.chars().collect();
+                let mut digit_start_char_pos = dot_char_pos;
+
+                for i in (0..dot_char_pos).rev() {
+                    if chars[i].is_ascii_digit() {
+                        digit_start_char_pos = i;
+                    } else {
+                        break;
+                    }
+                }
+
+                let before: String = chars[..digit_start_char_pos].iter().collect();
+                let after: String = chars[dot_char_pos + 1..].iter().collect();
+                title = format!("{}{}", before, after);
+            }
+
+            title = title.trim().to_string();
+        }
+    }
+
     // 根据是否为截止时间，分配到不同字段
     if is_deadline {
         ParsedTime {
@@ -512,6 +543,22 @@ mod tests {
         let expected_start = Local.with_ymd_and_hms(2026, 6, 17, 9, 0, 0).unwrap();
 
         assert_eq!(result.title, "汇报");
+        assert_eq!(result.planned_start_at, Some(expected_start));
+        assert_eq!(result.due_at, None);
+    }
+
+    #[test]
+    fn test_parse_time_only_smart_pm() {
+        // P2-3: 智能上下午判断
+        // 固定时间点：2026-06-14 10:00:00
+        let now = Local.with_ymd_and_hms(2026, 6, 14, 10, 0, 0).unwrap();
+
+        let result = parse_time_expression("3点开会", now);
+
+        // 期望：今天（6月14日）15:00，3点智能识别为下午
+        let expected_start = Local.with_ymd_and_hms(2026, 6, 14, 15, 0, 0).unwrap();
+
+        assert_eq!(result.title, "开会");
         assert_eq!(result.planned_start_at, Some(expected_start));
         assert_eq!(result.due_at, None);
     }
