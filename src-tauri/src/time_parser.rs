@@ -231,8 +231,36 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
         title = title.trim().to_string();
     }
 
+    // 检测"N天后"（如"3天后"）
+    if let Some(days_later_pos) = trimmed.find("天后") {
+        // 向前提取数字
+        let before_days_later = &trimmed[..days_later_pos];
+        let digits: String = before_days_later.chars().rev()
+            .take_while(|c| c.is_ascii_digit())
+            .collect::<String>()
+            .chars().rev().collect();
+
+        if let Ok(days) = digits.parse::<i64>() {
+            let target_day = now + Duration::days(days);
+
+            // 默认时间 9:00
+            let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+            parsed_time = Some(target_day.date_naive().and_time(default_time).and_local_timezone(Local).unwrap());
+
+            // 清理标题：移除"N天后"
+            title = trimmed.to_string();
+            if let Some(digit_start_pos) = title.find(&digits) {
+                let digit_end_pos = digit_start_pos + digits.len();
+                let days_later_end_pos = digit_end_pos + "天后".len();
+                title = format!("{}{}", &title[..digit_start_pos], &title[days_later_end_pos..]);
+            }
+
+            title = title.trim().to_string();
+        }
+    }
+
     // 检测"后天"
-    if trimmed.contains("后天") {
+    if trimmed.contains("后天") && !trimmed.contains("天后") {
         let day_after_tomorrow = now + Duration::days(2);
 
         // 优先尝试解析 HH:MM 格式
@@ -410,6 +438,22 @@ mod tests {
         let expected_start = Local.with_ymd_and_hms(2026, 6, 16, 14, 0, 0).unwrap();
 
         assert_eq!(result.title, "开会");
+        assert_eq!(result.planned_start_at, Some(expected_start));
+        assert_eq!(result.due_at, None);
+    }
+
+    #[test]
+    fn test_parse_n_days_later_numeric() {
+        // P2-1: N天后（数字）
+        // 固定时间点：2026-06-14 10:00:00
+        let now = Local.with_ymd_and_hms(2026, 6, 14, 10, 0, 0).unwrap();
+
+        let result = parse_time_expression("3天后提交", now);
+
+        // 期望：今天+3天（6月17日）09:00
+        let expected_start = Local.with_ymd_and_hms(2026, 6, 17, 9, 0, 0).unwrap();
+
+        assert_eq!(result.title, "提交");
         assert_eq!(result.planned_start_at, Some(expected_start));
         assert_eq!(result.due_at, None);
     }
