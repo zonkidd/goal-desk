@@ -75,6 +75,23 @@ fn parse_hour_expression(input: &str) -> Option<u32> {
     None
 }
 
+/// 解析中文数字（一到十）
+fn parse_chinese_number(ch: char) -> Option<i64> {
+    match ch {
+        '一' => Some(1),
+        '二' => Some(2),
+        '三' => Some(3),
+        '四' => Some(4),
+        '五' => Some(5),
+        '六' => Some(6),
+        '七' => Some(7),
+        '八' => Some(8),
+        '九' => Some(9),
+        '十' => Some(10),
+        _ => None,
+    }
+}
+
 pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -231,16 +248,25 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
         title = title.trim().to_string();
     }
 
-    // 检测"N天后"（如"3天后"）
+    // 检测"N天后"（如"3天后"或"三天后"）
     if let Some(days_later_pos) = trimmed.find("天后") {
-        // 向前提取数字
+        // 向前提取数字或中文数字
         let before_days_later = &trimmed[..days_later_pos];
+
+        // 先尝试阿拉伯数字
         let digits: String = before_days_later.chars().rev()
             .take_while(|c| c.is_ascii_digit())
             .collect::<String>()
             .chars().rev().collect();
 
-        if let Ok(days) = digits.parse::<i64>() {
+        let days_opt = if !digits.is_empty() {
+            digits.parse::<i64>().ok()
+        } else {
+            // 尝试中文数字（取最后一个字符）
+            before_days_later.chars().rev().next().and_then(parse_chinese_number)
+        };
+
+        if let Some(days) = days_opt {
             let target_day = now + Duration::days(days);
 
             // 默认时间 9:00
@@ -249,10 +275,26 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
 
             // 清理标题：移除"N天后"
             title = trimmed.to_string();
-            if let Some(digit_start_pos) = title.find(&digits) {
-                let digit_end_pos = digit_start_pos + digits.len();
-                let days_later_end_pos = digit_end_pos + "天后".len();
-                title = format!("{}{}", &title[..digit_start_pos], &title[days_later_end_pos..]);
+            if !digits.is_empty() {
+                // 阿拉伯数字
+                if let Some(digit_start_pos) = title.find(&digits) {
+                    let digit_end_pos = digit_start_pos + digits.len();
+                    let days_later_end_pos = digit_end_pos + "天后".len();
+                    title = format!("{}{}", &title[..digit_start_pos], &title[days_later_end_pos..]);
+                }
+            } else {
+                // 中文数字：移除最后一个中文数字字符 + "天后"
+                let chars: Vec<char> = title.chars().collect();
+                if let Some(pos) = title.find("天后") {
+                    let char_pos = title[..pos].chars().count();
+                    if char_pos > 0 {
+                        let new_chars: Vec<char> = chars[..char_pos-1].iter()
+                            .chain(chars[char_pos+2..].iter())
+                            .copied()
+                            .collect();
+                        title = new_chars.iter().collect();
+                    }
+                }
             }
 
             title = title.trim().to_string();
@@ -454,6 +496,22 @@ mod tests {
         let expected_start = Local.with_ymd_and_hms(2026, 6, 17, 9, 0, 0).unwrap();
 
         assert_eq!(result.title, "提交");
+        assert_eq!(result.planned_start_at, Some(expected_start));
+        assert_eq!(result.due_at, None);
+    }
+
+    #[test]
+    fn test_parse_n_days_later_chinese() {
+        // P2-2: 中文数字
+        // 固定时间点：2026-06-14 10:00:00
+        let now = Local.with_ymd_and_hms(2026, 6, 14, 10, 0, 0).unwrap();
+
+        let result = parse_time_expression("三天后汇报", now);
+
+        // 期望：今天+3天（6月17日）09:00
+        let expected_start = Local.with_ymd_and_hms(2026, 6, 17, 9, 0, 0).unwrap();
+
+        assert_eq!(result.title, "汇报");
         assert_eq!(result.planned_start_at, Some(expected_start));
         assert_eq!(result.due_at, None);
     }
