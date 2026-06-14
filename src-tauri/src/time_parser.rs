@@ -40,10 +40,14 @@ fn parse_hhmm_format(input: &str) -> Option<(u32, u32)> {
     None
 }
 
-/// 解析时间关键词（如 "今晚" -> 20:00）
+/// 解析时间关键词（如 "今晚" -> 20:00, "下午" -> 14:00）
 fn parse_time_of_day_keyword(input: &str) -> Option<u32> {
     if input.contains("今晚") || input.contains("晚上") {
         Some(20)
+    } else if input.contains("下午") {
+        Some(14)
+    } else if input.contains("上午") || input.contains("早上") || input.contains("今早") {
+        Some(9)
     } else {
         None
     }
@@ -227,6 +231,90 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
         title = title.trim().to_string();
     }
 
+    // 检测"后天"
+    if trimmed.contains("后天") {
+        let day_after_tomorrow = now + Duration::days(2);
+
+        // 优先尝试解析 HH:MM 格式
+        if let Some((hour, minute)) = parse_hhmm_format(trimmed) {
+            let time = NaiveTime::from_hms_opt(hour, minute, 0).unwrap();
+            parsed_time = Some(day_after_tomorrow.date_naive().and_time(time).and_local_timezone(Local).unwrap());
+
+            // 清理标题
+            title = title.replace("后天", "");
+
+            // 移除 HH:MM 格式
+            if let Some(colon_char_pos) = title.chars().position(|c| c == ':') {
+                let chars: Vec<char> = title.chars().collect();
+                let mut start_pos = colon_char_pos;
+                for i in (0..colon_char_pos).rev() {
+                    if chars[i].is_ascii_digit() {
+                        start_pos = i;
+                    } else {
+                        break;
+                    }
+                }
+                let mut end_pos = colon_char_pos + 1;
+                for i in (colon_char_pos + 1)..chars.len() {
+                    if chars[i].is_ascii_digit() {
+                        end_pos = i + 1;
+                    } else {
+                        break;
+                    }
+                }
+                let before: String = chars[..start_pos].iter().collect();
+                let after: String = chars[end_pos..].iter().collect();
+                title = format!("{}{}", before, after);
+            }
+
+            if is_deadline {
+                title = title.replace("前", "").replace("之前", "").replace("截止", "");
+            }
+        }
+        // 尝试解析时间点
+        else if let Some(hour) = parse_hour_expression(trimmed) {
+            let time = NaiveTime::from_hms_opt(hour, 0, 0).unwrap();
+            parsed_time = Some(day_after_tomorrow.date_naive().and_time(time).and_local_timezone(Local).unwrap());
+
+            title = title.replace("后天", "");
+
+            // 移除时间点表达式
+            if let Some(dot_char_pos) = title.chars().position(|c| c == '点') {
+                let chars: Vec<char> = title.chars().collect();
+                let mut digit_start_char_pos = dot_char_pos;
+                for i in (0..dot_char_pos).rev() {
+                    if chars[i].is_ascii_digit() {
+                        digit_start_char_pos = i;
+                    } else {
+                        break;
+                    }
+                }
+                let before: String = chars[..digit_start_char_pos].iter().collect();
+                let after: String = chars[dot_char_pos+1..].iter().collect();
+                title = format!("{}{}", before, after);
+            }
+
+            if is_deadline {
+                title = title.replace("前", "").replace("之前", "").replace("截止", "");
+            }
+        }
+        // 尝试解析时间段关键词（下午、上午等）
+        else if let Some(hour_from_keyword) = parse_time_of_day_keyword(trimmed) {
+            let time = NaiveTime::from_hms_opt(hour_from_keyword, 0, 0).unwrap();
+            parsed_time = Some(day_after_tomorrow.date_naive().and_time(time).and_local_timezone(Local).unwrap());
+
+            title = title.replace("后天", "");
+            title = title.replace("下午", "").replace("上午", "").replace("早上", "").replace("晚上", "");
+        } else {
+            // 默认时间 9:00
+            let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+            parsed_time = Some(day_after_tomorrow.date_naive().and_time(default_time).and_local_timezone(Local).unwrap());
+            title = title.replace("后天", "");
+        }
+
+        title = title.trim().to_string();
+    }
+
     // 根据是否为截止时间，分配到不同字段
     if is_deadline {
         ParsedTime {
@@ -306,6 +394,22 @@ mod tests {
         let expected_start = Local.with_ymd_and_hms(2026, 6, 14, 20, 0, 0).unwrap();
 
         assert_eq!(result.title, "健身");
+        assert_eq!(result.planned_start_at, Some(expected_start));
+        assert_eq!(result.due_at, None);
+    }
+
+    #[test]
+    fn test_parse_day_after_tomorrow() {
+        // P1-3: 后天
+        // 固定时间点：2026-06-14 10:00:00
+        let now = Local.with_ymd_and_hms(2026, 6, 14, 10, 0, 0).unwrap();
+
+        let result = parse_time_expression("后天下午开会", now);
+
+        // 期望：后天（6月16日）14:00，"下午"默认14:00
+        let expected_start = Local.with_ymd_and_hms(2026, 6, 16, 14, 0, 0).unwrap();
+
+        assert_eq!(result.title, "开会");
         assert_eq!(result.planned_start_at, Some(expected_start));
         assert_eq!(result.due_at, None);
     }
