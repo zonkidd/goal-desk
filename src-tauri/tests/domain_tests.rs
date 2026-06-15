@@ -112,7 +112,7 @@ fn quick_capture_parses_tomorrow_afternoon_three_oclock() {
     let draft = parse_quick_capture("明天下午三点 review notes", now);
 
     assert_eq!(draft.title, "review notes".to_string());
-    assert_eq!(draft.scheduled_at, Some(Local.with_ymd_and_hms(2026, 6, 11, 15, 0, 0).unwrap()));
+    assert_eq!(draft.planned_start_at, Some(Local.with_ymd_and_hms(2026, 6, 11, 15, 0, 0).unwrap()));
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn quick_capture_parses_tonight_as_eight_pm() {
     let draft = parse_quick_capture("今晚 activity", now);
 
     assert_eq!(draft.title, "activity");
-    assert_eq!(draft.scheduled_at, Some(Local.with_ymd_and_hms(2026, 6, 10, 20, 0, 0).unwrap()));
+    assert_eq!(draft.planned_start_at, Some(Local.with_ymd_and_hms(2026, 6, 10, 20, 0, 0).unwrap()));
 }
 
 #[test]
@@ -132,5 +132,5 @@ fn quick_capture_without_time_phrase_stays_in_inbox() {
     let draft = parse_quick_capture("Review annual goals", now);
 
     assert_eq!(draft.title, "Review annual goals");
-    assert_eq!(draft.scheduled_at, None);
+    assert_eq!(draft.planned_start_at, None);
 }

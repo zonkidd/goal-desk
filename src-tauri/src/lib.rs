@@ -1,6 +1,7 @@
 pub mod domain;
 pub mod eventkit;
 pub mod repository;
+pub mod time_parser;
 
 use chrono::Local;
 use domain::{
@@ -654,19 +655,23 @@ mod commands {
         }
 
         let mut tasks = load_or_seed_desk_tasks(&app)?;
-        let system_reminder_id = maybe_create_task_system_reminder(&app, &title, draft.scheduled_at);
+
+        // 优先使用 planned_start_at，否则用 due_at
+        let reminder_time = draft.planned_start_at.or(draft.due_at);
+        let system_reminder_id = maybe_create_task_system_reminder(&app, &title, reminder_time);
+
         let task = DeskTask {
             id: Uuid::new_v4(),
             title,
             content: String::new(),
             status: TaskStatus::Todo,
-            planned_start_at: None,
-            due_at: draft.scheduled_at,
+            planned_start_at: draft.planned_start_at,
+            due_at: draft.due_at,
             linked_goal_id: None,
             linked_goal_label: None,
             bear_note_id: None,
             system_reminder_id,
-            show_in_timeline: false,
+            show_in_timeline: draft.planned_start_at.is_some() || draft.due_at.is_some(),
             activity_logs: vec![TaskActivityLog {
                 action: TaskActivityAction::Created,
                 note: None,

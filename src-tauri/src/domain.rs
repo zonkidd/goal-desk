@@ -255,6 +255,7 @@ pub struct DeskTask {
     pub content: String,
     pub status: TaskStatus,
     pub planned_start_at: Option<DateTime<Local>>,
+    #[serde(rename = "dueDate")]
     pub due_at: Option<DateTime<Local>>,
     pub linked_goal_id: Option<Uuid>,
     pub linked_goal_label: Option<String>,
@@ -367,7 +368,8 @@ pub struct GoalProgress {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuickCaptureDraft {
     pub title: String,
-    pub scheduled_at: Option<DateTime<Local>>,
+    pub planned_start_at: Option<DateTime<Local>>,
+    pub due_at: Option<DateTime<Local>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -510,50 +512,12 @@ pub fn goal_progress(goal_id: Uuid, todos: &[Todo], milestones: &[Milestone]) ->
 }
 
 pub fn parse_quick_capture(input: &str, now: DateTime<Local>) -> QuickCaptureDraft {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return QuickCaptureDraft {
-            title: String::new(),
-            scheduled_at: None,
-        };
-    }
-
-    let mut scheduled_at = None;
-    let mut title = trimmed.to_string();
-
-    if title.contains("明天下午三点") {
-        title = title.replace("明天下午三点", "").trim().to_string();
-        scheduled_at = Some(relative_day_time(now, 1, 15, 0));
-    } else if title.contains("明天三点") {
-        title = title.replace("明天三点", "").trim().to_string();
-        scheduled_at = Some(relative_day_time(now, 1, 15, 0));
-    } else if title.contains("明天") {
-        title = title.replace("明天", "").trim().to_string();
-        scheduled_at = Some(relative_day_time(now, 1, 9, 0));
-    } else if title.contains("今晚") {
-        title = title.replace("今晚", "").trim().to_string();
-        scheduled_at = Some(relative_day_time(now, 0, 20, 0));
-    }
-
+    let parsed = crate::time_parser::parse_time_expression(input, now);
     QuickCaptureDraft {
-        title,
-        scheduled_at,
+        title: parsed.title,
+        planned_start_at: parsed.planned_start_at,
+        due_at: parsed.due_at,
     }
-}
-
-fn relative_day_time(now: DateTime<Local>, day_offset: i64, hour: u32, minute: u32) -> DateTime<Local> {
-    let target_day = now + chrono::Duration::days(day_offset);
-    Local
-        .with_ymd_and_hms(
-            target_day.year(),
-            target_day.month(),
-            target_day.day(),
-            hour,
-            minute,
-            0,
-        )
-        .single()
-        .unwrap_or(target_day)
 }
 
 #[cfg(test)]
