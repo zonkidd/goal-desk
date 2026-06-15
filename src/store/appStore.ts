@@ -4,7 +4,13 @@ import {
   isTauriRuntime,
   setSystemReminderCompleted as persistSystemReminderCompleted,
   showQuickCaptureWindow as openNativeQuickCaptureWindow,
+  requestCalendarAccess as apiRequestCalendarAccess,
+  requestRemindersAccess as apiRequestRemindersAccess,
+  fetchCalendarEvents,
+  fetchReminders,
+  type AuthorizationStatus,
 } from '../lib/desktopApi'
+import { PermissionManager, type PermissionType } from '../lib/PermissionManager'
 import { getRuntimeModeStatusMessage } from '../lib/taskPresentation'
 import {
   BROWSER_PREVIEW_STATUS,
@@ -13,6 +19,7 @@ import {
 } from '../lib/workspaceMutations'
 import { logActionForTransition } from '../lib/taskPresentation'
 import { DerivedStateManager, type ChangeType } from '../lib/DerivedStateManager'
+import { StateProducer } from '../lib/StateProducer'
 import type { AreaFilter, AreaOption, AreaWithStats, GoalCard, GoalStatus, IntegrationStatus, ReminderItem, TimelineItem, ViewKey } from '../types/app'
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 import type { InboxTaskGroups, TodayAttentionGroups, TodayRelevantGoal } from '../lib/workspaceDerivation'
@@ -26,7 +33,7 @@ interface HydratePayload {
   statusMessage: string
 }
 
-interface AppStoreState {
+export interface AppStoreState {
   currentView: ViewKey
   activeArea: AreaFilter
   allAreas: AreaWithStats[]
@@ -42,6 +49,14 @@ interface AppStoreState {
   baseGoals: GoalCard[]
   systemReminders: ReminderItem[]
   integrationStatus: IntegrationStatus
+  eventkitPermissions: {
+    calendar: AuthorizationStatus
+    reminders: AuthorizationStatus
+  }
+  eventkitData: {
+    calendarEventCount: number
+    reminderCount: number
+  }
   selectedTaskId?: string
   selectedGoalId?: string
   selectedReminderId?: string
@@ -50,6 +65,8 @@ interface AppStoreState {
   isTaskDrawerOpen: boolean
   isGoalDrawerOpen: boolean
   isReminderDrawerOpen: boolean
+  isCalendarEventDrawerOpen: boolean
+  selectedCalendarEventId?: string
   isQuickCaptureOpen: boolean
   setView: (view: ViewKey) => void
   setActiveArea: (area: AreaFilter) => void
@@ -63,6 +80,8 @@ interface AppStoreState {
   closeGoalDrawer: () => void
   openReminderDrawer: (reminderId?: string) => void
   closeReminderDrawer: () => void
+  openCalendarEventDrawer: (eventId: string) => void
+  closeCalendarEventDrawer: () => void
   openQuickCapture: () => void
   closeQuickCapture: () => void
   setShowCompletedTodos: (value: boolean) => void
@@ -93,6 +112,9 @@ interface AppStoreState {
   createArea: (title: string) => Promise<void>
   renameArea: (areaId: string, newTitle: string) => Promise<void>
   deleteArea: (areaId: string, force?: boolean) => Promise<void>
+  requestCalendarAccess: () => Promise<void>
+  requestRemindersAccess: () => Promise<void>
+  refreshEventkitData: () => Promise<void>
 }
 
 function replaceTask(tasks: Task[], nextTask: Task) {
@@ -126,19 +148,15 @@ function applyDerivedState(
 }
 
 function replaceTaskState(state: AppStoreState, nextTask: Task) {
-  const nextTasks = state.tasks.map((task) => (task.id === nextTask.id ? nextTask : task))
-  return {
-    tasks: nextTasks,
-    ...applyDerivedState({ ...state, tasks: nextTasks }, 'tasks'),
-  }
+  const producer = new StateProducer(state, applyDerivedState)
+  producer.replaceTask(nextTask)
+  return producer.finalize()
 }
 
 function replaceGoalState(state: AppStoreState, nextGoal: GoalCard) {
-  const nextGoals = replaceGoal(state.baseGoals, nextGoal)
-  return {
-    baseGoals: nextGoals,
-    ...applyDerivedState({ ...state, baseGoals: nextGoals }, 'goals'),
-  }
+  const producer = new StateProducer(state, applyDerivedState)
+  producer.replaceGoal(nextGoal)
+  return producer.finalize()
 }
 
 function syncTasksForSystemReminder(tasks: Task[], reminderId: string, done: boolean): Task[] {
@@ -162,6 +180,26 @@ function syncTasksForSystemReminder(tasks: Task[], reminderId: string, done: boo
       : task,
   )
 }
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function createDateRange() {
+  const today = new Date()
+  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+  return { startOfDay, endOfDay }
+}
+
+// 创建权限管理器实例
+const permissionManager = new PermissionManager(async (type: PermissionType) => {
+  if (type === 'calendar') {
+    return await apiRequestCalendarAccess()
+  } else {
+    return await apiRequestRemindersAccess()
+  }
+})
 
 export const useAppStore = create<AppStoreState>((set, get) => ({
   currentView: 'inbox',
@@ -190,20 +228,34 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     calendar: 'not_determined',
     reminders: 'not_determined',
   },
+  eventkitPermissions: {
+    calendar: 'not_determined',
+    reminders: 'not_determined',
+  },
+  eventkitData: {
+    calendarEventCount: 0,
+    reminderCount: 0,
+  },
   statusMessage: '',
   isLoading: true,
   isTaskDrawerOpen: false,
   isGoalDrawerOpen: false,
   isReminderDrawerOpen: false,
   isQuickCaptureOpen: false,
+  isCalendarEventDrawerOpen: false,
+  selectedCalendarEventId: undefined,
   setView: (view) => set({ currentView: view }),
   setActiveArea: (area) =>
-    set((state) => ({
-      activeArea: area,
-      ...applyDerivedState({ ...state, activeArea: area }, 'area-filter'),
-    })),
+    set((state) => {
+      const producer = new StateProducer(state, applyDerivedState)
+      producer.setActiveArea(area)
+      return producer.finalize()
+    }),
   hydrateApp: (payload) =>
     set((state) => {
+      // 同步权限状态到 PermissionManager
+      permissionManager.updateState(payload.integrationStatus)
+
       const derived = applyDerivedState(
         {
           baseTimeline: payload.timeline,
@@ -226,16 +278,18 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
         baseGoals: payload.goals,
         systemReminders: payload.systemReminders,
         integrationStatus: payload.integrationStatus,
+        eventkitPermissions: permissionManager.getState(),
         statusMessage: payload.statusMessage,
       }
     }),
   setLoading: (value) => set({ isLoading: value }),
   setStatusMessage: (value) => set({ statusMessage: value }),
   setShowCompletedTodos: (value) =>
-    set((state) => ({
-      showCompletedTodos: value,
-      ...applyDerivedState({ ...state, showCompletedTodos: value }, 'show-completed'),
-    })),
+    set((state) => {
+      const producer = new StateProducer(state, applyDerivedState)
+      producer.setShowCompletedTodos(value)
+      return producer.finalize()
+    }),
   receiveExternalTask: (task) =>
     set((state) => {
       const nextTasks = replaceTask(state.tasks, task)
@@ -266,6 +320,8 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     set({ isQuickCaptureOpen: true })
   },
   closeQuickCapture: () => set({ isQuickCaptureOpen: false }),
+  openCalendarEventDrawer: (eventId: string) => set({ selectedCalendarEventId: eventId, isCalendarEventDrawerOpen: true }),
+  closeCalendarEventDrawer: () => set({ isCalendarEventDrawerOpen: false }),
   addTask: async (title) => {
     const adapter = createWorkspaceMutationAdapter()
 
@@ -295,51 +351,59 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       ...input,
       area: input.area?.trim() || '未分类',
     }
-    const { goal: nextGoal, statusMessage, openGoalWorkspace } = await adapter.createGoal(normalizedInput, options)
-    if (!nextGoal) return undefined
 
-    set((state) => {
-      return {
-        ...replaceGoalState(state, nextGoal),
-        selectedGoalId: openGoalWorkspace ? nextGoal.id : state.selectedGoalId,
-        isGoalDrawerOpen: openGoalWorkspace,
-        currentView: openGoalWorkspace ? 'goals' : state.currentView,
-        statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
-      }
-    })
+    try {
+      const { goal: nextGoal, statusMessage, openGoalWorkspace } = await adapter.createGoal(normalizedInput, options)
+      if (!nextGoal) return undefined
 
-    // 刷新领域列表
-    void get().loadAreas()
+      set((state) => {
+        return {
+          ...replaceGoalState(state, nextGoal),
+          selectedGoalId: openGoalWorkspace ? nextGoal.id : state.selectedGoalId,
+          isGoalDrawerOpen: openGoalWorkspace,
+          currentView: openGoalWorkspace ? 'goals' : state.currentView,
+          statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
+        }
+      })
 
-    return nextGoal.id
+      // 刷新领域列表
+      void get().loadAreas()
+
+      return nextGoal.id
+    } catch (error) {
+      set({ statusMessage: `Unable to create goal · ${error instanceof Error ? error.message : String(error)}` })
+      return undefined
+    }
   },
   updateGoalFields: async (goalId, input) => {
     const adapter = createWorkspaceMutationAdapter()
-    const { goal: updatedGoal, statusMessage } = await adapter.updateGoalFields(goalId, input)
-    if (!updatedGoal && isTauriRuntime()) return
 
-    set((state) => {
-      const nextGoal = isTauriRuntime()
-        ? (updatedGoal as GoalCard)
-        : state.baseGoals.map((goal) =>
-            goal.id === goalId
-              ? {
-                  ...goal,
-                  title: input.title.trim(),
-                  area: input.area.trim(),
-                  description: input.description.trim(),
-                  updatedAt: new Date(),
-                }
-              : goal,
-          ).find((goal) => goal.id === goalId) as GoalCard
-      return {
-        ...replaceGoalState(state, nextGoal),
-        statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
-      }
-    })
+    try {
+      const { goal: updatedGoal, statusMessage } = await adapter.updateGoalFields(goalId, input)
+      if (!updatedGoal && isTauriRuntime()) return
 
-    // 刷新领域列表
-    void get().loadAreas()
+      set((state) => {
+        const nextGoal = isTauriRuntime()
+          ? (updatedGoal as GoalCard)
+          : state.baseGoals.map((goal) =>
+              goal.id === goalId
+                ? {
+                    ...goal,
+                    title: input.title.trim(),
+                    area: input.area.trim(),
+                    description: input.description.trim(),
+                    updatedAt: new Date(),
+                  }
+                : goal,
+            ).find((goal) => goal.id === goalId) as GoalCard
+        return {
+          ...replaceGoalState(state, nextGoal),
+          statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
+        }
+      })
+    } catch (error) {
+      set({ statusMessage: `Unable to update goal · ${error instanceof Error ? error.message : String(error)}` })
+    }
   },
   updateGoalStatus: async (goalId, status) => {
     if (status === 'READY_TO_COMPLETE') {
@@ -348,45 +412,55 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     }
 
     const adapter = createWorkspaceMutationAdapter()
-    const { goal: updatedGoal, statusMessage } = await adapter.updateGoalStatus(goalId, status)
 
-    set((state) => {
-      const nextGoal = isTauriRuntime()
-        ? (updatedGoal as GoalCard)
-        : state.baseGoals.map((goal) =>
-            goal.id === goalId
-              ? {
-                  ...goal,
-                  status,
-                  updatedAt: new Date(),
-                }
-              : goal,
-          ).find((goal) => goal.id === goalId) as GoalCard
-      return {
-        ...replaceGoalState(state, nextGoal),
-        statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
-      }
-    })
+    try {
+      const { goal: updatedGoal, statusMessage } = await adapter.updateGoalStatus(goalId, status)
+
+      set((state) => {
+        const nextGoal = isTauriRuntime()
+          ? (updatedGoal as GoalCard)
+          : state.baseGoals.map((goal) =>
+              goal.id === goalId
+                ? {
+                    ...goal,
+                    status,
+                    updatedAt: new Date(),
+                  }
+                : goal,
+            ).find((goal) => goal.id === goalId) as GoalCard
+        return {
+          ...replaceGoalState(state, nextGoal),
+          statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
+        }
+      })
+    } catch (error) {
+      set({ statusMessage: `Unable to update goal status · ${error instanceof Error ? error.message : String(error)}` })
+    }
   },
   createTaskForGoal: async (goalId, title) => {
     const adapter = createWorkspaceMutationAdapter()
 
     const goal = get().baseGoals.find((item) => item.id === goalId)
     if (!goal) return
-    const { task: nextTask, statusMessage } = await adapter.createTaskForGoal(goal, title)
-    if (!nextTask) return
 
-    set((state) => {
-      const nextTasks = replaceTask(state.tasks, nextTask)
-      return {
-        tasks: nextTasks,
-        ...applyDerivedState({ ...state, tasks: nextTasks }, 'tasks'),
-        selectedTaskId: nextTask.id,
-        isTaskDrawerOpen: true,
-        isGoalDrawerOpen: false,
-        statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
-      }
-    })
+    try {
+      const { task: nextTask, statusMessage } = await adapter.createTaskForGoal(goal, title)
+      if (!nextTask) return
+
+      set((state) => {
+        const nextTasks = replaceTask(state.tasks, nextTask)
+        return {
+          tasks: nextTasks,
+          ...applyDerivedState({ ...state, tasks: nextTasks }, 'tasks'),
+          selectedTaskId: nextTask.id,
+          isTaskDrawerOpen: true,
+          isGoalDrawerOpen: false,
+          statusMessage: statusMessage || BROWSER_PREVIEW_STATUS,
+        }
+      })
+    } catch (error) {
+      set({ statusMessage: `Unable to create task · ${error instanceof Error ? error.message : String(error)}` })
+    }
   },
   addTaskNote: async (taskId, note) => {
     const trimmed = note.trim()
@@ -725,6 +799,78 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       }
     } catch (error) {
       set({ statusMessage: `Unable to delete area · ${error instanceof Error ? error.message : String(error)}` })
+    }
+  },
+  requestCalendarAccess: async () => {
+    try {
+      const status = await permissionManager.request('calendar')
+      set({
+        eventkitPermissions: permissionManager.getState(),
+        statusMessage: status === 'granted' ? 'Calendar access granted' : `Calendar access ${status}`,
+      })
+    } catch (error) {
+      permissionManager.updateState({
+        ...permissionManager.getState(),
+        calendar: 'error',
+      })
+      set({
+        eventkitPermissions: permissionManager.getState(),
+        statusMessage: `Unable to request calendar access · ${formatErrorMessage(error)}`,
+      })
+    }
+  },
+  requestRemindersAccess: async () => {
+    try {
+      const status = await permissionManager.request('reminders')
+      set({
+        eventkitPermissions: permissionManager.getState(),
+        statusMessage: status === 'granted' ? 'Reminders access granted' : `Reminders access ${status}`,
+      })
+    } catch (error) {
+      permissionManager.updateState({
+        ...permissionManager.getState(),
+        reminders: 'error',
+      })
+      set({
+        eventkitPermissions: permissionManager.getState(),
+        statusMessage: `Unable to request reminders access · ${formatErrorMessage(error)}`,
+      })
+    }
+  },
+  refreshEventkitData: async () => {
+    const state = get()
+
+    // 只有在权限授权后才获取数据
+    if (state.eventkitPermissions.calendar !== 'granted' && state.eventkitPermissions.reminders !== 'granted') {
+      return
+    }
+
+    try {
+      let calendarEventCount = 0
+      let reminderCount = 0
+
+      if (state.eventkitPermissions.calendar === 'granted') {
+        const { startOfDay, endOfDay } = createDateRange()
+        const events = await fetchCalendarEvents(startOfDay, endOfDay)
+        calendarEventCount = events.length
+      }
+
+      if (state.eventkitPermissions.reminders === 'granted') {
+        const reminders = await fetchReminders()
+        reminderCount = reminders.length
+      }
+
+      set({
+        eventkitData: {
+          calendarEventCount,
+          reminderCount,
+        },
+        statusMessage: 'EventKit data refreshed',
+      })
+    } catch (error) {
+      set({
+        statusMessage: `Unable to refresh EventKit data · ${formatErrorMessage(error)}`,
+      })
     }
   },
 }))
