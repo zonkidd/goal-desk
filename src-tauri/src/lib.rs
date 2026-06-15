@@ -2,6 +2,7 @@ pub mod domain;
 pub mod eventkit;
 pub mod repository;
 pub mod time_parser;
+pub mod workspace_session;
 
 use chrono::Local;
 use domain::{
@@ -28,11 +29,6 @@ pub fn goal_snapshot_data(path: &std::path::Path) -> Result<Vec<GoalSummary>, St
     Ok(goal_summaries(&snapshot))
 }
 
-fn find_or_create_area(snapshot: &mut WorkspaceSnapshot, area_title: &str) -> Result<Uuid, String> {
-    // 使用 WorkspaceSnapshot 的领域方法
-    Ok(snapshot.find_or_create_area(area_title))
-}
-
 pub fn create_goal_record(
     path: &std::path::Path,
     title: String,
@@ -41,6 +37,7 @@ pub fn create_goal_record(
     status: GoalStatus,
 ) -> Result<Goal, String> {
     use repository::GoalRepository;
+    use workspace_session::WorkspaceSession;
 
     let trimmed_title = title.trim();
     if trimmed_title.is_empty() {
@@ -55,29 +52,18 @@ pub fn create_goal_record(
     };
 
     let repository = SqliteRepository::new(path.to_path_buf());
-    let mut snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
-
-    // 强制关联 area (可能会创建新的 area 并添加到 snapshot)
-    let original_area_count = snapshot.areas.len();
-    let area_id = find_or_create_area(&mut snapshot, area_title)?;
-    let area_was_created = snapshot.areas.len() > original_area_count;
-
-    let goal = Goal {
-        id: Uuid::new_v4(),
-        area_id: Some(area_id),
-        title: trimmed_title.to_string(),
+    let mut session = WorkspaceSession::load(&repository)?;
+    let goal = session.create_goal(
+        trimmed_title.to_string(),
+        area_title.to_string(),
         description,
         status,
-    };
+    )?;
 
-    // 如果创建了新 area，需要先保存 snapshot
-    if area_was_created {
-        repository
-            .save_workspace(&snapshot)
-            .map_err(|error| error.to_string())?;
-    }
+    // 提交 snapshot 变更
+    session.commit()?;
 
-    // 使用 GoalRepository trait 创建 goal
+    // 持久化 goal 到独立表
     GoalRepository::create(&repository, &goal)
         .map_err(|error| error.to_string())?;
     Ok(goal)
@@ -92,6 +78,7 @@ pub fn update_goal_record(
     status: GoalStatus,
 ) -> Result<Goal, String> {
     use repository::GoalRepository;
+    use workspace_session::WorkspaceSession;
 
     let trimmed_title = title.trim();
     if trimmed_title.is_empty() {
@@ -108,15 +95,11 @@ pub fn update_goal_record(
     let goal_id = Uuid::parse_str(&goal_id).map_err(|error| error.to_string())?;
     let repository = SqliteRepository::new(path.to_path_buf());
 
-    // 仍需要全量读取 snapshot 来处理 area
-    let mut snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
+    // 加载 session 并确保 area 存在
+    let mut session = WorkspaceSession::load(&repository)?;
+    let area_id = session.ensure_area(area_title);
 
-    // 强制关联 area (可能会创建新的 area 并添加到 snapshot)
-    let original_area_count = snapshot.areas.len();
-    let area_id = find_or_create_area(&mut snapshot, area_title)?;
-    let area_was_created = snapshot.areas.len() > original_area_count;
-
-    // 使用 GoalRepository trait 读取 goal
+    // 读取并更新 goal
     let mut goal = GoalRepository::find(&repository, goal_id)
         .map_err(|error| error.to_string())?
         .ok_or_else(|| format!("Goal not found: {goal_id}"))?;
@@ -126,14 +109,10 @@ pub fn update_goal_record(
     goal.description = description;
     goal.status = status;
 
-    // 如果创建了新 area，需要先保存 snapshot
-    if area_was_created {
-        repository
-            .save_workspace(&snapshot)
-            .map_err(|error| error.to_string())?;
-    }
+    // 提交 snapshot 变更（如果创建了新 area）
+    session.commit()?;
 
-    // 使用 GoalRepository trait 更新 goal
+    // 持久化 goal 更新
     GoalRepository::update(&repository, &goal)
         .map_err(|error| error.to_string())?;
     Ok(goal)
@@ -463,7 +442,7 @@ fn ensure_quick_capture_window<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<
 
     WebviewWindowBuilder::new(app, "quick-capture", WebviewUrl::App("index.html?view=quick-capture".into()))
         .title("Quick Capture")
-        .inner_size(520.0, 228.0)
+        .inner_size(520.0, 320.0)
         .resizable(false)
         .maximizable(false)
         .minimizable(false)
