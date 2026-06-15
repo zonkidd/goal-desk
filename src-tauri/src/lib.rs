@@ -863,6 +863,16 @@ mod commands {
     }
 
     #[tauri::command]
+    pub fn request_calendar_access() -> Result<eventkit::AccessStatus, String> {
+        eventkit::request_calendar_access()
+    }
+
+    #[tauri::command]
+    pub fn request_reminders_access() -> Result<eventkit::AccessStatus, String> {
+        eventkit::request_reminders_access()
+    }
+
+    #[tauri::command]
     pub fn set_system_reminder_completed(
         app: AppHandle,
         reminder_id: String,
@@ -871,6 +881,23 @@ mod commands {
         let reminder = eventkit::set_system_reminder_completed(&app, &reminder_id, done)?;
         sync_linked_tasks_for_system_reminder(&app, &reminder_id, done)?;
         Ok(reminder)
+    }
+
+    #[tauri::command]
+    pub fn open_url(url: String) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open")
+                .arg(&url)
+                .spawn()
+                .map_err(|e| format!("Failed to open URL: {}", e))?;
+            Ok(())
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            Err("URL opening only supported on macOS".to_string())
+        }
     }
 }
 
@@ -917,7 +944,10 @@ pub fn run() {
             commands::open_task_in_bear,
             commands::show_quick_capture_window,
             commands::eventkit_snapshot,
-            commands::set_system_reminder_completed
+            commands::request_calendar_access,
+            commands::request_reminders_access,
+            commands::set_system_reminder_completed,
+            commands::open_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running Goal Desk");

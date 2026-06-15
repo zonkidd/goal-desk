@@ -75,7 +75,10 @@ export async function loadDesktopSnapshot() {
     invoke<RustTimelineItem[]>('today_snapshot'),
     invoke<RustGoalCard[]>('goal_snapshot'),
     invoke<RustTask[]>('desk_task_list'),
-    invoke<RustSystemSnapshot>('eventkit_snapshot').catch(() => undefined),
+    invoke<RustSystemSnapshot>('eventkit_snapshot').catch((error) => {
+      console.error('EventKit snapshot failed:', error)
+      return undefined
+    }),
   ])
 
   // Convert timeline items
@@ -104,15 +107,17 @@ export async function loadDesktopSnapshot() {
     listTitle: item.listTitle,
   })) || []
 
+  const integrationStatus = systemSnapshot?.integrationStatus || {
+    calendar: 'error' as const,
+    reminders: 'error' as const,
+  }
+
   return {
     timeline: buildTimeline(localTimeline, normalizedTasks, systemSnapshot),
     goals: normalizedGoals,
     tasks: normalizedTasks,
     systemReminders,
-    integrationStatus: systemSnapshot?.integrationStatus || {
-      calendar: 'error' as const,
-      reminders: 'error' as const,
-    },
+    integrationStatus,
   }
 }
 
@@ -263,6 +268,28 @@ export async function requestRemindersAccess(): Promise<AuthorizationStatus> {
     return 'granted'
   }
   return invoke<AuthorizationStatus>('request_reminders_access')
+}
+
+export async function openCalendarEvent(eventId: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    console.log('Browser preview: would open calendar event', eventId)
+    return
+  }
+
+  // macOS Calendar URL scheme
+  const url = `ical://ekevent/${eventId}`
+  await invoke('open_url', { url })
+}
+
+export async function openSystemReminder(reminderId: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    console.log('Browser preview: would open reminder', reminderId)
+    return
+  }
+
+  // macOS Reminders URL scheme
+  const url = `x-apple-reminder://${reminderId}`
+  await invoke('open_url', { url })
 }
 
 interface CalendarEvent {

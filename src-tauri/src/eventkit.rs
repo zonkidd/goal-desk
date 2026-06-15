@@ -26,8 +26,11 @@ pub struct IntegrationStatus {
 pub struct SystemCalendarEvent {
     pub id: String,
     pub title: String,
+    #[serde(alias = "starts_at")]
     pub starts_at: DateTime<Local>,
+    #[serde(alias = "ends_at")]
     pub ends_at: DateTime<Local>,
+    #[serde(alias = "calendar_title")]
     pub calendar_title: Option<String>,
 }
 
@@ -36,16 +39,21 @@ pub struct SystemCalendarEvent {
 pub struct SystemReminder {
     pub id: String,
     pub title: String,
+    #[serde(alias = "due_at")]
     pub due_at: Option<DateTime<Local>>,
     pub done: bool,
+    #[serde(alias = "list_title")]
     pub list_title: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemAgendaSnapshot {
+    #[serde(alias = "integration_status")]
     pub integration_status: IntegrationStatus,
+    #[serde(alias = "calendar_events")]
     pub calendar_events: Vec<SystemCalendarEvent>,
+    #[serde(alias = "reminders")]
     pub reminders: Vec<SystemReminder>,
 }
 
@@ -167,6 +175,8 @@ struct NativeEventKitResult {
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
     fn gd_eventkit_snapshot(start_iso: *const c_char, end_iso: *const c_char) -> NativeEventKitResult;
+    fn gd_eventkit_request_calendar_access() -> NativeEventKitResult;
+    fn gd_eventkit_request_reminders_access() -> NativeEventKitResult;
     fn gd_eventkit_create_reminder(title: *const c_char, due_at_iso: *const c_char) -> NativeEventKitResult;
     fn gd_eventkit_set_reminder_completed(identifier: *const c_char, done: c_int) -> NativeEventKitResult;
     fn gd_eventkit_free_string(string: *mut c_char);
@@ -409,4 +419,28 @@ mod tests {
 
         assert!(error.contains("permission request failed"));
     }
+}
+
+// Public API for requesting calendar access
+#[cfg(target_os = "macos")]
+pub fn request_calendar_access() -> Result<AccessStatus, String> {
+    let result = unsafe { gd_eventkit_request_calendar_access() };
+    MacEventKitAdapter::read_native_result(result)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_calendar_access() -> Result<AccessStatus, String> {
+    Ok(AccessStatus::Error)
+}
+
+// Public API for requesting reminders access
+#[cfg(target_os = "macos")]
+pub fn request_reminders_access() -> Result<AccessStatus, String> {
+    let result = unsafe { gd_eventkit_request_reminders_access() };
+    MacEventKitAdapter::read_native_result(result)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_reminders_access() -> Result<AccessStatus, String> {
+    Ok(AccessStatus::Error)
 }
