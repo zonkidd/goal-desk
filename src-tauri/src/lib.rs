@@ -312,6 +312,28 @@ pub fn rename_area_record(path: &std::path::Path, area_id: String, new_title: St
     Ok(area)
 }
 
+pub fn reset_all_data_record(path: &std::path::Path) -> Result<(), String> {
+    use rusqlite::Connection;
+
+    let connection = Connection::open(path).map_err(|error| error.to_string())?;
+
+    connection
+        .execute_batch(
+            "
+            DELETE FROM desk_task_activity_logs;
+            DELETE FROM desk_tasks;
+            DELETE FROM milestones;
+            DELETE FROM todos;
+            DELETE FROM projects;
+            DELETE FROM goals;
+            DELETE FROM areas WHERE id != '00000000-0000-0000-0000-000000000000';
+            ",
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
 pub fn delete_area_record(path: &std::path::Path, area_id: String, force: bool) -> Result<domain::DeleteAreaResult, String> {
     use repository::{AreaRepository, GoalRepository};
 
@@ -619,6 +641,12 @@ mod commands {
     }
 
     #[tauri::command]
+    pub fn reset_all_data(app: AppHandle) -> Result<(), String> {
+        let path = workspace_repository(&app)?.path().to_path_buf();
+        super::reset_all_data_record(&path)
+    }
+
+    #[tauri::command]
     pub fn desk_task_list(app: AppHandle) -> Result<Vec<DeskTask>, String> {
         load_or_seed_desk_tasks(&app)
     }
@@ -863,6 +891,34 @@ mod commands {
     }
 
     #[tauri::command]
+    pub fn load_calendar_range(
+        app: AppHandle,
+        start_date: String,  // ISO 8601 format: "2026-06-09"
+        end_date: String,     // ISO 8601 format: "2026-06-29"
+    ) -> Result<eventkit::CalendarRangeData, String> {
+        use chrono::NaiveDate;
+
+        // Parse date strings
+        let start_parsed = NaiveDate::parse_from_str(&start_date, "%Y-%m-%d")
+            .map_err(|e| format!("Invalid start_date format: {}", e))?;
+        let end_parsed = NaiveDate::parse_from_str(&end_date, "%Y-%m-%d")
+            .map_err(|e| format!("Invalid end_date format: {}", e))?;
+
+        // Convert to DateTime<Local> at start of day
+        let start = Local
+            .from_local_datetime(&start_parsed.and_hms_opt(0, 0, 0).unwrap())
+            .single()
+            .ok_or_else(|| "Failed to convert start_date to local time".to_string())?;
+
+        let end = Local
+            .from_local_datetime(&end_parsed.and_hms_opt(23, 59, 59).unwrap())
+            .single()
+            .ok_or_else(|| "Failed to convert end_date to local time".to_string())?;
+
+        eventkit::load_calendar_range(&app, start, end)
+    }
+
+    #[tauri::command]
     pub fn request_calendar_access() -> Result<eventkit::AccessStatus, String> {
         eventkit::request_calendar_access()
     }
@@ -934,6 +990,7 @@ pub fn run() {
             commands::create_area,
             commands::rename_area,
             commands::delete_area,
+            commands::reset_all_data,
             commands::desk_task_list,
             commands::capture_task,
             commands::create_task_for_goal,
@@ -944,6 +1001,7 @@ pub fn run() {
             commands::open_task_in_bear,
             commands::show_quick_capture_window,
             commands::eventkit_snapshot,
+            commands::load_calendar_range,
             commands::request_calendar_access,
             commands::request_reminders_access,
             commands::set_system_reminder_completed,

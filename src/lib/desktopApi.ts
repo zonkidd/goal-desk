@@ -86,6 +86,7 @@ export async function loadDesktopSnapshot() {
     id: item.id,
     title: item.title,
     timeLabel: formatTimeLabel(item.startsAt),
+    startsAt: new Date(item.startsAt),
     source: item.source,
     readonly: item.readOnly,
     done: item.completed,
@@ -325,4 +326,70 @@ export async function fetchReminders(): Promise<Reminder[]> {
     return []
   }
   return invoke<Reminder[]>('fetch_reminders')
+}
+
+// Calendar Range Loading API
+
+interface CalendarRangeData {
+  events: Array<{
+    id: string
+    title: string
+    startsAt: string
+    endsAt: string
+    calendarTitle?: string
+  }>
+  reminders: Array<{
+    id: string
+    title: string
+    dueAt?: string
+    done: boolean
+    listTitle?: string
+  }>
+}
+
+export async function loadCalendarRange(
+  startDate: string,  // "2026-06-09"
+  endDate: string     // "2026-06-29"
+): Promise<{
+  events: Array<{
+    id: string
+    title: string
+    startsAt: Date
+    endsAt: Date
+    calendarTitle?: string
+  }>
+  reminders: Array<{
+    id: string
+    title: string
+    dueAt?: Date
+    done: boolean
+    listTitle?: string
+  }>
+}> {
+  if (!isTauriRuntime()) {
+    return { events: [], reminders: [] }
+  }
+
+  const result = await invoke<CalendarRangeData>('load_calendar_range', {
+    startDate,
+    endDate,
+  })
+
+  // 转换为前端类型
+  return {
+    events: result.events.map((event) => ({
+      id: event.id,
+      title: event.title,
+      startsAt: new Date(event.startsAt),
+      endsAt: new Date(event.endsAt),
+      calendarTitle: event.calendarTitle,
+    })),
+    reminders: result.reminders.map((reminder) => ({
+      id: reminder.id,
+      title: reminder.title,
+      dueAt: reminder.dueAt ? new Date(reminder.dueAt) : undefined,
+      done: reminder.done,
+      listTitle: reminder.listTitle,
+    })),
+  }
 }

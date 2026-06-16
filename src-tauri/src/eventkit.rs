@@ -57,12 +57,24 @@ pub struct SystemAgendaSnapshot {
     pub reminders: Vec<SystemReminder>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarRangeData {
+    pub events: Vec<SystemCalendarEvent>,
+    pub reminders: Vec<SystemReminder>,
+}
+
 pub trait SystemAgendaAdapter {
     fn snapshot(
         &self,
         start: DateTime<Local>,
         end: DateTime<Local>,
     ) -> Result<SystemAgendaSnapshot, String>;
+    fn load_range(
+        &self,
+        start: DateTime<Local>,
+        end: DateTime<Local>,
+    ) -> Result<CalendarRangeData, String>;
     fn create_reminder(
         &self,
         title: &str,
@@ -89,6 +101,14 @@ where
         end: DateTime<Local>,
     ) -> Result<SystemAgendaSnapshot, String> {
         self.adapter.snapshot(start, end)
+    }
+
+    pub fn load_range(
+        &self,
+        start: DateTime<Local>,
+        end: DateTime<Local>,
+    ) -> Result<CalendarRangeData, String> {
+        self.adapter.load_range(start, end)
     }
 
     pub fn create_reminder(
@@ -125,6 +145,27 @@ pub fn load_snapshot<R: Runtime>(
             reminders: AccessStatus::Error,
         },
         calendar_events: Vec::new(),
+        reminders: Vec::new(),
+    })
+}
+
+#[cfg(target_os = "macos")]
+pub fn load_calendar_range<R: Runtime>(
+    app: &AppHandle<R>,
+    start: DateTime<Local>,
+    end: DateTime<Local>,
+) -> Result<CalendarRangeData, String> {
+    EventKitService::new(MacEventKitAdapter::new(app)?).load_range(start, end)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn load_calendar_range<R: Runtime>(
+    _app: &AppHandle<R>,
+    _start: DateTime<Local>,
+    _end: DateTime<Local>,
+) -> Result<CalendarRangeData, String> {
+    Ok(CalendarRangeData {
+        events: Vec::new(),
         reminders: Vec::new(),
     })
 }
@@ -220,8 +261,14 @@ impl MacEventKitAdapter {
         }
 
         let payload = json.ok_or_else(|| "EventKit bridge returned no payload".to_string())?;
-        serde_json::from_str(&payload)
-            .map_err(|error| format!("Unable to decode EventKit bridge response: {error}; payload={payload}"))
+        eprintln!("🔍 [EventKit] Raw payload from native: {:?}", payload);
+        let result: T = serde_json::from_str(&payload)
+            .map_err(|error| {
+                eprintln!("❌ [EventKit] Deserialization failed: {:?}", error);
+                format!("Unable to decode EventKit bridge response: {error}; payload={payload}")
+            })?;
+        eprintln!("✅ [EventKit] Successfully deserialized");
+        Ok(result)
     }
 }
 
@@ -235,6 +282,20 @@ impl SystemAgendaAdapter for MacEventKitAdapter {
         let start_iso = CString::new(start.to_rfc3339()).map_err(|error| error.to_string())?;
         let end_iso = CString::new(end.to_rfc3339()).map_err(|error| error.to_string())?;
         Self::read_native_result(unsafe { gd_eventkit_snapshot(start_iso.as_ptr(), end_iso.as_ptr()) })
+    }
+
+    fn load_range(
+        &self,
+        start: DateTime<Local>,
+        end: DateTime<Local>,
+    ) -> Result<CalendarRangeData, String> {
+        let start_iso = CString::new(start.to_rfc3339()).map_err(|error| error.to_string())?;
+        let end_iso = CString::new(end.to_rfc3339()).map_err(|error| error.to_string())?;
+        Self::read_native_result(unsafe { gd_eventkit_snapshot(start_iso.as_ptr(), end_iso.as_ptr()) })
+            .map(|snapshot: SystemAgendaSnapshot| CalendarRangeData {
+                events: snapshot.calendar_events,
+                reminders: snapshot.reminders,
+            })
     }
 
     fn create_reminder(
@@ -290,6 +351,25 @@ mod tests {
             self.snapshot
                 .clone()
                 .ok_or_else(|| "missing snapshot".to_string())
+        }
+
+        fn load_range(
+            &self,
+            _start: chrono::DateTime<Local>,
+            _end: chrono::DateTime<Local>,
+        ) -> Result<super::CalendarRangeData, String> {
+            if let Some(error) = &self.fail_with {
+                return Err(error.clone());
+            }
+
+            let snapshot = self.snapshot
+                .clone()
+                .ok_or_else(|| "missing snapshot".to_string())?;
+
+            Ok(super::CalendarRangeData {
+                events: snapshot.calendar_events,
+                reminders: snapshot.reminders,
+            })
         }
 
         fn create_reminder(
@@ -418,6 +498,74 @@ mod tests {
             .unwrap_err();
 
         assert!(error.contains("permission request failed"));
+    }
+
+    #[test]
+    fn eventkit_service_loads_calendar_range() {
+        let service = EventKitService::new(FakeAdapter {
+            snapshot: Some(SystemAgendaSnapshot {
+                integration_status: IntegrationStatus {
+                    calendar: AccessStatus::Granted,
+                    reminders: AccessStatus::Granted,
+                },
+                calendar_events: vec![
+                    super::SystemCalendarEvent {
+                        id: "event-1".to_string(),
+                        title: "Week 1 Event".to_string(),
+                        starts_at: Local.with_ymd_and_hms(2026, 6, 10, 10, 0, 0).unwrap(),
+                        ends_at: Local.with_ymd_and_hms(2026, 6, 10, 11, 0, 0).unwrap(),
+                        calendar_title: Some("Work".to_string()),
+                    },
+                    super::SystemCalendarEvent {
+                        id: "event-2".to_string(),
+                        title: "Week 2 Event".to_string(),
+                        starts_at: Local.with_ymd_and_hms(2026, 6, 20, 14, 0, 0).unwrap(),
+                        ends_at: Local.with_ymd_and_hms(2026, 6, 20, 15, 0, 0).unwrap(),
+                        calendar_title: Some("Personal".to_string()),
+                    },
+                ],
+                reminders: vec![SystemReminder {
+                    id: "reminder-1".to_string(),
+                    title: "Submit report".to_string(),
+                    due_at: Some(Local.with_ymd_and_hms(2026, 6, 15, 17, 0, 0).unwrap()),
+                    done: false,
+                    list_title: Some("Tasks".to_string()),
+                }],
+            }),
+            reminder: None,
+            fail_with: None,
+        });
+
+        let range = service
+            .load_range(
+                Local.with_ymd_and_hms(2026, 6, 9, 0, 0, 0).unwrap(),
+                Local.with_ymd_and_hms(2026, 6, 29, 23, 59, 59).unwrap(),
+            )
+            .unwrap();
+
+        assert_eq!(range.events.len(), 2);
+        assert_eq!(range.events[0].title, "Week 1 Event");
+        assert_eq!(range.events[1].title, "Week 2 Event");
+        assert_eq!(range.reminders.len(), 1);
+        assert_eq!(range.reminders[0].title, "Submit report");
+    }
+
+    #[test]
+    fn eventkit_service_load_range_propagates_errors() {
+        let service = EventKitService::new(FakeAdapter {
+            snapshot: None,
+            reminder: None,
+            fail_with: Some("Network timeout".to_string()),
+        });
+
+        let error = service
+            .load_range(
+                Local.with_ymd_and_hms(2026, 6, 9, 0, 0, 0).unwrap(),
+                Local.with_ymd_and_hms(2026, 6, 29, 23, 59, 59).unwrap(),
+            )
+            .unwrap_err();
+
+        assert!(error.contains("Network timeout"));
     }
 }
 
