@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日历与提醒看板原型 - 选择器</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    * {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .mesh-bg {
+      background:
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(147, 51, 234, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
+        radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.08) 0px, transparent 50%),
+        #f8fafc;
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .glass-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+    }
+
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+    }
+  </style>
+</head>
+<body class="mesh-bg min-h-screen flex items-center justify-center p-8">
+
+  <div class="max-w-5xl w-full">
+    <div class="text-center mb-12">
+      <h1 class="text-5xl font-extrabold text-slate-900 mb-4">Goal Desk 看板原型</h1>
+      <p class="text-lg text-slate-600 font-medium">日历看板与提醒看板 - 高保真交互原型</p>
+      <p class="mt-2 text-sm text-slate-500">基于 2026-06-16 设计讨论</p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-8">
+      <!-- 日历看板 -->
+      <a href="./calendar-board-v1.html" class="glass-card rounded-3xl p-8 block group">
+        <div class="text-6xl mb-6 group-hover:scale-110 transition-transform">📅</div>
+        <h2 class="text-2xl font-bold text-slate-900 mb-3">日历看板</h2>
+        <p class="text-slate-600 font-medium mb-4">月历视图 + 当日事件列表</p>
+        <ul class="text-sm text-slate-500 space-y-2 mb-6">
+          <li>✓ 混合显示日历事件、系统提醒、待办事项</li>
+          <li>✓ 强视觉区分（背景色 + 色条 + 图标）</li>
+          <li>✓ 月历切换 + 日期高亮</li>
+          <li>✓ 淡入淡出动画</li>
+        </ul>
+        <div class="text-indigo-600 font-bold flex items-center gap-2">
+          查看原型
+          <span class="text-xl">→</span>
+        </div>
+      </a>
+
+      <!-- 提醒看板 -->
+      <a href="./reminders-board-v1.html" class="glass-card rounded-3xl p-8 block group">
+        <div class="text-6xl mb-6 group-hover:scale-110 transition-transform">⏰</div>
+        <h2 class="text-2xl font-bold text-slate-900 mb-3">提醒看板</h2>
+        <p class="text-slate-600 font-medium mb-4">双视图切换：按清单 / 按时间</p>
+        <ul class="text-sm text-slate-500 space-y-2 mb-6">
+          <li>✓ 按清单：2-4列自适应网格布局</li>
+          <li>✓ 按时间：已过期/今天/未来7天/更晚分组</li>
+          <li>✓ 顶部 Tab 切换视图</li>
+          <li>✓ 完成状态同步 + 隐藏开关</li>
+        </ul>
+        <div class="text-orange-600 font-bold flex items-center gap-2">
+          查看原型
+          <span class="text-xl">→</span>
+        </div>
+      </a>
+    </div>
+
+    <div class="glass-panel rounded-2xl p-6 mt-12">
+      <h3 class="text-sm font-black uppercase text-slate-400 mb-3">设计规范</h3>
+      <div class="grid grid-cols-3 gap-4 text-xs">
+        <div>
+          <div class="font-bold text-slate-700 mb-1">技术栈</div>
+          <div class="text-slate-600">纯静态 HTML + Tailwind CDN + 原生 JS</div>
+        </div>
+        <div>
+          <div class="font-bold text-slate-700 mb-1">交互级别</div>
+          <div class="text-slate-600">基础交互（切换、展开、勾选）</div>
+        </div>
+        <div>
+          <div class="font-bold text-slate-700 mb-1">数据量</div>
+          <div class="text-slate-600">中等（6-12 项/视图）</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center mt-8 text-sm text-slate-400">
+      <p>创建于 2026-06-16 · Goal Desk 开发团队</p>
+    </div>
+  </div>
+
+</body>
+</html>

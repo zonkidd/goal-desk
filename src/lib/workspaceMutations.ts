@@ -4,6 +4,7 @@ import {
   createArea as persistCreateArea,
   createGoal as persistGoal,
   createTaskForGoal as persistTaskForGoal,
+  createSystemReminder as persistCreateSystemReminder,
   deleteArea as persistDeleteArea,
   isTauriRuntime,
   listAreas as persistListAreas,
@@ -139,6 +140,7 @@ export class TauriMutations {
       linkedGoalId?: string
       availableGoals?: GoalCard[]
       showInTimeline?: boolean
+      systemReminderId?: string
     },
   ): Promise<{ task?: Task; statusMessage?: string }> {
     const trimmedTitle = input.title.trim()
@@ -155,6 +157,7 @@ export class TauriMutations {
         linkedGoalId: input.linkedGoalId,
         linkedGoalLabel,
         showInTimeline: input.showInTimeline,
+        systemReminderId: input.systemReminderId,
       }),
       statusMessage: 'Task details saved',
     }
@@ -216,6 +219,10 @@ export class TauriMutations {
       message: result.message,
       statusMessage: result.success ? 'Area deleted' : result.message,
     }
+  }
+
+  async createSystemReminder(title: string, dueAt?: Date): Promise<string> {
+    return persistCreateSystemReminder(title, dueAt)
   }
 }
 
@@ -389,6 +396,10 @@ export class BrowserMutations {
       message: BROWSER_PREVIEW_STATUS,
       statusMessage: BROWSER_PREVIEW_STATUS,
     }
+  }
+
+  async createSystemReminder(title: string, dueAt?: Date): Promise<string> {
+    return `mock-reminder-${Date.now()}`
   }
 }
 

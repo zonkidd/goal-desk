@@ -7,6 +7,8 @@ const titles = {
   board: 'Goal Board',
   goals: 'Goals',
   areas: '领域管理',
+  calendar: 'Calendar',
+  reminders: 'Reminders',
 }
 
 export function TopBar() {

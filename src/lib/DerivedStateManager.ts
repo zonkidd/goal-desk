@@ -1,13 +1,13 @@
-import type { AreaFilter, GoalCard, TimelineItem } from '../types/app'
+import type { AreaFilter, GoalCard, RawAgendaItem, TodayAgenda } from '../types/app'
 import type { Task } from '../types/task'
 import {
   deriveGoalRecords,
   deriveTodayAttentionGroups,
   deriveTodayRelevantGoals,
-  deriveTodayTimeline,
+  deriveTodayAgenda,
   filterGoalsByArea,
   filterTasksByArea,
-  filterTimelineByArea,
+  filterAgendaByArea,
   getInboxTaskGroups,
   getTodayFocusTasks,
   type InboxTaskGroups,
@@ -25,7 +25,7 @@ export type ChangeType =
 
 export interface DerivedState {
   goals: GoalCard[]
-  timeline: TimelineItem[]
+  timeline: TodayAgenda
   todayFocusTasks: Task[]
   todayAttentionGroups: TodayAttentionGroups
   todayRelevantGoals: TodayRelevantGoal[]
@@ -44,13 +44,13 @@ export class DerivedStateManager {
     filteredGoals?: GoalCard[]
     filteredTasks?: Task[]
     todayFocusTasks?: Task[]
-    timeline?: TimelineItem[]
+    timeline?: TodayAgenda
     todayAttentionGroups?: TodayAttentionGroups
     todayRelevantGoals?: TodayRelevantGoal[]
     inbox?: InboxTaskGroups
   } = {}
 
-  private baseTimeline: TimelineItem[]
+  private baseTimeline: RawAgendaItem[]
   private baseGoals: GoalCard[]
   private tasks: Task[]
   private activeArea: AreaFilter
@@ -58,7 +58,7 @@ export class DerivedStateManager {
   private now?: Date
 
   constructor(
-    baseTimeline: TimelineItem[],
+    baseTimeline: RawAgendaItem[],
     baseGoals: GoalCard[],
     tasks: Task[],
     activeArea: AreaFilter,
@@ -181,7 +181,7 @@ export class DerivedStateManager {
     if (this.cache.todayFocusTasks) {
       return this.cache.todayFocusTasks
     }
-    const focusTasks = getTodayFocusTasks(this.tasks, this.now)
+    const focusTasks = getTodayFocusTasks(this.tasks, derivedGoals, this.activeArea, this.now)
     const filtered =
       this.activeArea === 'ALL'
         ? focusTasks
@@ -190,15 +190,15 @@ export class DerivedStateManager {
     return filtered
   }
 
-  private computeTimeline(filteredTasks: Task[]): TimelineItem[] {
+  private computeTimeline(filteredTasks: Task[]): TodayAgenda {
     if (this.cache.timeline) {
       return this.cache.timeline
     }
-    const derived = deriveTodayTimeline(this.baseTimeline, this.tasks, this.now)
+    const derived = deriveTodayAgenda(this.baseTimeline, this.tasks, this.now)
     const filtered =
       this.activeArea === 'ALL'
         ? derived
-        : filterTimelineByArea(derived, filteredTasks)
+        : filterAgendaByArea(derived, filteredTasks)
     this.cache.timeline = filtered
     return filtered
   }

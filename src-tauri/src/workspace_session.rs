@@ -10,10 +10,10 @@ use uuid::Uuid;
 /// - 追踪脏状态，只在必要时保存
 ///
 /// 使用方式：
-/// ```rust
+/// ```rust,ignore
 /// let repo = SqliteRepository::new(path);
 /// let mut session = WorkspaceSession::load(&repo)?;
-/// let goal = session.create_goal(GoalSpec { title, area })?;
+/// let goal = session.create_goal(title, area, description, status)?;
 /// session.commit()?;
 /// ```
 pub struct WorkspaceSession<'a> {

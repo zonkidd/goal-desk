@@ -56,67 +56,13 @@ static NSString *GDFormatDate(NSDate *date) {
     return date ? [GDISOFormatter() stringFromDate:date] : nil;
 }
 
-static BOOL GDRequestCalendarAccess(EKEventStore *store) {
-    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-    __block BOOL granted = NO;
-
-    if (@available(macOS 14.0, *)) {
-        [store requestFullAccessToEventsWithCompletion:^(BOOL result, NSError * _Nullable error) {
-            granted = result;
-            dispatch_semaphore_signal(semaphore);
-        }];
-    } else {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-        [store requestAccessToEntityType:EKEntityTypeEvent completion:^(BOOL result, NSError * _Nullable error) {
-            granted = result;
-            dispatch_semaphore_signal(semaphore);
-        }];
-#pragma clang diagnostic pop
-    }
-
-    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-    return granted;
-}
-
-static BOOL GDRequestReminderAccess(EKEventStore *store) {
-    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-    __block BOOL granted = NO;
-
-    if (@available(macOS 14.0, *)) {
-        [store requestFullAccessToRemindersWithCompletion:^(BOOL result, NSError * _Nullable error) {
-            granted = result;
-            dispatch_semaphore_signal(semaphore);
-        }];
-    } else {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-        [store requestAccessToEntityType:EKEntityTypeReminder completion:^(BOOL result, NSError * _Nullable error) {
-            granted = result;
-            dispatch_semaphore_signal(semaphore);
-        }];
-#pragma clang diagnostic pop
-    }
-
-    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-    return granted;
-}
-
 static NSString *GDResolvedCalendarStatus(EKEventStore *store) {
     EKAuthorizationStatus status = [EKEventStore authorizationStatusForEntityType:EKEntityTypeEvent];
-    if (status == EKAuthorizationStatusNotDetermined) {
-        GDRequestCalendarAccess(store);
-        status = [EKEventStore authorizationStatusForEntityType:EKEntityTypeEvent];
-    }
     return GDResultStatus(status);
 }
 
 static NSString *GDResolvedReminderStatus(EKEventStore *store) {
     EKAuthorizationStatus status = [EKEventStore authorizationStatusForEntityType:EKEntityTypeReminder];
-    if (status == EKAuthorizationStatusNotDetermined) {
-        GDRequestReminderAccess(store);
-        status = [EKEventStore authorizationStatusForEntityType:EKEntityTypeReminder];
-    }
     return GDResultStatus(status);
 }
 
@@ -178,6 +124,62 @@ static GDEventKitResult GDJSONResult(id payload, NSError *error) {
 
     NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
     return (GDEventKitResult){.json = GDDupNSString(jsonString), .error = NULL};
+}
+
+void gd_eventkit_request_calendar_access_async(void *context, void (*callback)(void *, const char *)) {
+    @autoreleasepool {
+        EKEventStore *store = [[EKEventStore alloc] init];
+        EKAuthorizationStatus currentStatus = [EKEventStore authorizationStatusForEntityType:EKEntityTypeEvent];
+
+        if (currentStatus != EKAuthorizationStatusNotDetermined) {
+            NSString *statusString = GDResultStatus(currentStatus);
+            callback(context, [statusString UTF8String]);
+            return;
+        }
+
+        if (@available(macOS 14.0, *)) {
+            [store requestFullAccessToEventsWithCompletion:^(BOOL granted, NSError *error) {
+                NSString *status = (granted && !error) ? @"granted" : @"denied";
+                callback(context, [status UTF8String]);
+            }];
+        } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            [store requestAccessToEntityType:EKEntityTypeEvent completion:^(BOOL result, NSError * _Nullable error) {
+                NSString *status = (result && !error) ? @"granted" : @"denied";
+                callback(context, [status UTF8String]);
+            }];
+#pragma clang diagnostic pop
+        }
+    }
+}
+
+void gd_eventkit_request_reminders_access_async(void *context, void (*callback)(void *, const char *)) {
+    @autoreleasepool {
+        EKEventStore *store = [[EKEventStore alloc] init];
+        EKAuthorizationStatus currentStatus = [EKEventStore authorizationStatusForEntityType:EKEntityTypeReminder];
+
+        if (currentStatus != EKAuthorizationStatusNotDetermined) {
+            NSString *statusString = GDResultStatus(currentStatus);
+            callback(context, [statusString UTF8String]);
+            return;
+        }
+
+        if (@available(macOS 14.0, *)) {
+            [store requestFullAccessToRemindersWithCompletion:^(BOOL granted, NSError *error) {
+                NSString *status = (granted && !error) ? @"granted" : @"denied";
+                callback(context, [status UTF8String]);
+            }];
+        } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            [store requestAccessToEntityType:EKEntityTypeReminder completion:^(BOOL result, NSError * _Nullable error) {
+                NSString *status = (result && !error) ? @"granted" : @"denied";
+                callback(context, [status UTF8String]);
+            }];
+#pragma clang diagnostic pop
+        }
+    }
 }
 
 GDEventKitResult gd_eventkit_snapshot(const char *start_iso, const char *end_iso) {

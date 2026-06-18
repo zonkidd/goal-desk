@@ -1,19 +1,61 @@
-import { Clock } from 'lucide-react'
+import { Clock, Info } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { useState } from 'react'
 import { GlassCard } from '../common/GlassCard'
 import { GlassPanel } from '../common/GlassPanel'
-import { useAppStore } from '../../store/appStore'
+import { useAppStore, selectFilteredTimeline } from '../../store/appStore'
 import { getTaskTimeInfo, getUrgencyColor, getUrgencyIcon } from '../../lib/taskPresentation'
 import type { Task } from '../../types/task'
+
+// Timeline 来源视觉配置辅助函数
+// PRD 颜色规范: Calendar=绿色, Reminder=靛蓝, Todo=琥珀色
+function getTimelineStyles(source: 'todo' | 'reminder' | 'calendar') {
+  const styles = {
+    todo: {
+      dot: 'bg-amber-500',
+      card: 'border-l-4 border-l-amber-500 bg-amber-50/30',
+      label: 'text-amber-600',
+    },
+    reminder: {
+      dot: 'bg-indigo-500',
+      card: 'border-l-4 border-l-indigo-500 bg-indigo-50/30',
+      label: 'text-indigo-600',
+    },
+    calendar: {
+      dot: 'bg-emerald-500',
+      card: 'border-l-4 border-l-emerald-500 bg-emerald-50/30',
+      label: 'text-emerald-600',
+    },
+  }
+  return styles[source]
+}
 
 export function TodayView() {
   const todayAttentionGroups = useAppStore((state) => state.todayAttentionGroups)
   const todayRelevantGoals = useAppStore((state) => state.todayRelevantGoals)
-  const timeline = useAppStore((state) => state.timeline)
+  const timeline = useAppStore(selectFilteredTimeline)
   const ongoingTasks = todayAttentionGroups.ongoing
   const openReminderDrawer = useAppStore((state) => state.openReminderDrawer)
   const openTaskDrawer = useAppStore((state) => state.openTaskDrawer)
   const openGoalDrawer = useAppStore((state) => state.openGoalDrawer)
+  const eventkitPermissions = useAppStore((state) => state.eventkitPermissions)
+  const requestCalendarAccess = useAppStore((state) => state.requestCalendarAccess)
+  const requestRemindersAccess = useAppStore((state) => state.requestRemindersAccess)
+
+  // 横幅关闭状态
+  const [bannerDismissed, setBannerDismissed] = useState(() => {
+    return localStorage.getItem('eventkit-banner-dismissed') === 'true'
+  })
+
+  const handleDismiss = () => {
+    localStorage.setItem('eventkit-banner-dismissed', 'true')
+    setBannerDismissed(true)
+  }
+
+  // 判断是否显示横幅
+  const shouldShowBanner =
+    !bannerDismissed &&
+    (eventkitPermissions.calendar === 'not_determined' || eventkitPermissions.reminders === 'not_determined')
 
   return (
     <section id="today" className="screen active">
@@ -169,28 +211,75 @@ export function TodayView() {
             今日时间轴
           </h2>
 
-          <div className="timeline-line relative space-y-6">
-            {timeline.map((item) => (
-              <motion.div key={item.id} className="relative z-10 flex gap-4" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-                <div className="w-12 shrink-0 text-right">
-                  <span className={`text-xs font-black ${item.source === 'calendar' ? 'text-slate-500' : 'text-indigo-600'}`}>{item.timeLabel}</span>
-                </div>
-                <div className={`mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white ${item.source === 'calendar' ? 'bg-emerald-400' : item.source === 'reminder' ? 'bg-indigo-500 ring-4 ring-indigo-100' : 'bg-amber-400'}`} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (item.source === 'reminder') openReminderDrawer(item.id)
-                    if (item.source === 'todo') openTaskDrawer(item.id)
-                  }}
-                  className={`flex-1 rounded-xl p-3 text-left ${item.source === 'reminder' ? 'glass-card border-l-4 border-l-indigo-500 shadow-md' : 'glass-card border border-slate-100'} ${item.source === 'reminder' ? 'transition-transform hover:-translate-y-0.5' : ''}`}
-                >
-                  <div className="mb-1 text-[10px] font-bold uppercase text-slate-500">
-                    {item.source === 'calendar' ? item.sourceLabel || 'Calendar Event' : item.source === 'reminder' ? item.sourceLabel || 'Apple Reminders' : item.sourceLabel || 'Desk Task'}
+          {shouldShowBanner && (
+            <div className="glass-card mb-4 rounded-2xl border-l-4 border-l-indigo-500 bg-indigo-50/50 p-4">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 shrink-0 text-indigo-600" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold text-slate-900">集成系统日历和提醒</h3>
+                  <p className="mt-1 text-xs text-slate-600">获得锁屏通知和跨应用同步能力</p>
+                  <div className="mt-3 flex gap-2">
+                    {eventkitPermissions.calendar === 'not_determined' && (
+                      <button
+                        type="button"
+                        onClick={requestCalendarAccess}
+                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700"
+                      >
+                        授权日历
+                      </button>
+                    )}
+                    {eventkitPermissions.reminders === 'not_determined' && (
+                      <button
+                        type="button"
+                        onClick={requestRemindersAccess}
+                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700"
+                      >
+                        授权提醒
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleDismiss}
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                    >
+                      暂不需要
+                    </button>
                   </div>
-                  <div className={`text-sm font-bold ${item.done ? 'text-slate-600 line-through' : 'text-slate-800'}`}>{item.title}</div>
-                </button>
-              </motion.div>
-            ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="timeline-line relative space-y-6">
+            {timeline.map((item) => {
+              const styles = getTimelineStyles(item.source)
+              return (
+                <motion.div key={item.id} className="relative z-10 flex gap-4" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+                  <div className="w-12 shrink-0 text-right">
+                    <span className={`text-xs font-black ${styles.label}`}>{item.timeLabel}</span>
+                  </div>
+                  <div className={`mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white ${styles.dot}`} />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (item.source === 'todo') openTaskDrawer(item.id)
+                      if (item.source === 'reminder') openReminderDrawer(item.id)
+                      if (item.source === 'calendar') openReminderDrawer(item.id)
+                    }}
+                    className={`flex-1 rounded-xl p-3 text-left glass-card ${styles.card} transition-transform hover:-translate-y-0.5`}
+                  >
+                    <div className={`mb-1 text-[10px] font-bold uppercase ${styles.label}`}>
+                      {item.source === 'todo'
+                        ? item.sourceLabel || 'Desk Task'
+                        : item.source === 'reminder'
+                          ? item.sourceLabel || 'Apple Reminders'
+                          : item.sourceLabel || 'Calendar Event'}
+                    </div>
+                    <div className={`text-sm font-bold ${item.done ? 'text-slate-600 line-through' : 'text-slate-800'}`}>{item.title}</div>
+                  </button>
+                </motion.div>
+              )
+            })}
 
             {timeline.length === 0 && (
               <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm font-medium text-slate-400">

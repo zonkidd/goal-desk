@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { GlassCard } from '../common/GlassCard'
 import { GlassPanel } from '../common/GlassPanel'
 import { AreaSelectWithCreate } from '../shared/AreaSelectWithCreate'
-import { useAppStore } from '../../store/appStore'
-import type { GoalStatus } from '../../types/app'
+import { useAppStore, selectFilteredGoals } from '../../store/appStore'
+import type { GoalCard, GoalStatus } from '../../types/app'
 
 const goalStatuses: GoalStatus[] = ['ACTIVE', 'PAUSED', 'READY_TO_COMPLETE', 'COMPLETED', 'ARCHIVED']
 
@@ -16,7 +16,7 @@ const statusColumns: Array<{ title: string; statuses: GoalStatus[]; bg: string; 
 ]
 
 export function GoalsView() {
-  const goals = useAppStore((state) => state.goals)
+  const goals = useAppStore(selectFilteredGoals)
   const allAreas = useAppStore((state) => state.allAreas)
   const activeArea = useAppStore((state) => state.activeArea)
   const setActiveArea = useAppStore((state) => state.setActiveArea)
@@ -177,7 +177,7 @@ export function GoalsView() {
   )
 }
 
-function AreaGoalBoard({ goals, onOpenGoal }: { goals: ReturnType<typeof useAppStore.getState>['goals']; onOpenGoal: (goalId: string) => void }) {
+function AreaGoalBoard({ goals, onOpenGoal }: { goals: GoalCard[]; onOpenGoal: (goalId: string) => void }) {
   return (
     <div className="grid grid-cols-3 gap-5">
       {statusColumns.map((column) => {
@@ -208,7 +208,7 @@ function AreaGoalBoard({ goals, onOpenGoal }: { goals: ReturnType<typeof useAppS
   )
 }
 
-function GoalBoardCard({ goal, onOpenGoal }: { goal: ReturnType<typeof useAppStore.getState>['goals'][number]; onOpenGoal: (goalId: string) => void }) {
+function GoalBoardCard({ goal, onOpenGoal }: { goal: GoalCard; onOpenGoal: (goalId: string) => void }) {
   return (
     <motion.button
       whileHover={{ y: -2 }}
@@ -218,12 +218,16 @@ function GoalBoardCard({ goal, onOpenGoal }: { goal: ReturnType<typeof useAppSto
     >
       <GlassCard className="rounded-2xl p-4 transition-all hover:shadow-lg">
         <div className="mb-2 flex items-start justify-between gap-3">
-          <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">{goal.status}</div>
+          <div className="mb-2 inline-flex rounded-full bg-purple-50 px-2.5 py-1 text-[10px] font-black uppercase text-purple-600">{goal.area}</div>
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500">{goal.progress}%</span>
         </div>
         <div className="text-sm font-black text-slate-800">{goal.title}</div>
-        <p className="mt-2 line-clamp-2 min-h-8 text-xs font-medium text-slate-500">{goal.description || '暂无描述'}</p>
-        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/70">
+        {goal.nextTodo && (
+          <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-xs font-medium text-slate-600">
+            <span className="font-bold text-slate-400">Next: </span>{goal.nextTodo}
+          </div>
+        )}
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/70">
           <div className="h-1.5 rounded-full bg-indigo-500" style={{ width: `${goal.progress}%` }} />
         </div>
         <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-400">
@@ -237,13 +241,13 @@ function GoalBoardCard({ goal, onOpenGoal }: { goal: ReturnType<typeof useAppSto
   )
 }
 
-function GoalTile({ goal, onOpenGoal }: { goal: ReturnType<typeof useAppStore.getState>['goals'][number]; onOpenGoal: (goalId: string) => void }) {
+function GoalTile({ goal, onOpenGoal }: { goal: GoalCard; onOpenGoal: (goalId: string) => void }) {
   return (
     <button type="button" onClick={() => onOpenGoal(goal.id)} className="block text-left transition-transform hover:-translate-y-1 active:scale-98">
       <GlassCard className="rounded-3xl p-6 transition-all hover:shadow-lg">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <div className="mb-2 inline-flex rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black uppercase text-indigo-600">{goal.area}</div>
+            <div className="mb-2 inline-flex rounded-full bg-purple-50 px-3 py-1.5 text-xs font-black uppercase text-purple-600">{goal.area}</div>
             <h2 className="text-xl font-bold text-slate-900">{goal.title}</h2>
           </div>
           <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-500">{goal.status}</span>

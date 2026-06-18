@@ -1,5 +1,6 @@
-import type { AreaFilter, GoalCard, TimelineItem } from '../types/app'
+import type { AreaFilter, GoalCard, RawAgendaItem, TodayAgenda } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
+import { TimelineBuilder } from './TimelineBuilder'
 
 export interface TodayAttentionGroups {
   overdue: Task[]
@@ -19,7 +20,7 @@ export interface TodayRelevantGoal {
 
 export interface WorkspaceDerivedState {
   goals: GoalCard[]
-  timeline: TimelineItem[]
+  timeline: TodayAgenda
   todayFocusTasks: Task[]
   todayAttentionGroups: TodayAttentionGroups
   todayRelevantGoals: TodayRelevantGoal[]
@@ -38,7 +39,7 @@ export interface InboxTaskGroups {
 }
 
 interface DeriveWorkspaceStateInput {
-  baseTimeline: TimelineItem[]
+  baseTimeline: RawAgendaItem[]
   baseGoals: GoalCard[]
   tasks: Task[]
   activeArea: AreaFilter
@@ -46,18 +47,22 @@ interface DeriveWorkspaceStateInput {
   now?: Date
 }
 
+/**
+ * @deprecated 使用 WorkspaceEngine.computeSnapshot() 替代
+ * 保留此函数仅用于向后兼容
+ */
 export function deriveWorkspaceState(input: DeriveWorkspaceStateInput): WorkspaceDerivedState {
   const goals = deriveGoalRecords(input.baseGoals, input.tasks)
   const visibleGoals = filterGoalsByArea(goals, input.activeArea)
   const visibleTasks = filterTasksByArea(input.tasks, goals, input.activeArea)
   const todayFocusTasks =
     input.activeArea === 'ALL'
-      ? getTodayFocusTasks(input.tasks, input.now)
-      : filterTasksByArea(getTodayFocusTasks(input.tasks, input.now), goals, input.activeArea)
+      ? getTodayFocusTasks(input.tasks, goals, input.activeArea, input.now)
+      : filterTasksByArea(getTodayFocusTasks(input.tasks, goals, input.activeArea, input.now), goals, input.activeArea)
   const timeline =
     input.activeArea === 'ALL'
-      ? deriveTodayTimeline(input.baseTimeline, input.tasks, input.now)
-      : filterTimelineByArea(deriveTodayTimeline(input.baseTimeline, input.tasks, input.now), visibleTasks)
+      ? deriveTodayAgenda(input.baseTimeline, input.tasks, input.now)
+      : filterAgendaByArea(deriveTodayAgenda(input.baseTimeline, input.tasks, input.now), visibleTasks)
   const todayAttentionGroups =
     input.activeArea === 'ALL'
       ? deriveTodayAttentionGroups(input.tasks, input.now)
@@ -110,9 +115,9 @@ export function filterTasksByArea(tasks: Task[], goals: GoalCard[], activeArea: 
   return tasks.filter((task) => task.linkedGoalId && goalIds.has(task.linkedGoalId))
 }
 
-export function filterTimelineByArea(timeline: TimelineItem[], visibleTasks: Task[]) {
+export function filterAgendaByArea(agenda: TodayAgenda, visibleTasks: Task[]): TodayAgenda {
   const visibleTaskIds = new Set(visibleTasks.map((task) => task.id))
-  return timeline.filter((item) => item.source !== 'todo' || visibleTaskIds.has(item.id))
+  return agenda.filter((item) => item.source !== 'todo' || visibleTaskIds.has(item.id))
 }
 
 export function deriveGoalRecords(goals: GoalCard[], tasks: Task[]): GoalCard[] {
@@ -150,9 +155,10 @@ function deriveGoalStatus(status: GoalCard['status'], linkedTasks: Task[]): Goal
   return 'ACTIVE'
 }
 
-export function getTodayFocusTasks(tasks: Task[], now = new Date()) {
+export function getTodayFocusTasks(tasks: Task[], goals: GoalCard[] = [], areaFilter: AreaFilter = 'ALL', now = new Date()) {
   const today = startOfDay(now)
-  return tasks.filter((task) => {
+
+  let filtered = tasks.filter((task) => {
     // 必须是 IN_PROGRESS 状态
     if (task.status !== 'IN_PROGRESS') return false
 
@@ -165,9 +171,24 @@ export function getTodayFocusTasks(tasks: Task[], now = new Date()) {
 
     return startDay.getTime() <= today.getTime() && (!endDay || today.getTime() <= endDay.getTime())
   })
+
+  // 领域筛选
+  if (areaFilter !== 'ALL') {
+    filtered = filterTasksByArea(filtered, goals, areaFilter)
+  }
+
+  return filtered
 }
 
-export function deriveTodayTimeline(baseTimeline: TimelineItem[], tasks: Task[], now = new Date()): TimelineItem[] {
+/**
+ * 派生今日议程
+ *
+ * @param baseTimeline - 原始议程数据（来自 EventKit 和 Desk Tasks）
+ * @param tasks - 所有任务
+ * @param now - 当前时间
+ * @returns TodayAgenda - 今日议程（过滤到今天的事件和任务）
+ */
+export function deriveTodayAgenda(baseTimeline: RawAgendaItem[], tasks: Task[], now = new Date()): TodayAgenda {
   const today = startOfDay(now)
   const taskItems = tasks
     .filter((task) => {
@@ -203,15 +224,18 @@ export function deriveTodayTimeline(baseTimeline: TimelineItem[], tasks: Task[],
       readonly: false,
       done: false,
       sourceLabel: task.linkedGoalLabel || 'Desk Task',
+      startsAt: task.plannedStartAt,
+      linkedGoalId: task.linkedGoalId,
     }))
 
+  // 合并基础议程（事件、提醒）和任务项
   const merged = [...baseTimeline.filter((item) => item.source !== 'todo'), ...taskItems]
   return merged.sort((left, right) => timeLabelSortValue(left.timeLabel) - timeLabelSortValue(right.timeLabel))
 }
 
 export function deriveTodayAttentionGroups(tasks: Task[], now = new Date()): TodayAttentionGroups {
   const today = startOfDay(now)
-  const activeTasks = tasks.filter((task) => task.status !== 'DONE' && task.status !== 'PAUSED')
+  const activeTasks = tasks.filter((task) => task.status !== 'DONE')
 
   const overdue = activeTasks
     .filter((task) => task.dueDate && startOfDay(task.dueDate).getTime() < today.getTime())

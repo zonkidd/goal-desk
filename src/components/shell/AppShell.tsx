@@ -5,9 +5,13 @@ import { TodayView } from '../views/TodayView'
 import { BoardView } from '../views/BoardView'
 import { GoalsView } from '../views/GoalsView'
 import { AreasView } from '../views/AreasView'
+import { CalendarView } from '../views/CalendarView'
+import { RemindersView } from '../views/RemindersView'
 import { TaskDrawer } from '../drawer/TaskDrawer'
 import { GoalDrawer } from '../drawer/GoalDrawer'
 import { ReminderDrawer } from '../drawer/ReminderDrawer'
+import { CalendarEventDrawer } from '../drawer/CalendarEventDrawer'
+import { SystemReminderDrawer } from '../drawer/SystemReminderDrawer'
 import { QuickCaptureModal } from '../modal/QuickCaptureModal'
 import { isTauriRuntime } from '../../lib/desktopApi'
 import { useAppStore } from '../../store/appStore'
@@ -40,12 +44,16 @@ export function AppShell() {
           {currentView === 'board' && <BoardView />}
           {currentView === 'goals' && <GoalsView />}
           {currentView === 'areas' && <AreasView />}
+          {currentView === 'calendar' && <CalendarView />}
+          {currentView === 'reminders' && <RemindersView />}
         </div>
       </section>
 
       <TaskDrawer />
       <GoalDrawer />
       <ReminderDrawer />
+      <CalendarEventDrawer />
+      <SystemReminderDrawer />
       <QuickCaptureModal />
     </main>
   )

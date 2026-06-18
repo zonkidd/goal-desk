@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bell, CheckCircle2, Circle, Clock3, ShieldAlert, X } from 'lucide-react'
-import { useAppStore } from '../../store/appStore'
+import { useAppStore, useToggleSystemReminder } from '../../store/appStore'
 
 const accessLabel = {
   granted: 'Granted',
@@ -16,7 +16,7 @@ export function ReminderDrawer() {
   const selectedReminderId = useAppStore((state) => state.selectedReminderId)
   const reminders = useAppStore((state) => state.systemReminders)
   const integrationStatus = useAppStore((state) => state.integrationStatus)
-  const toggleSystemReminderDone = useAppStore((state) => state.toggleSystemReminderDone)
+  const toggleSystemReminderDone = useToggleSystemReminder()
 
   return (
     <AnimatePresence>

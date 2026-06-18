@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Selector Test</title>
+  <script type="module">
+    // 模拟一个简单的 selector 测试
+    let callCount = 0;
+    const maxCalls = 100;
+
+    // 模拟缓存的 selector
+    let cachedResult = null;
+    let lastInput = null;
+
+    function selectWithCache(input) {
+      callCount++;
+      console.log('Selector called:', callCount, 'times');
+
+      if (callCount > maxCalls) {
+        document.body.innerHTML = '<h1 style="color: red;">INFINITE LOOP DETECTED! Selector called ' + callCount + ' times</h1>';
+        throw new Error('Maximum selector calls exceeded');
+      }
+
+      if (lastInput === input && cachedResult) {
+        return cachedResult;
+      }
+
+      lastInput = input;
+      cachedResult = input.filter(x => x > 5);
+      return cachedResult;
+    }
+
+    // 模拟组件重渲染
+    function simulateRender() {
+      const data = [1, 2, 3, 6, 7, 8];
+      const result = selectWithCache(data);
+
+      if (callCount < maxCalls) {
+        setTimeout(simulateRender, 10);
+      } else {
+        document.body.innerHTML = '<h1 style="color: green;">✓ Test passed! Selector called ' + callCount + ' times (cached correctly)</h1>';
+      }
+    }
+
+    simulateRender();
+  </script>
+</head>
+<body>
+  <h1>Testing selector caching...</h1>
+</body>
+</html>

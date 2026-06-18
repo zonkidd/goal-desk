@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlignLeft, BookOpen, Calendar, Clock, Folder, Plus, Send, X } from 'lucide-react'
+import { AlignLeft, Bell, BookOpen, Calendar, CheckCircle, Clock, Folder, Plus, Send, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { DayPicker } from 'react-day-picker'
 import { zhCN } from 'date-fns/locale'
@@ -9,7 +9,7 @@ import { AreaSelectWithCreate } from '../shared/AreaSelectWithCreate'
 import { ActivityLogTimeline } from './ActivityLogTimeline'
 import { MarkdownContent } from './MarkdownContent'
 import { StatusMachineButtons } from './StatusMachineButtons'
-import { useAppStore, useSelectedTask } from '../../store/appStore'
+import { useAppStore, useSelectedTask, selectFilteredGoals } from '../../store/appStore'
 import type { TaskStatus } from '../../types/task'
 
 const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
@@ -26,7 +26,10 @@ export function TaskDrawer() {
   const activeArea = useAppStore((state) => state.activeArea)
   const allAreas = useAppStore((state) => state.allAreas)
   const createArea = useAppStore((state) => state.createArea)
-  const goals = useAppStore((state) => state.goals)
+  const goals = useAppStore(selectFilteredGoals)
+  const systemReminders = useAppStore((state) => state.systemReminders)
+  const createAndLinkReminder = useAppStore((state) => state.createAndLinkReminder)
+  const unlinkTaskFromReminder = useAppStore((state) => state.unlinkTaskFromReminder)
   const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null)
   const [statusNote, setStatusNote] = useState('')
   const [logNote, setLogNote] = useState('')
@@ -53,6 +56,21 @@ export function TaskDrawer() {
 
   const canChangeStatus = editingSession?.capabilities.canChangeStatus ?? false
   const statusActions = editingSession?.capabilities.statusActions ?? []
+
+  const linkedReminder = task?.systemReminderId
+    ? systemReminders.find((r) => r.id === task.systemReminderId)
+    : undefined
+
+  const formatReminderDate = (date?: Date) => {
+    if (!date) return ''
+    return date.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+  }
 
   return (
     <AnimatePresence>
@@ -211,6 +229,47 @@ export function TaskDrawer() {
                     </button>
                   )}
                 </div>
+
+              <div className="mx-8 my-2 h-px bg-slate-100" />
+
+              <div className="px-8 py-4">
+                {!task.systemReminderId && (
+                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:text-indigo-600 transition-colors">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                      onChange={() => {
+                        if (task) {
+                          void createAndLinkReminder(task.id, task.title, task.dueDate)
+                        }
+                      }}
+                    />
+                    <Bell className="h-4 w-4 text-slate-400" />
+                    <span className="font-medium text-slate-700">关联系统提醒获得通知</span>
+                  </label>
+                )}
+                {task.systemReminderId && linkedReminder && (
+                  <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <div className="text-xs">
+                        <span className="font-bold text-green-800">已关联:</span>
+                        <span className="text-slate-700"> {linkedReminder.title} · {formatReminderDate(linkedReminder.dueAt)}</span>
+                      </div>
+                    </div>
+                    <button
+                      className="text-xs font-semibold text-slate-500 hover:text-slate-700 underline"
+                      onClick={() => {
+                        if (task) {
+                          void unlinkTaskFromReminder(task.id)
+                        }
+                      }}
+                    >
+                      解除
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <div className="mx-8 my-2 h-px bg-slate-100" />
 

@@ -41,6 +41,20 @@ npm run test:e2e
 - `src-tauri/src/lib.rs` 组合 Tauri runtime、命令处理、demo seed、全局快捷键 `alt+space`、快速捕获窗口、Bear URL Scheme、EventKit 同步等桌面能力。
 - `src-tauri/src/eventkit.rs` 和 `src-tauri/native/` 负责 macOS EventKit 桥接；修改这里通常需要在 macOS Tauri 环境手动验证权限与系统集成。
 
+## UI 样式一致性原则
+
+**关键规范**：浏览器模式（`npm run dev`）和 Tauri 模式（`npm run tauri:dev`）的 UI 样式必须保持一致。
+
+- 所有共享组件（如 `QuickCaptureForm`、对话框、卡片等）在两种模式下应该有相同的视觉呈现。
+- 如果存在样式差异，**以浏览器模式的样式为准**，修改 Tauri 模式以匹配浏览器模式。
+- 涉及样式改动时，必须同时在两种模式下验证视觉一致性。
+- 背景、间距、颜色、字体、圆角等视觉属性应该在两个环境中完全相同。
+
+**验证流程**：
+1. 修改 UI 组件后，先运行 `npm run dev` 在浏览器中预览
+2. 确认样式符合预期后，运行 `npm run tauri:dev` 验证 Tauri 窗口
+3. 对比两者，确保视觉呈现一致
+
 ## 测试与验证注意事项
 
 - UI 改动优先用 `npm run tauri:dev` 或 `npm run dev` 实际打开页面验证；浏览器预览不代表 Tauri command、SQLite、原生窗口、全局快捷键或 EventKit 都正常。

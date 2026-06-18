@@ -185,8 +185,6 @@ export function AreasView() {
           </GlassCard>
         </div>
       )}
-    </section>
-  )
 
       {editModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEditModal(null)}>

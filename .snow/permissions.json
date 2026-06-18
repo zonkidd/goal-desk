@@ -1,0 +1,10 @@
+{
+  "alwaysApprovedTools": [
+    "subagent-agent_explore",
+    "filesystem-read",
+    "ace-search",
+    "filesystem-replaceedit",
+    "terminal-execute",
+    "filesystem-create"
+  ]
+}

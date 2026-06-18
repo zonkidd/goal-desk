@@ -36,7 +36,11 @@
       "mcp__chrome-devtools__get_console_message",
       "Bash(git *)",
       "Bash(npx tsc *)",
-      "Bash(cargo check *)"
+      "Bash(cargo check *)",
+      "Bash(npm test *)",
+      "Bash(npx vitest *)",
+      "Bash(node src/store/appStore.test.mjs)",
+      "Bash(npx vite *)"
     ]
   }
 }

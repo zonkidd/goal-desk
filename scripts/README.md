@@ -1,12 +1,23 @@
-# 浏览器模式测试数据生成器
+# Goal Desk 测试数据生成器
 
 ## 📋 概述
 
-这个脚本会为 Goal Desk 浏览器预览模式生成完整的测试数据，包括领域、目标和待办任务，让你可以全面体验应用的各项功能。
+Goal Desk 提供了两个测试数据生成脚本，分别用于浏览器预览模式和 Tauri 桌面模式：
 
-## 🚀 使用方法
+- **`seed-browser-data.js`** - 浏览器预览模式（使用 localStorage）
+- **`seed-tauri-data.js`** - Tauri 桌面模式（使用 SQLite 数据库）
 
-### 方法 1：通过浏览器控制台运行（推荐）
+两个脚本生成的数据内容基本一致，确保功能在两种模式下表现相同。
+
+---
+
+## 🌐 浏览器模式（seed-browser-data.js）
+
+适用于快速预览和 UI 开发，数据保存在 localStorage 中。
+
+### 使用方法
+
+#### 方法 1：通过浏览器控制台运行（推荐）
 
 1. **启动开发服务器**
    ```bash
@@ -35,7 +46,7 @@
    - 脚本执行后会询问是否立即刷新
    - 点击"确定"自动刷新，或手动按 `F5` / `Cmd+R`
 
-### 方法 2：直接在控制台执行
+#### 方法 2：直接在控制台执行
 
 如果你不想复制粘贴，可以在控制台直接输入：
 
@@ -44,6 +55,100 @@ fetch('/scripts/seed-browser-data.js')
   .then(r => r.text())
   .then(eval)
 ```
+
+### 数据存储
+
+- 数据保存在浏览器的 localStorage 中
+- 键名：
+  - `goal-desk-browser-tasks` - 任务数据
+  - `goal-desk-browser-goals` - 目标数据
+  - `goal-desk-browser-areas` - 领域数据
+
+### 清空数据
+
+在浏览器控制台执行：
+
+```javascript
+localStorage.clear();
+location.reload();
+```
+
+或者只清空 Goal Desk 数据：
+
+```javascript
+localStorage.removeItem('goal-desk-browser-tasks')
+localStorage.removeItem('goal-desk-browser-goals')
+localStorage.removeItem('goal-desk-browser-areas')
+location.reload()
+```
+
+---
+
+## 🖥️ Tauri 模式（seed-tauri-data.js）
+
+适用于桌面应用开发和测试，数据持久化保存到 SQLite 数据库。
+
+### 使用方法
+
+1. **启动 Tauri 应用**
+   ```bash
+   nvm use 26
+   npm run tauri:dev
+   ```
+
+2. **打开开发者工具**
+   - macOS: `Cmd + Option + I`
+   - Windows/Linux: `F12` 或 `Ctrl + Shift + I`
+
+3. **切换到 Console（控制台）标签**
+
+4. **执行脚本**
+   - 打开文件 `scripts/seed-tauri-data.js`
+   - 复制全部内容（Cmd+A / Ctrl+A，然后 Cmd+C / Ctrl+C）
+   - 粘贴到控制台（Cmd+V / Ctrl+V）
+   - 按 `Enter` 执行
+
+5. **等待数据创建完成**
+   - 脚本会逐个调用 Tauri commands 创建数据
+   - 控制台会显示进度信息
+
+6. **刷新页面**
+   - 脚本执行后会询问是否立即刷新
+   - 点击"确定"自动刷新，或手动按 `F5` / `Cmd+R`
+
+### 数据存储
+
+- 数据通过 Tauri commands 保存到 SQLite 数据库
+- 数据持久化存储，重启应用后依然存在
+- 数据库文件位置：
+  - **macOS**: `~/Library/Application Support/com.goal-desk.app/goal-desk.sqlite`
+  - **Windows**: `%APPDATA%\com.goal-desk.app\goal-desk.sqlite`
+  - **Linux**: `~/.local/share/com.goal-desk.app/goal-desk.sqlite`
+
+### 清空数据
+
+删除数据库文件：
+
+```bash
+# macOS
+rm ~/Library/Application\ Support/com.goal-desk.app/goal-desk.sqlite
+
+# Linux
+rm ~/.local/share/com.goal-desk.app/goal-desk.sqlite
+
+# Windows (PowerShell)
+Remove-Item "$env:APPDATA\com.goal-desk.app\goal-desk.sqlite"
+```
+
+然后重启应用，会自动创建新的空数据库。
+
+### 注意事项
+
+- ⚠️ 脚本必须在 Tauri 应用中运行，浏览器预览模式会报错
+- ⚠️ 如果重复执行脚本，会产生重复数据，建议先清空数据库
+- ⚠️ 数据创建过程需要一定时间（约 10-30 秒），请耐心等待
+
+---
 
 ## 📊 生成的数据
 
@@ -218,23 +323,6 @@ fetch('/scripts/seed-browser-data.js')
    关联任务：12 个
 ```
 
-## 🧹 清空测试数据
-
-如果需要清空所有测试数据，在浏览器控制台执行：
-
-```javascript
-localStorage.clear()
-location.reload()
-```
-
-或者只清空 Goal Desk 数据：
-
-```javascript
-localStorage.removeItem('goal-desk-browser-tasks')
-localStorage.removeItem('goal-desk-browser-goals')
-localStorage.removeItem('goal-desk-browser-areas')
-location.reload()
-```
 
 ## 🎨 UI 展示重点
 

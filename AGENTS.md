@@ -10,6 +10,7 @@ Tauri 2 + React + TypeScript + Tailwind 本地优先桌面应用。持久化在 
 - **领域概念不合并**：Goal、Project、Todo、Reminder、Calendar Event、Today Timeline 各自独立。
 - **SQLite 是唯一持久化**；macOS 日历/提醒是**只读**外部源，除非 issue 明确修改此约束。
 - **不顺手改 Tauri/Rust/Node 基础配置**（tauri.conf.json、Cargo.toml、vite.config.ts 等）。
+- **UI 样式一致性**：浏览器模式和 Tauri 模式的 UI 必须完全一致。如有差异，**以浏览器模式为准**，修改 Tauri 模式匹配之。
 
 ## 命令速查
 
@@ -49,7 +50,12 @@ node src/lib/todoEditing.test.mjs # 前端 .mjs 测试无 npm script，直跑
 
 - **垂直切片**：schema → Rust core → Tauri command → TypeScript UI → 测试同步推进。
 - **TDD**：新行为和 bug 修复走红/绿/重构。Rust 测试用 `cargo test <test_name>`。
-- **UI 改动**优先用 `npm run tauri:dev` 或 `npm run dev` 实际打开验证；浏览器预览不代表 Tauri command/SQLite/原生窗口/全局快捷键/EventKit 正常。
+- **UI 改动验证**：
+  1. 先运行 `npm run dev` 在浏览器（端口 1420）预览并确认样式
+  2. 再运行 `npm run tauri:dev` 验证 Tauri 桌面窗口
+  3. 对比两者，确保视觉呈现完全一致（背景、间距、颜色、字体、圆角等）
+  4. 如有差异，以浏览器模式为准，修改 Tauri 相关代码
+- **Tauri 独有功能验证**：浏览器预览无法验证 Tauri command、SQLite、原生窗口、全局快捷键（`alt+space`）、EventKit 同步——这些必须在 Tauri 环境中测试。
 
 ## 领域术语
 

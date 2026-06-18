@@ -7,7 +7,11 @@ export function QuickCaptureWindow() {
   const [status, setStatus] = useState<string>()
 
   async function closeWindow() {
-    await hideCurrentWindow()
+    try {
+      await hideCurrentWindow()
+    } catch (error) {
+      setStatus(`关闭失败: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   async function submitCapture() {
@@ -25,8 +29,8 @@ export function QuickCaptureWindow() {
   }
 
   return (
-    <main className="mesh-bg flex min-h-screen items-center justify-center p-4 text-slate-800">
-      <div className="w-full max-w-[520px]">
+    <main className="flex min-h-screen items-center justify-center bg-slate-900/15 backdrop-blur-sm text-slate-800">
+      <div className="w-[520px]">
         <QuickCaptureForm
           value={value}
           onChange={setValue}

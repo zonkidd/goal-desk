@@ -68,8 +68,8 @@
 
 | 文件 | 版本 | 更新日期 | 说明 |
 |------|------|---------|------|
-| [prototype-1.html](../prototype/prototype-1.html) | v1.0 | 2026-06-10 | 初始概念原型 |
-| [prototype-2.html](../prototype/prototype-2.html) | v2.0 | 2026-06-10 | 优化布局和交互 |
+| [prototype-1.html](../history/prototype/prototype-1.html) | v1.0 | 2026-06-10 | 初始概念原型 |
+| [prototype-2.html](../history/prototype/prototype-2.html) | v2.0 | 2026-06-10 | 优化布局和交互 |
 | **[prototype-3-current-implementation.html](../prototype/prototype-3-current-implementation.html)** | **v3.0** | **2026-06-14** | **当前实现的真实 UI** ✨ |
 
 ### 最新原型（v3.0）功能演示

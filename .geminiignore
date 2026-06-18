@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+target/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+src-tauri/target/
+
+# IDE
+.idea/
+*.iml
+
+# Git
+.git/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+
+# Test artifacts
+test-results/
+
+# Package locks (large files, not needed for context)
+package-lock.json

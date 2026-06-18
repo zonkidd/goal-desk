@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日历看板 - Goal Desk 原型</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    * {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .mesh-bg {
+      background:
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(147, 51, 234, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
+        radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.08) 0px, transparent 50%),
+        #f8fafc;
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .glass-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+    }
+
+    .sidebar-item {
+      transition: all 0.2s;
+    }
+
+    .sidebar-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .sidebar-item.active {
+      background: rgba(255, 255, 255, 0.15);
+      border-left: 3px solid white;
+    }
+
+    .calendar-day {
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .calendar-day:hover {
+      background: rgba(99, 102, 241, 0.05);
+    }
+
+    .calendar-day.today {
+      background: #6366f1;
+      color: white;
+      font-weight: 700;
+    }
+
+    .calendar-day.selected {
+      background: #e0e7ff;
+      font-weight: 700;
+    }
+
+    .calendar-day.has-events {
+      background: #f1f5f9;
+    }
+
+    .event-list-enter {
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .week-view-day {
+      min-height: 500px;
+      border-right: 1px solid rgba(226, 232, 240, 0.5);
+    }
+
+    .week-view-day:last-child {
+      border-right: none;
+    }
+
+    .week-event {
+      font-size: 11px;
+      padding: 4px 6px;
+      margin-bottom: 2px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .week-event:hover {
+      transform: translateX(2px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body class="mesh-bg h-screen overflow-hidden">
+
+  <div class="flex h-full">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gradient-to-b from-indigo-600 to-indigo-700 p-6 shadow-2xl">
+      <div class="mb-8">
+        <h1 class="text-2xl font-black text-white">Goal Desk</h1>
+        <p class="mt-1 text-xs font-semibold text-indigo-200">本地优先的目标管理</p>
+      </div>
+
+      <nav class="space-y-2">
+        <button class="sidebar-item w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-white">
+          📥 收件箱
+        </button>
+        <button class="sidebar-item w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-white">
+          🌟 今日焦点
+        </button>
+        <button class="sidebar-item active w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-white">
+          📅 日历看板
+        </button>
+        <button class="sidebar-item w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-white">
+          ⏰ 提醒看板
+        </button>
+        <button class="sidebar-item w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-white">
+          📊 目标看板
+        </button>
+        <button class="sidebar-item w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-white">
+          🎯 目标管理
+        </button>
+        <button class="sidebar-item w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-white">
+          🏷️ 领域管理
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto">
+      <!-- Top Bar -->
+      <header class="glass-panel sticky top-0 z-20 border-b border-slate-200/50 px-10 py-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[0.24em] text-slate-400">
+              Calendar Board · 原型预览
+            </p>
+          </div>
+          <a href="./calendar-reminders-boards-index.html" class="rounded-2xl bg-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-300">
+            ← 返回索引
+          </a>
+        </div>
+      </header>
+
+      <!-- Calendar View -->
+      <div class="mx-auto max-w-7xl p-10">
+        <div class="mb-8 flex items-end justify-between">
+          <div>
+            <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">日历看板</h1>
+            <p class="mt-2 font-medium text-slate-500">在月历中查看日历事件、系统提醒和待办事项。</p>
+          </div>
+        </div>
+
+        <!-- View Tabs -->
+        <div class="glass-panel mb-6 inline-flex rounded-2xl p-1">
+          <button onclick="switchView('week')" id="tabWeek" class="rounded-xl px-6 py-2 text-sm font-bold text-slate-900 bg-white shadow-sm">
+            周视图
+          </button>
+          <button onclick="switchView('day')" id="tabDay" class="rounded-xl px-6 py-2 text-sm font-bold text-slate-600">
+            日视图
+          </button>
+        </div>
+
+        <!-- Week View -->
+        <div id="weekView">
+          <div class="glass-panel rounded-3xl p-6">
+            <!-- Week Navigation -->
+            <div class="mb-6 flex items-center justify-between">
+              <button onclick="prevWeek()" class="rounded-lg px-4 py-2 font-bold text-slate-600 hover:bg-slate-100">
+                ← 上一周
+              </button>
+              <div class="text-lg font-bold text-slate-900" id="currentWeek">2026年6月16日 - 6月22日</div>
+              <button onclick="nextWeek()" class="rounded-lg px-4 py-2 font-bold text-slate-600 hover:bg-slate-100">
+                下一周 →
+              </button>
+            </div>
+
+            <!-- Week Grid -->
+            <div class="grid grid-cols-7 gap-0 border-l border-t border-slate-200/50">
+              <!-- Headers -->
+              <div class="border-b border-r border-slate-200/50 bg-slate-50/50 px-3 py-2 text-center">
+                <div class="text-xs font-black uppercase text-slate-400">周一</div>
+                <div class="text-2xl font-bold text-slate-900">16</div>
+              </div>
+              <div class="border-b border-r border-slate-200/50 bg-slate-50/50 px-3 py-2 text-center">
+                <div class="text-xs font-black uppercase text-slate-400">周二</div>
+                <div class="text-2xl font-bold text-slate-900">17</div>
+              </div>
+              <div class="border-b border-r border-slate-200/50 bg-slate-50/50 px-3 py-2 text-center">
+                <div class="text-xs font-black uppercase text-slate-400">周三</div>
+                <div class="text-2xl font-bold text-slate-900">18</div>
+              </div>
+              <div class="border-b border-r border-slate-200/50 bg-slate-50/50 px-3 py-2 text-center">
+                <div class="text-xs font-black uppercase text-slate-400">周四</div>
+                <div class="text-2xl font-bold text-slate-900">19</div>
+              </div>
+              <div class="border-b border-r border-slate-200/50 bg-slate-50/50 px-3 py-2 text-center">
+                <div class="text-xs font-black uppercase text-slate-400">周五</div>
+                <div class="text-2xl font-bold text-slate-900">20</div>
+              </div>
+              <div class="border-b border-r border-slate-200/50 bg-slate-50/50 px-3 py-2 text-center">
+                <div class="text-xs font-black uppercase text-slate-400">周六</div>
+                <div class="text-2xl font-bold text-slate-900">21</div>
+              </div>
+              <div class="border-b border-r border-slate-200/50 bg-slate-50/50 px-3 py-2 text-center">
+                <div class="text-xs font-black uppercase text-slate-400">周日</div>
+                <div class="text-2xl font-bold text-slate-900">22</div>
+              </div>
+
+              <!-- Day Columns with Events -->
+              <div class="week-view-day border-r border-slate-200/50 p-2">
+                <div class="week-event border-l-2 border-l-purple-500 bg-purple-50 text-purple-900">
+                  <div class="font-bold">09:00 团队站会</div>
+                  <div class="text-[10px] text-purple-600">工作日历</div>
+                </div>
+                <div class="week-event border-l-2 border-l-orange-500 bg-orange-50 text-orange-900">
+                  <div class="font-bold">09:30 完成Q2绩效自评</div>
+                  <div class="text-[10px] text-orange-600">工作清单</div>
+                </div>
+                <div class="week-event border-l-2 border-l-indigo-500 bg-indigo-50 text-indigo-900">
+                  <div class="font-bold">10:00 完成原型设计评审</div>
+                  <div class="text-[10px] text-indigo-600">Q2 产品迭代</div>
+                </div>
+                <div class="week-event border-l-2 border-l-purple-500 bg-purple-50 text-purple-900">
+                  <div class="font-bold">10:30 产品需求评审会</div>
+                  <div class="text-[10px] text-purple-600">工作日历</div>
+                </div>
+                <div class="week-event border-l-2 border-l-purple-500 bg-purple-50 text-purple-900">
+                  <div class="font-bold">14:00 1:1 对话</div>
+                  <div class="text-[10px] text-purple-600">工作日历</div>
+                </div>
+                <div class="week-event border-l-2 border-l-indigo-500 bg-indigo-50 text-indigo-900">
+                  <div class="font-bold">15:30 更新项目文档</div>
+                  <div class="text-[10px] text-indigo-600">技术债务</div>
+                </div>
+              </div>
+              <div class="week-view-day border-r border-slate-200/50 p-2">
+                <div class="week-event border-l-2 border-l-purple-500 bg-purple-50 text-purple-900">
+                  <div class="font-bold">09:00 每日站会</div>
+                  <div class="text-[10px] text-purple-600">工作日历</div>
+                </div>
+                <div class="week-event border-l-2 border-l-indigo-500 bg-indigo-50 text-indigo-900">
+                  <div class="font-bold">10:00 代码审查</div>
+                  <div class="text-[10px] text-indigo-600">技术债务</div>
+                </div>
+                <div class="week-event border-l-2 border-l-orange-500 bg-orange-50 text-orange-900">
+                  <div class="font-bold">14:00 准备周报</div>
+                  <div class="text-[10px] text-orange-600">工作清单</div>
+                </div>
+              </div>
+              <div class="week-view-day border-r border-slate-200/50 p-2">
+                <div class="week-event border-l-2 border-l-purple-500 bg-purple-50 text-purple-900">
+                  <div class="font-bold">10:00 设计评审</div>
+                  <div class="text-[10px] text-purple-600">工作日历</div>
+                </div>
+                <div class="week-event border-l-2 border-l-orange-500 bg-orange-50 text-orange-900">
+                  <div class="font-bold">全天 整理会议纪要</div>
+                  <div class="text-[10px] text-orange-600">工作清单</div>
+                </div>
+              </div>
+              <div class="week-view-day border-r border-slate-200/50 p-2">
+                <div class="week-event border-l-2 border-l-purple-500 bg-purple-50 text-purple-900">
+                  <div class="font-bold">15:00 技术分享会</div>
+                  <div class="text-[10px] text-purple-600">工作日历</div>
+                </div>
+              </div>
+              <div class="week-view-day border-r border-slate-200/50 p-2">
+                <div class="week-event border-l-2 border-l-orange-500 bg-orange-50 text-orange-900">
+                  <div class="font-bold">全天 缴纳水电费</div>
+                  <div class="text-[10px] text-orange-600">个人清单</div>
+                </div>
+                <div class="week-event border-l-2 border-l-indigo-500 bg-indigo-50 text-indigo-900">
+                  <div class="font-bold">17:00 健身房训练</div>
+                  <div class="text-[10px] text-indigo-600">健康目标</div>
+                </div>
+              </div>
+              <div class="week-view-day border-r border-slate-200/50 p-2">
+                <div class="week-event border-l-2 border-l-orange-500 bg-orange-50 text-orange-900">
+                  <div class="font-bold">全天 买菜购物</div>
+                  <div class="text-[10px] text-orange-600">购物清单</div>
+                </div>
+              </div>
+              <div class="week-view-day border-r border-slate-200/50 p-2">
+                <div class="week-event border-l-2 border-l-indigo-500 bg-indigo-50 text-indigo-900">
+                  <div class="font-bold">全天 阅读《深度工作》</div>
+                  <div class="text-[10px] text-indigo-600">阅读清单</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Day View (original) -->
+        <div id="dayView" class="hidden">
+        <div class="grid grid-cols-[360px_1fr] gap-8">
+          <!-- Left: Calendar -->
+          <div class="glass-panel rounded-3xl p-6">
+            <!-- Month Navigation -->
+            <div class="mb-6 flex items-center justify-between">
+              <button onclick="prevMonth()" class="rounded-lg px-3 py-2 font-bold text-slate-600 hover:bg-slate-100">
+                ←
+              </button>
+              <div class="text-lg font-bold text-slate-900" id="currentMonth">2026年6月</div>
+              <button onclick="nextMonth()" class="rounded-lg px-3 py-2 font-bold text-slate-600 hover:bg-slate-100">
+                →
+              </button>
+            </div>
+
+            <!-- Calendar Grid -->
+            <div class="grid grid-cols-7 gap-2">
+              <!-- Header -->
+              <div class="text-center text-xs font-bold text-slate-400">一</div>
+              <div class="text-center text-xs font-bold text-slate-400">二</div>
+              <div class="text-center text-xs font-bold text-slate-400">三</div>
+              <div class="text-center text-xs font-bold text-slate-400">四</div>
+              <div class="text-center text-xs font-bold text-slate-400">五</div>
+              <div class="text-center text-xs font-bold text-slate-400">六</div>
+              <div class="text-center text-xs font-bold text-slate-400">日</div>
+
+              <!-- Days (June 2026 starts on Monday) -->
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-01')">1</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900 has-events" onclick="selectDate('2026-06-02')">2</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-03')">3</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900 has-events" onclick="selectDate('2026-06-04')">4</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-05')">5</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-06')">6</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-07')">7</div>
+
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-08')">8</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900 has-events" onclick="selectDate('2026-06-09')">9</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-10')">10</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-11')">11</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900 has-events" onclick="selectDate('2026-06-12')">12</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-13')">13</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-14')">14</div>
+
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-15')">15</div>
+              <div class="calendar-day today rounded-lg py-2 text-center text-sm" onclick="selectDate('2026-06-16')">16</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900 has-events" onclick="selectDate('2026-06-17')">17</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-18')">18</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900 has-events" onclick="selectDate('2026-06-19')">19</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-20')">20</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-21')">21</div>
+
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-22')">22</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900 has-events" onclick="selectDate('2026-06-23')">23</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-24')">24</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-25')">25</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-26')">26</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-27')">27</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-28')">28</div>
+
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-29')">29</div>
+              <div class="calendar-day rounded-lg py-2 text-center text-sm text-slate-900" onclick="selectDate('2026-06-30')">30</div>
+            </div>
+
+            <!-- Legend -->
+            <div class="mt-6 space-y-2 text-xs">
+              <div class="flex items-center gap-2">
+                <div class="h-3 w-3 rounded-full bg-purple-500"></div>
+                <span class="text-slate-600">日历事件</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="h-3 w-3 rounded-full bg-orange-500"></div>
+                <span class="text-slate-600">系统提醒</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="h-3 w-3 rounded-full bg-indigo-500"></div>
+                <span class="text-slate-600">待办事项</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Event List -->
+          <div class="glass-panel rounded-3xl p-6">
+            <div class="mb-6 flex items-center justify-between">
+              <div>
+                <h2 class="text-xl font-bold text-slate-900" id="selectedDateTitle">2026年6月16日 周一</h2>
+                <p class="mt-1 text-sm text-slate-500" id="eventCount">8 项日程安排</p>
+              </div>
+              <label class="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                <input type="checkbox" id="hideCompleted" onchange="toggleHideCompleted()" class="rounded" />
+                隐藏已完成
+              </label>
+            </div>
+
+            <div id="eventList" class="space-y-3 event-list-enter">
+              <!-- Calendar Event -->
+              <button onclick="openDrawer('calendar', 'event-1')" class="glass-card flex w-full items-start gap-4 rounded-2xl border-l-4 border-l-purple-500 bg-purple-50/30 p-4 text-left">
+                <div class="w-16 shrink-0 text-right">
+                  <span class="text-xs font-black text-purple-600">09:00</span>
+                </div>
+                <div class="flex-1">
+                  <div class="mb-1 text-[10px] font-bold uppercase text-purple-600">CALENDAR EVENT</div>
+                  <div class="text-sm font-bold text-slate-900">团队站会</div>
+                  <div class="mt-1 text-xs text-slate-600">工作日历 · 3楼会议室</div>
+                </div>
+              </button>
+
+              <!-- System Reminder -->
+              <button onclick="openDrawer('reminder', 'reminder-1')" class="glass-card flex w-full items-start gap-4 rounded-2xl border-l-4 border-l-orange-500 bg-orange-50/30 p-4 text-left">
+                <div class="w-16 shrink-0 text-right">
+                  <span class="text-xs font-black text-orange-600">09:30</span>
+                </div>
+                <div class="flex-1">
+                  <div class="mb-1 text-[10px] font-bold uppercase text-orange-600">APPLE REMINDERS</div>
+                  <div class="text-sm font-bold text-slate-900">完成Q2绩效自评</div>
+                  <div class="mt-1 text-xs text-slate-600">工作清单</div>
+                </div>
+              </button>
+
+              <!-- Desk Task -->
+              <button onclick="openDrawer('task', 'task-1')" class="glass-card flex w-full items-start gap-4 rounded-2xl border-l-4 border-l-indigo-500 bg-indigo-50/30 p-4 text-left">
+                <div class="w-16 shrink-0 text-right">
+                  <span class="text-xs font-black text-indigo-600">10:00</span>
+                </div>
+                <div class="flex-1">
+                  <div class="mb-1 text-[10px] font-bold uppercase text-indigo-600">DESK TASK</div>
+                  <div class="text-sm font-bold text-slate-900">完成原型设计评审</div>
+                  <div class="mt-1 text-xs text-slate-600">Q2 产品迭代</div>
+                </div>
+              </button>
+
+              <!-- Calendar Event -->
+              <button onclick="openDrawer('calendar', 'event-2')" class="glass-card flex w-full items-start gap-4 rounded-2xl border-l-4 border-l-purple-500 bg-purple-50/30 p-4 text-left">
+                <div class="w-16 shrink-0 text-right">
+                  <span class="text-xs font-black text-purple-600">10:30</span>
+                </div>
+                <div class="flex-1">
+                  <div class="mb-1 text-[10px] font-bold uppercase text-purple-600">CALENDAR EVENT</div>
+                  <div class="text-sm font-bold text-slate-900">产品需求评审会</div>
+                  <div class="mt-1 text-xs text-slate-600">工作日历 · 腾讯会议</div>
+                </div>
+              </button>
+
+              <!-- System Reminder (completed) -->
+              <button onclick="openDrawer('reminder', 'reminder-2')" class="glass-card flex w-full items-start gap-4 rounded-2xl border-l-4 border-l-orange-500 bg-orange-50/30 p-4 text-left opacity-60">
+                <div class="w-16 shrink-0 text-right">
+                  <span class="text-xs font-black text-orange-600">11:00</span>
+                </div>
+                <div class="flex-1">
+                  <div class="mb-1 text-[10px] font-bold uppercase text-orange-600">APPLE REMINDERS</div>
+                  <div class="text-sm font-bold text-slate-600 line-through">回复客户邮件</div>
+                  <div class="mt-1 text-xs text-slate-500">工作清单 · 已完成</div>
+                </div>
+              </button>
+
+              <!-- Calendar Event -->
+              <button onclick="openDrawer('calendar', 'event-3')" class="glass-card flex w-full items-start gap-4 rounded-2xl border-l-4 border-l-purple-500 bg-purple-50/30 p-4 text-left">
+                <div class="w-16 shrink-0 text-right">
+                  <span class="text-xs font-black text-purple-600">14:00</span>
+                </div>
+                <div class="flex-1">
+                  <div class="mb-1 text-[10px] font-bold uppercase text-purple-600">CALENDAR EVENT</div>
+                  <div class="text-sm font-bold text-slate-900">1:1 对话 - 李明</div>
+                  <div class="mt-1 text-xs text-slate-600">工作日历 · 咖啡厅</div>
+                </div>
+              </button>
+
+              <!-- Desk Task -->
+              <button onclick="openDrawer('task', 'task-2')" class="glass-card flex w-full items-start gap-4 rounded-2xl border-l-4 border-l-indigo-500 bg-indigo-50/30 p-4 text-left">
+                <div class="w-16 shrink-0 text-right">
+                  <span class="text-xs font-black text-indigo-600">15:30</span>
+                </div>
+                <div class="flex-1">
+                  <div class="mb-1 text-[10px] font-bold uppercase text-indigo-600">DESK TASK</div>
+                  <div class="text-sm font-bold text-slate-900">更新项目文档</div>
+                  <div class="mt-1 text-xs text-slate-600">技术债务清理</div>
+                </div>
+              </button>
+
+              <!-- Calendar Event -->
+              <button onclick="openDrawer('calendar', 'event-4')" class="glass-card flex w-full items-start gap-4 rounded-2xl border-l-4 border-l-purple-500 bg-purple-50/30 p-4 text-left">
+                <div class="w-16 shrink-0 text-right">
+                  <span class="text-xs font-black text-purple-600">16:00</span>
+                </div>
+                <div class="flex-1">
+                  <div class="mb-1 text-[10px] font-bold uppercase text-purple-600">CALENDAR EVENT</div>
+                  <div class="text-sm font-bold text-slate-900">设计复盘会议</div>
+                  <div class="mt-1 text-xs text-slate-600">工作日历 · 设计间</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let currentView = 'week';
+    let selectedDate = '2026-06-16';
+    let hideCompleted = false;
+
+    function switchView(view) {
+      currentView = view;
+
+      // Update tabs
+      const tabWeek = document.getElementById('tabWeek');
+      const tabDay = document.getElementById('tabDay');
+
+      if (view === 'week') {
+        tabWeek.className = 'rounded-xl px-6 py-2 text-sm font-bold text-slate-900 bg-white shadow-sm';
+        tabDay.className = 'rounded-xl px-6 py-2 text-sm font-bold text-slate-600';
+        document.getElementById('weekView').classList.remove('hidden');
+        document.getElementById('dayView').classList.add('hidden');
+      } else {
+        tabDay.className = 'rounded-xl px-6 py-2 text-sm font-bold text-slate-900 bg-white shadow-sm';
+        tabWeek.className = 'rounded-xl px-6 py-2 text-sm font-bold text-slate-600';
+        document.getElementById('weekView').classList.add('hidden');
+        document.getElementById('dayView').classList.remove('hidden');
+      }
+    }
+
+    function prevWeek() {
+      alert('上一周功能：在实际应用中会加载 6月9日-15日 的数据');
+    }
+
+    function nextWeek() {
+      alert('下一周功能：在实际应用中会加载 6月23日-29日 的数据');
+    }
+
+    // Mock data for different dates
+    const mockEvents = {
+      '2026-06-16': [
+        { time: '09:00', type: 'calendar', title: '团队站会', subtitle: '工作日历 · 3楼会议室', completed: false },
+        { time: '09:30', type: 'reminder', title: '完成Q2绩效自评', subtitle: '工作清单', completed: false },
+        { time: '10:00', type: 'task', title: '完成原型设计评审', subtitle: 'Q2 产品迭代', completed: false },
+        { time: '10:30', type: 'calendar', title: '产品需求评审会', subtitle: '工作日历 · 腾讯会议', completed: false },
+        { time: '11:00', type: 'reminder', title: '回复客户邮件', subtitle: '工作清单 · 已完成', completed: true },
+        { time: '14:00', type: 'calendar', title: '1:1 对话 - 李明', subtitle: '工作日历 · 咖啡厅', completed: false },
+        { time: '15:30', type: 'task', title: '更新项目文档', subtitle: '技术债务清理', completed: false },
+        { time: '16:00', type: 'calendar', title: '设计复盘会议', subtitle: '工作日历 · 设计间', completed: false }
+      ],
+      '2026-06-17': [
+        { time: '09:00', type: 'calendar', title: '每日站会', subtitle: '工作日历', completed: false },
+        { time: '10:00', type: 'task', title: '代码审查', subtitle: '技术债务', completed: false },
+        { time: '14:00', type: 'reminder', title: '准备周报', subtitle: '工作清单', completed: false },
+        { time: '16:00', type: 'calendar', title: '团队建设活动', subtitle: '工作日历', completed: false }
+      ],
+      '2026-06-02': [
+        { time: '10:00', type: 'calendar', title: '月度会议', subtitle: '工作日历', completed: false },
+        { time: '14:00', type: 'task', title: '完成月度报告', subtitle: 'Q2 目标', completed: false }
+      ]
+    };
+
+    function selectDate(date) {
+      selectedDate = date;
+
+      // Update calendar visual state
+      document.querySelectorAll('.calendar-day').forEach(day => {
+        day.classList.remove('selected');
+      });
+      event.target.classList.add('selected');
+
+      // Update title
+      const dateObj = new Date(date);
+      const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+      const weekday = weekdays[dateObj.getDay()];
+      document.getElementById('selectedDateTitle').textContent =
+        `${dateObj.getFullYear()}年${dateObj.getMonth() + 1}月${dateObj.getDate()}日 周${weekday}`;
+
+      // Render events
+      renderEvents();
+    }
+
+    function renderEvents() {
+      const events = mockEvents[selectedDate] || [];
+      const filteredEvents = hideCompleted ? events.filter(e => !e.completed) : events;
+
+      document.getElementById('eventCount').textContent = `${filteredEvents.length} 项日程安排`;
+
+      const eventList = document.getElementById('eventList');
+      eventList.innerHTML = '';
+
+      const typeStyles = {
+        calendar: {
+          border: 'border-l-purple-500',
+          bg: 'bg-purple-50/30',
+          label: 'text-purple-600',
+          labelText: 'CALENDAR EVENT'
+        },
+        reminder: {
+          border: 'border-l-orange-500',
+          bg: 'bg-orange-50/30',
+          label: 'text-orange-600',
+          labelText: 'APPLE REMINDERS'
+        },
+        task: {
+          border: 'border-l-indigo-500',
+          bg: 'bg-indigo-50/30',
+          label: 'text-indigo-600',
+          labelText: 'DESK TASK'
+        }
+      };
+
+      filteredEvents.forEach(event => {
+        const style = typeStyles[event.type];
+        const completedClass = event.completed ? 'opacity-60' : '';
+        const titleClass = event.completed ? 'text-slate-600 line-through' : 'text-slate-900';
+
+        const eventEl = document.createElement('button');
+        eventEl.className = `glass-card flex w-full items-start gap-4 rounded-2xl border-l-4 ${style.border} ${style.bg} p-4 text-left ${completedClass}`;
+        eventEl.onclick = () => openDrawer(event.type, event.title);
+
+        eventEl.innerHTML = `
+          <div class="w-16 shrink-0 text-right">
+            <span class="text-xs font-black ${style.label}">${event.time}</span>
+          </div>
+          <div class="flex-1">
+            <div class="mb-1 text-[10px] font-bold uppercase ${style.label}">${style.labelText}</div>
+            <div class="text-sm font-bold ${titleClass}">${event.title}</div>
+            <div class="mt-1 text-xs text-slate-600">${event.subtitle}</div>
+          </div>
+        `;
+
+        eventList.appendChild(eventEl);
+      });
+
+      // Add animation class
+      eventList.classList.remove('event-list-enter');
+      setTimeout(() => eventList.classList.add('event-list-enter'), 10);
+    }
+
+    function toggleHideCompleted() {
+      hideCompleted = document.getElementById('hideCompleted').checked;
+      renderEvents();
+    }
+
+    function prevMonth() {
+      alert('上一月功能：在实际应用中会加载 2026年5月 的数据');
+    }
+
+    function nextMonth() {
+      alert('下一月功能：在实际应用中会加载 2026年7月 的数据');
+    }
+
+    function openDrawer(type, id) {
+      const typeNames = {
+        calendar: 'CalendarEventDrawer',
+        reminder: 'SystemReminderDrawer',
+        task: 'TaskDrawer'
+      };
+      alert(`打开 ${typeNames[type]}\n\n在实际应用中会打开右侧抽屉展示详情。\n\n项目: ${id}`);
+    }
+  </script>
+
+</body>
+</html>

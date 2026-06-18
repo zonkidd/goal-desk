@@ -36,7 +36,6 @@ pub fn create_goal_record(
     description: String,
     status: GoalStatus,
 ) -> Result<Goal, String> {
-    use repository::GoalRepository;
     use workspace_session::WorkspaceSession;
 
     let trimmed_title = title.trim();
@@ -60,12 +59,9 @@ pub fn create_goal_record(
         status,
     )?;
 
-    // 提交 snapshot 变更
+    // 提交 snapshot 变更，这将自动保存至 goals 独立表中
     session.commit()?;
 
-    // 持久化 goal 到独立表
-    GoalRepository::create(&repository, &goal)
-        .map_err(|error| error.to_string())?;
     Ok(goal)
 }
 
@@ -464,7 +460,7 @@ fn ensure_quick_capture_window<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<
 
     WebviewWindowBuilder::new(app, "quick-capture", WebviewUrl::App("index.html?view=quick-capture".into()))
         .title("Quick Capture")
-        .inner_size(520.0, 320.0)
+        .inner_size(520.0, 240.0)
         .resizable(false)
         .maximizable(false)
         .minimizable(false)
@@ -485,9 +481,15 @@ fn bear_note_url(note_id: &str) -> String {
 
 fn show_quick_capture_window_internal<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let window = ensure_quick_capture_window(app)?;
-    window.center().map_err(|error| error.to_string())?;
-    window.show().map_err(|error| error.to_string())?;
-    window.set_focus().map_err(|error| error.to_string())
+
+    // Toggle: if window is already visible, hide it; otherwise show it
+    if window.is_visible().unwrap_or(false) {
+        window.hide().map_err(|error| error.to_string())
+    } else {
+        window.center().map_err(|error| error.to_string())?;
+        window.show().map_err(|error| error.to_string())?;
+        window.set_focus().map_err(|error| error.to_string())
+    }
 }
 
 mod commands {
@@ -919,13 +921,13 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn request_calendar_access() -> Result<eventkit::AccessStatus, String> {
-        eventkit::request_calendar_access()
+    pub async fn request_calendar_access() -> Result<eventkit::AccessStatus, String> {
+        eventkit::request_calendar_access_async().await
     }
 
     #[tauri::command]
-    pub fn request_reminders_access() -> Result<eventkit::AccessStatus, String> {
-        eventkit::request_reminders_access()
+    pub async fn request_reminders_access() -> Result<eventkit::AccessStatus, String> {
+        eventkit::request_reminders_access_async().await
     }
 
     #[tauri::command]

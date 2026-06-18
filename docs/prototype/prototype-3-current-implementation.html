@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Goal Desk - 当前实现原型 v3</title>
+  <title>Goal Desk - 当前实现原型 v3 (全功能交互版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
@@ -26,6 +26,12 @@
       backdrop-filter: blur(16px);
       border: 1px solid rgba(255, 255, 255, 0.3);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .glass-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
     }
 
     .glass-panel {
@@ -54,20 +60,12 @@
     }
 
     .animate-spring {
-      animation: spring-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      animation: spring-in 0.5s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     @keyframes spring-in {
-      0% { opacity: 0; transform: translateY(-20px); }
+      0% { opacity: 0; transform: translateY(10px); }
       100% { opacity: 1; transform: translateY(0); }
-    }
-
-    .hover-lift {
-      transition: transform 0.2s;
-    }
-
-    .hover-lift:hover {
-      transform: translateY(-2px);
     }
 
     .sidebar-item {
@@ -88,289 +86,942 @@
 
   <div class="flex h-full">
     <!-- Sidebar -->
-    <aside class="w-64 bg-gradient-to-b from-indigo-600 to-indigo-700 p-6 shadow-2xl">
-      <div class="mb-8">
-        <h1 class="text-2xl font-black text-white">Goal Desk</h1>
-        <p class="mt-1 text-xs font-semibold text-indigo-200">本地优先的目标管理</p>
+    <aside class="w-64 bg-gradient-to-b from-indigo-600 to-indigo-700 p-6 shadow-2xl flex flex-col justify-between shrink-0">
+      <div>
+        <div class="mb-8">
+          <h1 class="text-2xl font-black text-white flex items-center gap-2">
+            <span>🎯</span> Goal Desk
+          </h1>
+          <p class="mt-1 text-xs font-semibold text-indigo-200">本地优先的目标时间管理</p>
+        </div>
+
+        <nav class="space-y-1.5">
+          <p class="px-3 text-[10px] font-black uppercase tracking-wider text-indigo-300 mb-2">任务管理</p>
+          <button id="sidebar-inbox" onclick="showView('inbox')" class="sidebar-item w-full rounded-xl px-4 py-2.5 text-left text-sm font-bold text-white flex items-center gap-3">
+            <span>📥</span> 收件箱 / 待办
+          </button>
+          <button id="sidebar-today" onclick="showView('today')" class="sidebar-item active w-full rounded-xl px-4 py-2.5 text-left text-sm font-bold text-white flex items-center gap-3">
+            <span>🌟</span> 今日焦点
+          </button>
+          <button id="sidebar-calendar" onclick="showView('calendar')" class="sidebar-item w-full rounded-xl px-4 py-2.5 text-left text-sm font-bold text-white flex items-center gap-3">
+            <span>📅</span> 日历看板
+          </button>
+          <button id="sidebar-reminders" onclick="showView('reminders')" class="sidebar-item w-full rounded-xl px-4 py-2.5 text-left text-sm font-bold text-white flex items-center gap-3">
+            <span>⏰</span> 提醒看板
+          </button>
+          <button id="sidebar-board" onclick="showView('board')" class="sidebar-item w-full rounded-xl px-4 py-2.5 text-left text-sm font-bold text-white flex items-center gap-3">
+            <span>📊</span> 目标看板
+          </button>
+
+          <p class="px-3 text-[10px] font-black uppercase tracking-wider text-indigo-300 mt-6 mb-2">规划与分类</p>
+          <button id="sidebar-goals" onclick="showView('goals')" class="sidebar-item w-full rounded-xl px-4 py-2.5 text-left text-sm font-bold text-white flex items-center gap-3">
+            <span>🎯</span> 目标管理
+          </button>
+          <button id="sidebar-areas" onclick="showView('areas')" class="sidebar-item w-full rounded-xl px-4 py-2.5 text-left text-sm font-bold text-white flex items-center gap-3">
+            <span>🏷️</span> 领域管理
+          </button>
+        </nav>
       </div>
 
-      <nav class="space-y-2">
-        <button class="sidebar-item w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-white">
-          📥 收件箱
-        </button>
-        <button class="sidebar-item active w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-white">
-          🌟 今日焦点
-        </button>
-        <button class="sidebar-item w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-white">
-          📊 目标看板
-        </button>
-        <button class="sidebar-item w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-white">
-          🎯 领域管理
-        </button>
-      </nav>
-
-      <div class="mt-8 space-y-2">
-        <div class="text-[10px] font-black uppercase tracking-wider text-indigo-300">领域</div>
-        <button class="sidebar-item w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-white">
-          💼 工作
-        </button>
-        <button class="sidebar-item w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-white">
-          📚 学习
-        </button>
-        <button class="sidebar-item w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-white">
-          🏃 健康
-        </button>
+      <div class="mt-8 pt-4 border-t border-indigo-500/30">
+        <div class="text-[10px] font-black uppercase tracking-wider text-indigo-300 mb-2">活跃领域</div>
+        <div class="space-y-1">
+          <button onclick="showView('goals')" class="w-full text-left rounded px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10 flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-blue-400"></span> 💼 工作 (3)
+          </button>
+          <button onclick="showView('goals')" class="w-full text-left rounded px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10 flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-purple-400"></span> 📚 学习 (1)
+          </button>
+        </div>
       </div>
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 overflow-y-auto">
+    <main class="flex-1 overflow-y-auto flex flex-col h-full">
       <!-- Top Bar -->
-      <header class="glass-panel sticky top-0 z-20 border-b border-slate-200/50 px-10 py-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-xs font-bold uppercase tracking-[0.24em] text-slate-400">
-              Desktop mode · SQLite synced
-            </p>
-          </div>
-          <div class="flex items-center gap-3">
-            <button class="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-800">
-              ⌥Space 快速捕获
-            </button>
-          </div>
+      <header class="glass-panel sticky top-0 z-20 border-b border-slate-200/50 px-10 py-4 flex items-center justify-between shrink-0">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.24em] text-slate-400" id="top-status-message">
+            Desktop mode · SQLite synced · All systems nominal
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button onclick="alert('Quick Capture triggered!
+Global Hotkey: Option+Space
+App Hotkey: Cmd+K')" class="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-800 flex items-center gap-2">
+            <span>⌥Space</span> 快速捕获
+          </button>
         </div>
       </header>
 
-      <!-- Today View -->
-      <div class="mx-auto max-w-7xl p-10">
-        <div class="mb-8 flex items-end justify-between animate-spring">
-          <div>
-            <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">今日焦点</h1>
-            <p class="mt-2 font-medium text-slate-500">在时间流中推进你的顶层目标。</p>
+      <!-- View Containers -->
+      <div class="flex-1 overflow-y-auto">
+
+        <!-- 1. Inbox View -->
+        <div id="view-inbox" class="view-container hidden mx-auto max-w-7xl p-10 animate-spring">
+          <div class="mb-8">
+            <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">收集箱 / 待办</h1>
+            <p class="mt-2 font-medium text-slate-500">收集所有的想法与任务，快速分类并推进状态。</p>
+          </div>
+
+          <div class="grid grid-cols-[1fr_360px] gap-8">
+            <div class="space-y-6">
+              <!-- Quick Add -->
+              <div class="glass-panel rounded-3xl p-4 flex gap-3 items-center">
+                <span class="text-xl pl-2">⚡</span>
+                <input type="text" placeholder="快速添加任务，例如 '今晚 9 点撰写 Q2 计划草案' (Enter 提交)" class="flex-1 bg-transparent border-none text-slate-800 font-medium placeholder-slate-400 focus:outline-none" onkeydown="if(event.key === 'Enter'){ alert('任务已成功捕获并解析！'); this.value=''; }">
+              </div>
+
+              <!-- Group 1: Inbox & Todo -->
+              <div class="glass-panel rounded-3xl p-6">
+                <div class="mb-4 flex items-center justify-between">
+                  <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <span>📥</span> 收集箱与待办任务
+                  </h2>
+                  <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-600">3</span>
+                </div>
+                <div class="space-y-3">
+                  <div class="glass-card rounded-2xl p-4 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <input type="checkbox" class="rounded text-indigo-500 focus:ring-indigo-400 h-4 w-4">
+                      <div>
+                        <div class="text-sm font-bold text-slate-900">撰写 Q2 计划草案</div>
+                        <div class="mt-1 text-xs text-slate-400">领域: 工作 · 目标: Q2 产品迭代</div>
+                      </div>
+                    </div>
+                    <span class="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">TODO</span>
+                  </div>
+                  <div class="glass-card rounded-2xl p-4 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <input type="checkbox" class="rounded text-indigo-500 focus:ring-indigo-400 h-4 w-4">
+                      <div>
+                        <div class="text-sm font-bold text-slate-900">备份本地数据库</div>
+                        <div class="mt-1 text-xs text-slate-400">领域: 技术 · 目标: 系统安全</div>
+                      </div>
+                    </div>
+                    <span class="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">TODO</span>
+                  </div>
+                  <div class="glass-card rounded-2xl p-4 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <input type="checkbox" class="rounded text-indigo-500 focus:ring-indigo-400 h-4 w-4">
+                      <div>
+                        <div class="text-sm font-bold text-slate-900">购买办公用品和设备</div>
+                        <div class="mt-1 text-xs text-slate-400">领域: 行政 · 未关联目标</div>
+                      </div>
+                    </div>
+                    <span class="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">TODO</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Group 2: Paused -->
+              <div class="glass-panel rounded-3xl p-6 border-l-4 border-l-amber-500 bg-amber-50/10">
+                <div class="mb-4 flex items-center justify-between">
+                  <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <span>⏸️</span> 已暂停推进
+                  </h2>
+                  <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-600">1</span>
+                </div>
+                <div class="glass-card rounded-2xl p-4 flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <input type="checkbox" class="rounded h-4 w-4" disabled>
+                    <div>
+                      <div class="text-sm font-bold text-slate-800">整理归档旧文档</div>
+                      <div class="mt-1 text-xs text-amber-600">暂停原因：等待市场部提供销售分析数据</div>
+                    </div>
+                  </div>
+                  <span class="text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">PAUSED</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Side helper -->
+            <div class="glass-panel rounded-3xl p-6 h-fit">
+              <h3 class="font-bold text-slate-900 text-base mb-4">💡 收集箱小贴士</h3>
+              <p class="text-xs text-slate-500 leading-relaxed mb-3">收集箱 (Inbox) 是你心智的延伸。任何在脑海中闪过的想法，都可以通过 Option+Space 全局快捷键瞬间记录到这里，避免打断当前的工作流。</p>
+              <p class="text-xs text-slate-500 leading-relaxed">每周进行一次"清空收件箱"仪式，为其中的任务设定截止时间、关联对应目标并分配领域，以保持心流顺畅。</p>
+            </div>
           </div>
         </div>
 
-        <div class="grid grid-cols-[1fr_400px] gap-8">
-          <!-- Left Column -->
-          <div class="flex flex-col gap-6">
-            <!-- 今日持续推进 -->
-            <div class="glass-panel relative z-10 rounded-3xl p-6">
-              <div class="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 class="text-lg font-bold text-slate-900">今日持续推进</h2>
-                  <p class="mt-1 text-sm font-medium text-slate-500">开始时间与截止时间覆盖今天，且仍在推进中的待办。</p>
-                </div>
-                <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-600">3</span>
-              </div>
+        <!-- 2. Today View -->
+        <div id="view-today" class="view-container mx-auto max-w-7xl p-10 animate-spring">
+          <div class="mb-8 flex items-end justify-between">
+            <div>
+              <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">今日焦点</h1>
+              <p class="mt-2 font-medium text-slate-500">在时间流中推进你的顶层目标。</p>
+            </div>
+          </div>
 
-              <div class="space-y-3">
-                <!-- Task 1 - Critical -->
-                <div class="group relative">
-                  <button class="glass-card hover-lift flex w-full items-center justify-between rounded-2xl p-4 text-left">
+          <div class="grid grid-cols-[1fr_400px] gap-8">
+            <!-- Left Column -->
+            <div class="flex flex-col gap-6">
+              <!-- 今日持续推进 -->
+              <div class="glass-panel relative z-10 rounded-3xl p-6">
+                <div class="mb-4 flex items-center justify-between">
+                  <div>
+                    <h2 class="text-lg font-bold text-slate-900">今日持续推进</h2>
+                    <p class="mt-1 text-sm font-medium text-slate-500">开始与截止时间覆盖今天，仍在推进中的待办。</p>
+                  </div>
+                  <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-600">3</span>
+                </div>
+
+                <div class="space-y-3">
+                  <!-- Task 1 -->
+                  <div class="group relative">
+                    <button class="glass-card hover:transform hover:-translate-y-0.5 flex w-full items-center justify-between rounded-2xl p-4 text-left">
+                      <div>
+                        <div class="text-sm font-bold text-slate-900">完成项目原型设计</div>
+                        <div class="mt-1 text-xs font-semibold text-slate-500">Q2 产品迭代</div>
+                      </div>
+                      <div class="text-right text-xs font-bold">
+                        <div class="mb-0.5 text-slate-500">已推进 3天</div>
+                        <div class="flex items-center justify-end gap-1 text-red-600">
+                          <span>还剩 2天</span>
+                          <span class="text-base">🔥</span>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+
+                  <!-- Task 2 -->
+                  <button class="glass-card hover:transform hover:-translate-y-0.5 flex w-full items-center justify-between rounded-2xl p-4 text-left">
                     <div>
-                      <div class="text-sm font-bold text-slate-900">完成项目原型设计</div>
-                      <div class="mt-1 text-xs font-semibold text-slate-500">Q2 产品迭代</div>
+                      <div class="text-sm font-bold text-slate-900">研究竞品分析报告</div>
+                      <div class="mt-1 text-xs font-semibold text-slate-500">行业研究</div>
                     </div>
                     <div class="text-right text-xs font-bold">
-                      <div class="mb-0.5 text-slate-500">已推进 3天</div>
-                      <div class="flex items-center justify-end gap-1 text-red-600">
-                        <span>还剩 2天</span>
-                        <span class="text-base">🔥</span>
+                      <div class="mb-0.5 text-slate-500">已推进 1天</div>
+                      <div class="flex items-center justify-end gap-1 text-amber-600">
+                        <span>还剩 6天</span>
+                        <span class="text-base">⏰</span>
                       </div>
                     </div>
                   </button>
 
-                  <!-- Tooltip -->
-                  <div class="pointer-events-none absolute right-0 top-full z-[9999] mt-2 hidden group-hover:block">
-                    <div class="rounded-xl bg-slate-900 px-4 py-3 text-white shadow-2xl" style="min-width: 200px">
-                      <div class="mb-2 text-[10px] font-bold text-slate-400">完整时间线</div>
-                      <div class="space-y-1 text-xs font-semibold">
-                        <div class="flex justify-between">
-                          <span class="text-slate-400">开始</span>
-                          <span>2026-06-11</span>
-                        </div>
-                        <div class="flex justify-between">
-                          <span class="text-slate-400">今天</span>
-                          <span class="text-green-400">2026-06-14 (第3天)</span>
-                        </div>
-                        <div class="flex justify-between">
-                          <span class="text-slate-400">截止</span>
-                          <span class="text-red-400">2026-06-16</span>
-                        </div>
-                        <div class="mt-2 border-t border-slate-700 pt-2">
-                          <div class="text-[10px] text-slate-400">
-                            总计：5天 · 完成 60%
-                          </div>
-                        </div>
+                  <!-- Task 3 -->
+                  <button class="glass-card hover:transform hover:-translate-y-0.5 flex w-full items-center justify-between rounded-2xl p-4 text-left">
+                    <div>
+                      <div class="text-sm font-bold text-slate-900">搭建测试环境</div>
+                      <div class="mt-1 text-xs font-semibold text-slate-500">技术架构</div>
+                    </div>
+                    <div class="text-right text-xs font-bold">
+                      <div class="mb-0.5 text-slate-500">已推进 5天</div>
+                      <div class="flex items-center justify-end gap-1 text-slate-400">
+                        <span>无截止日期</span>
+                        <span class="text-base">∞</span>
                       </div>
                     </div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 今日目标看点 -->
+              <div class="glass-panel rounded-3xl border border-indigo-100 bg-indigo-50/30 p-6">
+                <div class="mb-4 flex items-center justify-between">
+                  <div>
+                    <h2 class="text-lg font-bold text-slate-900">今日目标看点</h2>
+                    <p class="mt-1 text-sm font-medium text-slate-500">由今日持续推进待办牵引的目标进度。</p>
                   </div>
+                  <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-600">2</span>
                 </div>
 
-                <!-- Task 2 - Warning -->
-                <button class="glass-card hover-lift flex w-full items-center justify-between rounded-2xl p-4 text-left">
-                  <div>
-                    <div class="text-sm font-bold text-slate-900">研究竞品分析报告</div>
-                    <div class="mt-1 text-xs font-semibold text-slate-500">行业研究</div>
-                  </div>
-                  <div class="text-right text-xs font-bold">
-                    <div class="mb-0.5 text-slate-500">已推进 1天</div>
-                    <div class="flex items-center justify-end gap-1 text-amber-600">
-                      <span>还剩 6天</span>
-                      <span class="text-base">⏰</span>
+                <div class="space-y-3">
+                  <!-- Goal 1 -->
+                  <button class="glass-card hover:transform hover:-translate-y-0.5 block w-full rounded-2xl p-4 text-left bg-white">
+                    <div class="mb-3 flex items-start justify-between gap-4">
+                      <div>
+                        <span class="rounded bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase text-indigo-700">工作</span>
+                        <h3 class="mt-2 text-sm font-bold text-slate-900">Q2 产品迭代</h3>
+                        <p class="mt-1 text-xs font-semibold text-slate-500">1 个持续推进待办覆盖今天</p>
+                      </div>
+                      <span class="text-xl font-black text-indigo-600">65%</span>
                     </div>
-                  </div>
-                </button>
 
-                <!-- Task 3 - No Deadline -->
-                <button class="glass-card hover-lift flex w-full items-center justify-between rounded-2xl p-4 text-left">
-                  <div>
-                    <div class="text-sm font-bold text-slate-900">搭建测试环境</div>
-                    <div class="mt-1 text-xs font-semibold text-slate-500">技术架构</div>
-                  </div>
-                  <div class="text-right text-xs font-bold">
-                    <div class="mb-0.5 text-slate-500">已推进 5天</div>
-                    <div class="flex items-center justify-end gap-1 text-slate-400">
-                      <span>无截止日期</span>
-                      <span class="text-base">∞</span>
+                    <div class="mb-3 h-2 w-full overflow-hidden rounded-full bg-slate-200/60">
+                      <div class="h-2 rounded-full bg-indigo-500" style="width: 65%"></div>
                     </div>
-                  </div>
-                </button>
+
+                    <div class="rounded-xl bg-slate-50 p-3">
+                      <div class="text-xs font-black uppercase text-slate-400">Next</div>
+                      <div class="mt-1 text-sm font-bold text-slate-800">完成原型设计</div>
+                    </div>
+                  </button>
+
+                  <!-- Goal 2 -->
+                  <button class="glass-card hover:transform hover:-translate-y-0.5 block w-full rounded-2xl p-4 text-left bg-white">
+                    <div class="mb-3 flex items-start justify-between gap-4">
+                      <div>
+                        <span class="rounded bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase text-indigo-700">工作</span>
+                        <h3 class="mt-2 text-sm font-bold text-slate-900">技术架构优化</h3>
+                        <p class="mt-1 text-xs font-semibold text-slate-500">1 个持续推进待办覆盖今天</p>
+                      </div>
+                      <span class="text-xl font-black text-indigo-600">40%</span>
+                    </div>
+
+                    <div class="mb-3 h-2 w-full overflow-hidden rounded-full bg-slate-200/60">
+                      <div class="h-2 rounded-full bg-indigo-500" style="width: 40%"></div>
+                    </div>
+
+                    <div class="rounded-xl bg-slate-50 p-3">
+                      <div class="text-xs font-black uppercase text-slate-400">Next</div>
+                      <div class="mt-1 text-sm font-bold text-slate-800">搭建测试环境</div>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
 
-            <!-- 今日目标看点 -->
-            <div class="glass-panel rounded-3xl border border-indigo-100 bg-indigo-50/30 p-6">
-              <div class="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 class="text-lg font-bold text-slate-900">今日目标看点</h2>
-                  <p class="mt-1 text-sm font-medium text-slate-500">仅展示由持续推进待办牵引的目标。</p>
-                </div>
-                <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-600">2</span>
-              </div>
+            <!-- Right Column - Timeline -->
+            <div class="glass-panel relative rounded-3xl p-8">
+              <h2 class="mb-6 flex items-center gap-2 text-xl font-bold text-slate-900">
+                <svg class="h-5 w-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                  <path d="M12 6v6l4 2" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                今日时间轴 (Events & Reminders)
+              </h2>
 
-              <div class="space-y-3">
-                <!-- Goal 1 -->
-                <button class="glass-card hover-lift block w-full rounded-2xl p-4 text-left">
-                  <div class="mb-3 flex items-start justify-between gap-4">
-                    <div>
-                      <span class="rounded bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase text-indigo-700">工作</span>
-                      <h3 class="mt-2 text-sm font-bold text-slate-900">Q2 产品迭代</h3>
-                      <p class="mt-1 text-xs font-semibold text-slate-500">1 个持续推进待办覆盖今天</p>
-                    </div>
-                    <span class="text-xl font-black text-indigo-600">65%</span>
+              <div class="timeline-line relative space-y-6">
+                <!-- Calendar Event -->
+                <div class="relative z-10 flex gap-4">
+                  <div class="w-12 shrink-0 text-right">
+                    <span class="text-xs font-black text-slate-500">09:00</span>
                   </div>
-
-                  <div class="mb-3 h-2 w-full overflow-hidden rounded-full bg-slate-200/60">
-                    <div class="progress-bar h-2 rounded-full bg-indigo-500" style="width: 65%"></div>
+                  <div class="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white bg-emerald-400"></div>
+                  <div class="glass-card flex-1 rounded-xl border border-slate-100 p-3 bg-white">
+                    <div class="mb-1 text-[10px] font-bold uppercase text-slate-500">Calendar Event</div>
+                    <div class="text-sm font-bold text-slate-800">团队周会</div>
                   </div>
+                </div>
 
-                  <div class="rounded-xl bg-white/70 p-3">
-                    <div class="text-xs font-black uppercase text-slate-400">Next</div>
-                    <div class="mt-1 text-sm font-bold text-slate-800">完成原型设计</div>
+                <!-- Reminder -->
+                <div class="relative z-10 flex gap-4">
+                  <div class="w-12 shrink-0 text-right">
+                    <span class="text-xs font-black text-indigo-600">14:00</span>
                   </div>
-                </button>
+                  <div class="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white bg-indigo-500 ring-4 ring-indigo-100"></div>
+                  <button class="glass-card hover:transform hover:-translate-y-0.5 flex-1 rounded-xl border-l-4 border-l-indigo-500 p-3 text-left shadow-md bg-white">
+                    <div class="mb-1 text-[10px] font-bold uppercase text-slate-500">Apple Reminders</div>
+                    <div class="text-sm font-bold text-slate-800">产品讨论会议</div>
+                  </button>
+                </div>
 
-                <!-- Goal 2 -->
-                <button class="glass-card hover-lift block w-full rounded-2xl p-4 text-left">
-                  <div class="mb-3 flex items-start justify-between gap-4">
-                    <div>
-                      <span class="rounded bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase text-indigo-700">工作</span>
-                      <h3 class="mt-2 text-sm font-bold text-slate-900">技术架构优化</h3>
-                      <p class="mt-1 text-xs font-semibold text-slate-500">1 个持续推进待办覆盖今天</p>
-                    </div>
-                    <span class="text-xl font-black text-indigo-600">40%</span>
+                <!-- Desk Task -->
+                <div class="relative z-10 flex gap-4">
+                  <div class="w-12 shrink-0 text-right">
+                    <span class="text-xs font-black text-indigo-600">16:00</span>
                   </div>
+                  <div class="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white bg-amber-400"></div>
+                  <button class="glass-card hover:transform hover:-translate-y-0.5 flex-1 rounded-xl border border-slate-100 p-3 text-left bg-white">
+                    <div class="mb-1 text-[10px] font-bold uppercase text-slate-500">Desk Task</div>
+                    <div class="text-sm font-bold text-slate-800">需求评审准备</div>
+                  </button>
+                </div>
 
-                  <div class="mb-3 h-2 w-full overflow-hidden rounded-full bg-slate-200/60">
-                    <div class="progress-bar h-2 rounded-full bg-indigo-500" style="width: 40%"></div>
+                <!-- Calendar Event (Done) -->
+                <div class="relative z-10 flex gap-4 opacity-60">
+                  <div class="w-12 shrink-0 text-right">
+                    <span class="text-xs font-black text-slate-500">18:00</span>
                   </div>
-
-                  <div class="rounded-xl bg-white/70 p-3">
-                    <div class="text-xs font-black uppercase text-slate-400">Next</div>
-                    <div class="mt-1 text-sm font-bold text-slate-800">搭建测试环境</div>
+                  <div class="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white bg-emerald-400"></div>
+                  <div class="glass-card flex-1 rounded-xl border border-slate-100 p-3 bg-white">
+                    <div class="mb-1 text-[10px] font-bold uppercase text-slate-500">Calendar Event</div>
+                    <div class="text-sm font-bold text-slate-600 line-through">健身房训练</div>
                   </div>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Right Column - Timeline -->
-          <div class="glass-panel relative rounded-3xl p-8">
-            <h2 class="mb-6 flex items-center gap-2 text-xl font-bold text-slate-900">
-              <svg class="h-5 w-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" stroke-width="2"/>
-                <path d="M12 6v6l4 2" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-              今日时间轴
-            </h2>
-
-            <div class="timeline-line relative space-y-6">
-              <!-- Calendar Event -->
-              <div class="relative z-10 flex gap-4">
-                <div class="w-12 shrink-0 text-right">
-                  <span class="text-xs font-black text-slate-500">09:00</span>
-                </div>
-                <div class="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white bg-emerald-400"></div>
-                <div class="glass-card flex-1 rounded-xl border border-slate-100 p-3">
-                  <div class="mb-1 text-[10px] font-bold uppercase text-slate-500">Calendar Event</div>
-                  <div class="text-sm font-bold text-slate-800">团队周会</div>
-                </div>
-              </div>
-
-              <!-- Reminder -->
-              <div class="relative z-10 flex gap-4">
-                <div class="w-12 shrink-0 text-right">
-                  <span class="text-xs font-black text-indigo-600">14:00</span>
-                </div>
-                <div class="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white bg-indigo-500 ring-4 ring-indigo-100"></div>
-                <button class="glass-card hover-lift flex-1 rounded-xl border-l-4 border-l-indigo-500 p-3 text-left shadow-md">
-                  <div class="mb-1 text-[10px] font-bold uppercase text-slate-500">Apple Reminders</div>
-                  <div class="text-sm font-bold text-slate-800">产品讨论会议</div>
-                </button>
-              </div>
-
-              <!-- Desk Task -->
-              <div class="relative z-10 flex gap-4">
-                <div class="w-12 shrink-0 text-right">
-                  <span class="text-xs font-black text-indigo-600">16:00</span>
-                </div>
-                <div class="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white bg-amber-400"></div>
-                <button class="glass-card hover-lift flex-1 rounded-xl border border-slate-100 p-3 text-left">
-                  <div class="mb-1 text-[10px] font-bold uppercase text-slate-500">Desk Task</div>
-                  <div class="text-sm font-bold text-slate-800">需求评审准备</div>
-                </button>
-              </div>
-
-              <!-- Calendar Event (Done) -->
-              <div class="relative z-10 flex gap-4 opacity-60">
-                <div class="w-12 shrink-0 text-right">
-                  <span class="text-xs font-black text-slate-500">18:00</span>
-                </div>
-                <div class="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white bg-emerald-400"></div>
-                <div class="glass-card flex-1 rounded-xl border border-slate-100 p-3">
-                  <div class="mb-1 text-[10px] font-bold uppercase text-slate-500">Calendar Event</div>
-                  <div class="text-sm font-bold text-slate-600 line-through">健身房训练</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- 3. Calendar View -->
+        <div id="view-calendar" class="view-container hidden mx-auto max-w-7xl p-10 animate-spring">
+          <div class="mb-8 flex items-end justify-between">
+            <div>
+              <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">日历看板</h1>
+              <p class="mt-2 font-medium text-slate-500">在周视图或日视图中查看所有日程安排，包括日历、提醒、待办。</p>
+            </div>
+          </div>
+
+          <!-- Tabs and controls -->
+          <div class="mb-6 flex items-center justify-between">
+            <div class="glass-panel inline-flex rounded-2xl p-1">
+              <button onclick="switchCalendarView('week')" id="calendar-tab-week" class="rounded-xl px-6 py-2 text-sm font-bold text-slate-900 bg-white shadow-sm">
+                周视图
+              </button>
+              <button onclick="switchCalendarView('day')" id="calendar-tab-day" class="rounded-xl px-6 py-2 text-sm font-bold text-slate-600">
+                日视图
+              </button>
+            </div>
+
+            <label class="flex items-center gap-2 text-sm font-semibold text-slate-600">
+              <input type="checkbox" checked id="calendar-hide-completed" class="rounded" />
+              隐藏已完成
+            </label>
+          </div>
+
+          <!-- Week View Container -->
+          <div id="calendar-week-container" class="glass-panel rounded-3xl p-6">
+            <!-- Week navigation -->
+            <div class="mb-6 flex items-center justify-between">
+              <button onclick="alert('Navigate to previous week')" class="flex items-center gap-2 rounded-xl bg-white px-4 py-2 font-bold text-slate-600 shadow-sm hover:bg-slate-50 border">
+                ← 上一周
+              </button>
+              <h2 class="text-lg font-bold text-slate-900">2026年6月15日 - 6月21日</h2>
+              <button onclick="alert('Navigate to next week')" class="flex items-center gap-2 rounded-xl bg-white px-4 py-2 font-bold text-slate-600 shadow-sm hover:bg-slate-50 border">
+                下一周 →
+              </button>
+            </div>
+
+            <!-- 7-day grid -->
+            <div class="grid grid-cols-7 border border-slate-200/50 rounded-2xl overflow-hidden">
+              <!-- Headers -->
+              <div class="bg-slate-50 border-b border-r border-slate-200/50 py-3 text-center">
+                <div class="text-[10px] font-black uppercase text-slate-400">周一</div>
+                <div class="text-xl font-bold text-slate-800">15</div>
+              </div>
+              <div class="bg-slate-50 border-b border-r border-slate-200/50 py-3 text-center">
+                <div class="text-[10px] font-black uppercase text-slate-400">周二</div>
+                <div class="text-xl font-bold text-slate-800">16</div>
+              </div>
+              <!-- Today Header -->
+              <div class="bg-indigo-50 border-b border-r border-slate-200/50 py-3 text-center">
+                <div class="text-[10px] font-black uppercase text-indigo-500">周三</div>
+                <div class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500 text-lg font-bold text-white shadow-md">17</div>
+              </div>
+              <div class="bg-slate-50 border-b border-r border-slate-200/50 py-3 text-center">
+                <div class="text-[10px] font-black uppercase text-slate-400">周四</div>
+                <div class="text-xl font-bold text-slate-800">18</div>
+              </div>
+              <div class="bg-slate-50 border-b border-r border-slate-200/50 py-3 text-center">
+                <div class="text-[10px] font-black uppercase text-slate-400">周五</div>
+                <div class="text-xl font-bold text-slate-800">19</div>
+              </div>
+              <div class="bg-slate-50 border-b border-r border-slate-200/50 py-3 text-center">
+                <div class="text-[10px] font-black uppercase text-slate-400">周六</div>
+                <div class="text-xl font-bold text-slate-800">20</div>
+              </div>
+              <div class="bg-slate-50 border-b py-3 text-center">
+                <div class="text-[10px] font-black uppercase text-slate-400">周日</div>
+                <div class="text-xl font-bold text-slate-800">21</div>
+              </div>
+
+              <!-- Day columns content -->
+              <!-- Mon -->
+              <div class="bg-white border-r border-slate-200/50 p-2 min-h-[400px] space-y-2">
+                <button class="w-full text-left p-2 rounded-lg border-l-2 border-l-purple-500 bg-purple-50 text-[11px]">
+                  <div class="font-bold text-purple-900">09:00 团队周会</div>
+                  <div class="text-purple-600 font-semibold mt-0.5">macOS Calendar</div>
+                </button>
+              </div>
+              <!-- Tue -->
+              <div class="bg-white border-r border-slate-200/50 p-2 min-h-[400px] space-y-2">
+                <button class="w-full text-left p-2 rounded-lg border-l-2 border-l-orange-500 bg-orange-50 text-[11px]">
+                  <div class="font-bold text-orange-900">14:00 产品讨论会</div>
+                  <div class="text-orange-600 font-semibold mt-0.5">Apple Reminders</div>
+                </button>
+              </div>
+              <!-- Wed (Today) -->
+              <div class="bg-indigo-50/10 border-r border-slate-200/50 p-2 min-h-[400px] space-y-2">
+                <button class="w-full text-left p-2 rounded-lg border-l-2 border-l-amber-500 bg-amber-50 text-[11px]">
+                  <div class="font-bold text-amber-900">16:00 需求评审准备</div>
+                  <div class="text-amber-600 font-semibold mt-0.5">Desk Task</div>
+                </button>
+              </div>
+              <!-- Thu -->
+              <div class="bg-white border-r border-slate-200/50 p-2 min-h-[400px] space-y-2">
+                <button class="w-full text-left p-2 rounded-lg border-l-2 border-l-purple-500 bg-purple-50 text-[11px]">
+                  <div class="font-bold text-purple-900">11:00 日常同步会</div>
+                  <div class="text-purple-600 font-semibold mt-0.5">macOS Calendar</div>
+                </button>
+              </div>
+              <!-- Fri -->
+              <div class="bg-white border-r border-slate-200/50 p-2 min-h-[400px] space-y-2">
+                <button class="w-full text-left p-2 rounded-lg border-l-2 border-l-orange-500 bg-orange-50 text-[11px]">
+                  <div class="font-bold text-orange-900">15:30 周报提交</div>
+                  <div class="text-orange-600 font-semibold mt-0.5">Apple Reminders</div>
+                </button>
+              </div>
+              <!-- Sat -->
+              <div class="bg-white border-r border-slate-200/50 p-2 min-h-[400px] text-center pt-10 text-[10px] text-slate-400">无日程</div>
+              <!-- Sun -->
+              <div class="bg-white p-2 min-h-[400px] text-center pt-10 text-[10px] text-slate-400">无日程</div>
+            </div>
+          </div>
+
+          <!-- Day View Container (Hidden initially) -->
+          <div id="calendar-day-container" class="hidden grid grid-cols-[320px_1fr] gap-6">
+            <div class="glass-panel rounded-3xl p-6 text-center">
+              <div class="text-lg font-extrabold text-slate-800 mb-4">🗓️ 选择日期</div>
+              <div class="p-8 rounded-2xl bg-white/50 border border-slate-200/40 text-sm text-slate-500">
+                月历组件，选择日期后右侧实时展示日程。
+              </div>
+            </div>
+            <div class="glass-panel rounded-3xl p-6">
+              <div class="text-lg font-extrabold text-slate-800 mb-4">📌 日视图详细日程 (2026-06-17)</div>
+              <div class="space-y-3">
+                <div class="p-4 rounded-xl bg-amber-50 border-l-4 border-l-amber-500 flex items-center justify-between">
+                  <div>
+                    <span class="text-xs font-black text-amber-700">DESK TASK</span>
+                    <h4 class="text-sm font-bold text-slate-900 mt-1">16:00 - 需求评审准备</h4>
+                  </div>
+                  <span class="text-xs font-bold text-slate-400">待办任务</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Reminders View -->
+        <div id="view-reminders" class="view-container hidden mx-auto max-w-7xl p-10 animate-spring">
+          <div class="mb-8 flex items-end justify-between">
+            <div>
+              <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">提醒看板</h1>
+              <p class="mt-2 font-medium text-slate-500">按清单或时间维度，在应用内极速管理系统提醒事项。</p>
+            </div>
+          </div>
+
+          <!-- Tabs and controls -->
+          <div class="mb-6 flex items-center justify-between">
+            <div class="glass-panel inline-flex rounded-2xl p-1">
+              <button onclick="switchRemindersView('byList')" id="reminders-tab-list" class="rounded-xl px-6 py-2 text-sm font-bold text-slate-900 bg-white shadow-sm">
+                按清单
+              </button>
+              <button onclick="switchRemindersView('byTime')" id="reminders-tab-time" class="rounded-xl px-6 py-2 text-sm font-bold text-slate-600">
+                按时间
+              </button>
+            </div>
+
+            <label class="flex items-center gap-2 text-sm font-semibold text-slate-600">
+              <input type="checkbox" id="reminders-hide-completed" onchange="toggleRemindersCompleted()" class="rounded" />
+              隐藏已完成
+            </label>
+          </div>
+
+          <!-- By List View Container -->
+          <div id="reminders-list-container" class="grid grid-cols-3 gap-6">
+            <!-- Work List -->
+            <div class="glass-panel rounded-3xl p-6">
+              <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-base font-extrabold text-orange-600 flex items-center gap-2">
+                  <span>💼</span> 工作清单
+                </h3>
+                <span class="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-black text-orange-600">3</span>
+              </div>
+              <div class="space-y-2">
+                <div class="p-3 rounded-xl bg-white border border-slate-100 flex items-center gap-3">
+                  <input type="checkbox" class="rounded text-orange-500 focus:ring-orange-400">
+                  <div>
+                    <div class="text-sm font-bold text-slate-800">完成Q2绩效自评</div>
+                    <div class="text-[10px] text-orange-500 font-bold mt-0.5">今天 09:30</div>
+                  </div>
+                </div>
+                <div class="p-3 rounded-xl bg-white border border-slate-100 flex items-center gap-3">
+                  <input type="checkbox" class="rounded text-orange-500 focus:ring-orange-400">
+                  <div>
+                    <div class="text-sm font-bold text-slate-800">周报准备</div>
+                    <div class="text-[10px] text-orange-500 font-bold mt-0.5">今天 15:30</div>
+                  </div>
+                </div>
+                <div class="p-3 rounded-xl bg-white border border-slate-100 flex items-center gap-3 opacity-50 line-through">
+                  <input type="checkbox" checked class="rounded text-orange-500 focus:ring-orange-400">
+                  <div>
+                    <div class="text-sm font-bold text-slate-600">团队日常会议</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Personal List -->
+            <div class="glass-panel rounded-3xl p-6">
+              <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-base font-extrabold text-blue-600 flex items-center gap-2">
+                  <span>🏠</span> 个人清单
+                </h3>
+                <span class="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-black text-blue-600">1</span>
+              </div>
+              <div class="space-y-2">
+                <div class="p-3 rounded-xl bg-white border border-slate-100 flex items-center gap-3">
+                  <input type="checkbox" class="rounded text-blue-500 focus:ring-blue-400">
+                  <div>
+                    <div class="text-sm font-bold text-slate-800">晚间有氧跑步 5km</div>
+                    <div class="text-[10px] text-blue-500 font-bold mt-0.5">今晚 19:00</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empty List -->
+            <div class="glass-panel rounded-3xl p-6">
+              <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-base font-extrabold text-green-600 flex items-center gap-2">
+                  <span>🛒</span> 购物清单
+                </h3>
+                <span class="rounded-full bg-green-50 px-2 py-0.5 text-xs font-black text-green-600">0</span>
+              </div>
+              <div class="h-[120px] rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-xs text-slate-400">
+                <span>暂无提醒事项</span>
+                <span class="text-[9px] mt-1">系统清单已完全同步</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- By Time View Container (Hidden initially) -->
+          <div id="reminders-time-container" class="hidden space-y-4">
+            <!-- Overdue -->
+            <div class="glass-panel rounded-3xl p-5 border-l-4 border-l-red-500 bg-red-50/10">
+              <div class="flex items-center justify-between">
+                <h4 class="text-sm font-black text-red-600 flex items-center gap-2">
+                  <span>⚠️</span> 已过期
+                </h4>
+                <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-black text-red-600">1</span>
+              </div>
+              <div class="mt-3 space-y-2">
+                <div class="p-3 rounded-xl bg-white flex items-center gap-3">
+                  <input type="checkbox" class="rounded text-red-500 focus:ring-red-400">
+                  <div>
+                    <div class="text-sm font-bold text-slate-800">提交Q2财务汇总报表</div>
+                    <div class="text-[10px] text-red-500 font-bold mt-0.5">昨天已截止</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Today -->
+            <div class="glass-panel rounded-3xl p-5 border-l-4 border-l-orange-500 bg-orange-50/10">
+              <div class="flex items-center justify-between">
+                <h4 class="text-sm font-black text-orange-600 flex items-center gap-2">
+                  <span>⚡️</span> 今天
+                </h4>
+                <span class="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-black text-orange-600">2</span>
+              </div>
+              <div class="mt-3 space-y-2">
+                <div class="p-3 rounded-xl bg-white flex items-center gap-3">
+                  <input type="checkbox" class="rounded text-orange-500 focus:ring-orange-400">
+                  <div>
+                    <div class="text-sm font-bold text-slate-800">完成Q2绩效自评</div>
+                    <div class="text-[10px] text-orange-500 font-bold mt-0.5">今天 09:30</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Board View -->
+        <div id="view-board" class="view-container hidden mx-auto max-w-7xl p-10 animate-spring">
+          <div class="mb-8">
+            <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">目标看板</h1>
+            <p class="mt-2 font-medium text-slate-500">将任务在不同的生命周期状态中进行流转与推进。</p>
+          </div>
+
+          <div class="grid grid-cols-3 gap-6">
+            <!-- TODO column -->
+            <div class="glass-panel rounded-3xl p-6">
+              <h3 class="text-base font-extrabold text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+                <span>📋 准备开始</span>
+                <span class="bg-slate-200/50 text-slate-700 px-2 py-0.5 text-xs font-black rounded-full">2</span>
+              </h3>
+              <div class="space-y-3">
+                <div class="glass-card rounded-2xl p-4 bg-white">
+                  <div class="text-sm font-bold text-slate-900">撰写 Q2 计划草案</div>
+                  <div class="mt-2 text-xs text-slate-400">目标: Q2 产品迭代</div>
+                </div>
+                <div class="glass-card rounded-2xl p-4 bg-white">
+                  <div class="text-sm font-bold text-slate-900">备份本地数据库</div>
+                  <div class="mt-2 text-xs text-slate-400">目标: 系统安全</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- IN PROGRESS column -->
+            <div class="glass-panel rounded-3xl p-6">
+              <h3 class="text-base font-extrabold text-indigo-600 uppercase tracking-widest mb-4 flex items-center justify-between">
+                <span>⚡ 推进中 / 已暂停</span>
+                <span class="bg-indigo-50 text-indigo-600 px-2 py-0.5 text-xs font-black rounded-full">2</span>
+              </h3>
+              <div class="space-y-3">
+                <div class="glass-card rounded-2xl p-4 bg-white border-l-4 border-l-indigo-500">
+                  <div class="text-sm font-bold text-slate-900">研究竞品分析报告</div>
+                  <div class="mt-2 text-xs text-indigo-600 font-semibold">正在进行中 (第1天)</div>
+                </div>
+                <div class="glass-card rounded-2xl p-4 bg-amber-50/20 border-l-4 border-l-amber-500">
+                  <div class="text-sm font-bold text-slate-800">整理归档旧文档</div>
+                  <div class="mt-2 text-xs text-amber-600 font-semibold">PAUSED · 等待财务提供数据</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DONE column -->
+            <div class="glass-panel rounded-3xl p-6">
+              <h3 class="text-base font-extrabold text-emerald-600 uppercase tracking-widest mb-4 flex items-center justify-between">
+                <span>✅ 已收束完成</span>
+                <span class="bg-emerald-50 text-emerald-600 px-2 py-0.5 text-xs font-black rounded-full">1</span>
+              </h3>
+              <div class="space-y-3 opacity-65">
+                <div class="glass-card rounded-2xl p-4 bg-white border-l-4 border-l-emerald-500 line-through">
+                  <div class="text-sm font-bold text-slate-700">搭建本地数据库环境</div>
+                  <div class="mt-2 text-xs text-emerald-600 font-semibold">已于 2026-06-14 完成</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Goals View -->
+        <div id="view-goals" class="view-container hidden mx-auto max-w-7xl p-10 animate-spring">
+          <div class="mb-8">
+            <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">目标管理</h1>
+            <p class="mt-2 font-medium text-slate-500">创建并管理你的长期目标，自动追踪旗下任务的派生状态。</p>
+          </div>
+
+          <div class="grid grid-cols-3 gap-6">
+            <!-- Goal 1 -->
+            <div class="glass-panel rounded-3xl p-6 flex flex-col justify-between h-[280px]">
+              <div>
+                <span class="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 font-bold rounded uppercase">工作领域</span>
+                <h3 class="text-lg font-bold text-slate-900 mt-2">Q2 产品迭代</h3>
+                <p class="text-xs text-slate-500 mt-1 leading-relaxed">完成 Goal Desk 核心功能开发并进行高保真重构优化。</p>
+              </div>
+              <div>
+                <div class="flex items-center justify-between text-xs font-black text-slate-700 mb-1.5">
+                  <span>总体进度</span>
+                  <span>65%</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+                  <div class="h-full bg-indigo-500" style="width: 65%"></div>
+                </div>
+                <div class="mt-3 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>3 关联任务</span>
+                  <span class="text-indigo-600 font-bold">ACTIVE 推进中</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Goal 2 -->
+            <div class="glass-panel rounded-3xl p-6 flex flex-col justify-between h-[280px]">
+              <div>
+                <span class="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 font-bold rounded uppercase">工作领域</span>
+                <h3 class="text-lg font-bold text-slate-900 mt-2">技术架构优化</h3>
+                <p class="text-xs text-slate-500 mt-1 leading-relaxed">深化 desktopApi 和 appStore 派生逻辑，并进行 Repository 重构。</p>
+              </div>
+              <div>
+                <div class="flex items-center justify-between text-xs font-black text-slate-700 mb-1.5">
+                  <span>总体进度</span>
+                  <span>40%</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+                  <div class="h-full bg-indigo-500" style="width: 40%"></div>
+                </div>
+                <div class="mt-3 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>2 关联任务</span>
+                  <span class="text-indigo-600 font-bold">ACTIVE 推进中</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Goal 3 -->
+            <div class="glass-panel rounded-3xl p-6 flex flex-col justify-between h-[280px]">
+              <div>
+                <span class="bg-purple-100 text-purple-800 text-[10px] px-2 py-0.5 font-bold rounded uppercase">学习领域</span>
+                <h3 class="text-lg font-bold text-slate-900 mt-2">深层软件系统设计</h3>
+                <p class="text-xs text-slate-500 mt-1 leading-relaxed">精读并学习经典系统设计模式和局部性高杠杆原则。</p>
+              </div>
+              <div>
+                <div class="flex items-center justify-between text-xs font-black text-slate-700 mb-1.5">
+                  <span>总体进度</span>
+                  <span>10%</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+                  <div class="h-full bg-indigo-500" style="width: 10%"></div>
+                </div>
+                <div class="mt-3 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>1 关联任务</span>
+                  <span class="text-slate-400 font-bold">WAITING 等待中</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. Areas View -->
+        <div id="view-areas" class="view-container hidden mx-auto max-w-7xl p-10 animate-spring">
+          <div class="mb-8">
+            <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">领域管理</h1>
+            <p class="mt-2 font-medium text-slate-500">按领域强实体化分类你的所有目标，保持工作与生活的平衡。</p>
+          </div>
+
+          <div class="grid grid-cols-4 gap-6">
+            <!-- Area 1 -->
+            <div class="glass-panel rounded-3xl p-6 text-center">
+              <span class="text-4xl">💼</span>
+              <h3 class="text-lg font-bold text-slate-900 mt-3">工作领域</h3>
+              <p class="text-xs text-slate-400 mt-1">系统强实体领域</p>
+              <div class="mt-6 flex justify-around border-t pt-4 border-slate-100 text-xs">
+                <div>
+                  <div class="font-extrabold text-slate-800">3</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">关联目标</div>
+                </div>
+                <div>
+                  <div class="font-extrabold text-indigo-600">2</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">活跃中</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Area 2 -->
+            <div class="glass-panel rounded-3xl p-6 text-center">
+              <span class="text-4xl">📚</span>
+              <h3 class="text-lg font-bold text-slate-900 mt-3">学习领域</h3>
+              <p class="text-xs text-slate-400 mt-1">自主创建领域</p>
+              <div class="mt-6 flex justify-around border-t pt-4 border-slate-100 text-xs">
+                <div>
+                  <div class="font-extrabold text-slate-800">1</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">关联目标</div>
+                </div>
+                <div>
+                  <div class="font-extrabold text-indigo-600">1</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">活跃中</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Area 3 -->
+            <div class="glass-panel rounded-3xl p-6 text-center">
+              <span class="text-4xl">🏃</span>
+              <h3 class="text-lg font-bold text-slate-900 mt-3">健康领域</h3>
+              <p class="text-xs text-slate-400 mt-1">自主创建领域</p>
+              <div class="mt-6 flex justify-around border-t pt-4 border-slate-100 text-xs">
+                <div>
+                  <div class="font-extrabold text-slate-800">0</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">关联目标</div>
+                </div>
+                <div>
+                  <div class="font-extrabold text-slate-400">0</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">活跃中</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Area 4 -->
+            <div class="glass-panel rounded-3xl p-6 text-center">
+              <span class="text-4xl">🏠</span>
+              <h3 class="text-lg font-bold text-slate-900 mt-3">个人领域</h3>
+              <p class="text-xs text-slate-400 mt-1">系统默认领域</p>
+              <div class="mt-6 flex justify-around border-t pt-4 border-slate-100 text-xs">
+                <div>
+                  <div class="font-extrabold text-slate-800">1</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">关联目标</div>
+                </div>
+                <div>
+                  <div class="font-extrabold text-slate-400">0</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">活跃中</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </main>
   </div>
 
   <script>
-    // 添加交互效果
-    document.querySelectorAll('.sidebar-item').forEach(item => {
-      item.addEventListener('click', function() {
-        document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
-        this.classList.add('active');
+    // 基础视图切换逻辑
+    function showView(viewId) {
+      // 隐藏所有容器
+      document.querySelectorAll('.view-container').forEach(container => {
+        container.classList.add('hidden');
+      });
+
+      // 显示选定容器
+      const targetContainer = document.getElementById('view-' + viewId);
+      if (targetContainer) {
+        targetContainer.classList.remove('hidden');
+      }
+
+      // 更新侧边栏 active 状态
+      document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.classList.remove('active');
+      });
+      const targetSidebarBtn = document.getElementById('sidebar-' + viewId);
+      if (targetSidebarBtn) {
+        targetSidebarBtn.classList.add('active');
+      }
+
+      // 更新顶部状态条显示信息
+      const statusMsg = document.getElementById('top-status-message');
+      if (statusMsg) {
+        const viewNames = {
+          'inbox': 'Inbox View · 整理你的想法',
+          'today': 'Today View · 顶层目标执行中',
+          'calendar': 'Calendar Board ·  macOS 日历周日程视图',
+          'reminders': 'Reminders Board · 系统提醒事项看板',
+          'board': 'Kanban Board · 状态转换器',
+          'goals': 'Goals View · 长期目标概览',
+          'areas': 'Areas View · 领域高内聚隔离'
+        };
+        statusMsg.innerText = `Desktop mode · SQLite synced · ${viewNames[viewId] || 'All systems nominal'}`;
+      }
+    }
+
+    // 日历看板视图切换
+    function switchCalendarView(mode) {
+      const weekBtn = document.getElementById('calendar-tab-week');
+      const dayBtn = document.getElementById('calendar-tab-day');
+      const weekCont = document.getElementById('calendar-week-container');
+      const dayCont = document.getElementById('calendar-day-container');
+
+      if (mode === 'week') {
+        weekBtn.className = "rounded-xl px-6 py-2 text-sm font-bold text-slate-900 bg-white shadow-sm";
+        dayBtn.className = "rounded-xl px-6 py-2 text-sm font-bold text-slate-600";
+        weekCont.classList.remove('hidden');
+        dayCont.classList.add('hidden');
+      } else {
+        weekBtn.className = "rounded-xl px-6 py-2 text-sm font-bold text-slate-600";
+        dayBtn.className = "rounded-xl px-6 py-2 text-sm font-bold text-slate-900 bg-white shadow-sm";
+        weekCont.classList.add('hidden');
+        dayCont.classList.remove('hidden');
+      }
+    }
+
+    // 提醒看板视图切换
+    function switchRemindersView(mode) {
+      const listBtn = document.getElementById('reminders-tab-list');
+      const timeBtn = document.getElementById('reminders-tab-time');
+      const listCont = document.getElementById('reminders-list-container');
+      const timeCont = document.getElementById('reminders-time-container');
+
+      if (mode === 'byList') {
+        listBtn.className = "rounded-xl px-6 py-2 text-sm font-bold text-slate-900 bg-white shadow-sm";
+        timeBtn.className = "rounded-xl px-6 py-2 text-sm font-bold text-slate-600";
+        listCont.classList.remove('hidden');
+        timeCont.classList.add('hidden');
+      } else {
+        listBtn.className = "rounded-xl px-6 py-2 text-sm font-bold text-slate-600";
+        timeBtn.className = "rounded-xl px-6 py-2 text-sm font-bold text-slate-900 bg-white shadow-sm";
+        listCont.classList.add('hidden');
+        timeCont.classList.remove('hidden');
+      }
+    }
+
+    // 切换提醒项的勾选状态
+    document.querySelectorAll('#view-reminders input[type="checkbox"]').forEach(checkbox => {
+      checkbox.addEventListener('change', function() {
+        const itemContainer = this.closest('.p-3');
+        if (this.checked) {
+          itemContainer.classList.add('opacity-50', 'line-through');
+        } else {
+          itemContainer.classList.remove('opacity-50', 'line-through');
+        }
       });
     });
 
-    // 模拟 tooltip hover
-    console.log('Goal Desk Prototype v3 - 基于当前实现的交互式原型');
+    // 页面初始化加载 Today View
+    window.addEventListener('DOMContentLoaded', () => {
+      showView('today');
+    });
   </script>
 
 </body>

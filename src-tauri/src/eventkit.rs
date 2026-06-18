@@ -216,8 +216,14 @@ struct NativeEventKitResult {
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
     fn gd_eventkit_snapshot(start_iso: *const c_char, end_iso: *const c_char) -> NativeEventKitResult;
-    fn gd_eventkit_request_calendar_access() -> NativeEventKitResult;
-    fn gd_eventkit_request_reminders_access() -> NativeEventKitResult;
+    fn gd_eventkit_request_calendar_access_async(
+        context: *mut std::ffi::c_void,
+        callback: unsafe extern "C" fn(*mut std::ffi::c_void, *const c_char),
+    );
+    fn gd_eventkit_request_reminders_access_async(
+        context: *mut std::ffi::c_void,
+        callback: unsafe extern "C" fn(*mut std::ffi::c_void, *const c_char),
+    );
     fn gd_eventkit_create_reminder(title: *const c_char, due_at_iso: *const c_char) -> NativeEventKitResult;
     fn gd_eventkit_set_reminder_completed(identifier: *const c_char, done: c_int) -> NativeEventKitResult;
     fn gd_eventkit_free_string(string: *mut c_char);
@@ -567,28 +573,108 @@ mod tests {
 
         assert!(error.contains("Network timeout"));
     }
+
+    #[tokio::test]
+    async fn async_permission_request_returns_valid_status() {
+        let result = super::request_calendar_access_async().await;
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        assert!(matches!(
+            status,
+            super::AccessStatus::Granted
+                | super::AccessStatus::Denied
+                | super::AccessStatus::Restricted
+                | super::AccessStatus::NotDetermined
+                | super::AccessStatus::Error
+        ));
+    }
+
+    #[tokio::test]
+    async fn async_reminders_permission_request_returns_valid_status() {
+        let result = super::request_reminders_access_async().await;
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        assert!(matches!(
+            status,
+            super::AccessStatus::Granted
+                | super::AccessStatus::Denied
+                | super::AccessStatus::Restricted
+                | super::AccessStatus::NotDetermined
+                | super::AccessStatus::Error
+        ));
+    }
 }
 
-// Public API for requesting calendar access
+// Public API for requesting calendar access asynchronously
 #[cfg(target_os = "macos")]
-pub fn request_calendar_access() -> Result<AccessStatus, String> {
-    let result = unsafe { gd_eventkit_request_calendar_access() };
-    MacEventKitAdapter::read_native_result(result)
+pub async fn request_calendar_access_async() -> Result<AccessStatus, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<AccessStatus, String>>();
+    let tx_boxed = Box::into_raw(Box::new(tx));
+
+    unsafe extern "C" fn callback(context: *mut std::ffi::c_void, status_ptr: *const c_char) {
+        let tx = Box::from_raw(context as *mut tokio::sync::oneshot::Sender<Result<AccessStatus, String>>);
+        let status_str = if status_ptr.is_null() {
+            "error".to_string()
+        } else {
+            CStr::from_ptr(status_ptr).to_string_lossy().into_owned()
+        };
+
+        let status = match status_str.as_str() {
+            "granted" => AccessStatus::Granted,
+            "denied" => AccessStatus::Denied,
+            "restricted" => AccessStatus::Restricted,
+            "not_determined" => AccessStatus::NotDetermined,
+            _ => AccessStatus::Error,
+        };
+
+        let _ = tx.send(Ok(status));
+    }
+
+    unsafe {
+        gd_eventkit_request_calendar_access_async(tx_boxed as *mut std::ffi::c_void, callback);
+    }
+
+    rx.await.map_err(|e| format!("Permission channel closed: {}", e))?
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn request_calendar_access() -> Result<AccessStatus, String> {
+pub async fn request_calendar_access_async() -> Result<AccessStatus, String> {
     Ok(AccessStatus::Error)
 }
 
-// Public API for requesting reminders access
+// Public API for requesting reminders access asynchronously
 #[cfg(target_os = "macos")]
-pub fn request_reminders_access() -> Result<AccessStatus, String> {
-    let result = unsafe { gd_eventkit_request_reminders_access() };
-    MacEventKitAdapter::read_native_result(result)
+pub async fn request_reminders_access_async() -> Result<AccessStatus, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<AccessStatus, String>>();
+    let tx_boxed = Box::into_raw(Box::new(tx));
+
+    unsafe extern "C" fn callback(context: *mut std::ffi::c_void, status_ptr: *const c_char) {
+        let tx = Box::from_raw(context as *mut tokio::sync::oneshot::Sender<Result<AccessStatus, String>>);
+        let status_str = if status_ptr.is_null() {
+            "error".to_string()
+        } else {
+            CStr::from_ptr(status_ptr).to_string_lossy().into_owned()
+        };
+
+        let status = match status_str.as_str() {
+            "granted" => AccessStatus::Granted,
+            "denied" => AccessStatus::Denied,
+            "restricted" => AccessStatus::Restricted,
+            "not_determined" => AccessStatus::NotDetermined,
+            _ => AccessStatus::Error,
+        };
+
+        let _ = tx.send(Ok(status));
+    }
+
+    unsafe {
+        gd_eventkit_request_reminders_access_async(tx_boxed as *mut std::ffi::c_void, callback);
+    }
+
+    rx.await.map_err(|e| format!("Permission channel closed: {}", e))?
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn request_reminders_access() -> Result<AccessStatus, String> {
+pub async fn request_reminders_access_async() -> Result<AccessStatus, String> {
     Ok(AccessStatus::Error)
 }

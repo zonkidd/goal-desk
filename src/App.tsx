@@ -5,7 +5,8 @@ import { AppShell } from './components/shell/AppShell'
 import { QuickCaptureWindow } from './components/modal/QuickCaptureWindow'
 import { getCurrentWindowLabel, isTauriRuntime, loadDesktopSnapshot } from './lib/desktopApi'
 import { getRuntimeModeStatusMessage } from './lib/taskPresentation'
-import { useAppStore } from './store/appStore'
+import { useUiStore } from './store/uiStore'
+import { useStoreMessageBridge, useDerivedStateSync, useAppHydration, useReceiveExternalTask } from './hooks/useStoreComposition'
 import type { Task } from './types/task'
 import type { GoalCard } from './types/app'
 import type { AreaWithStats } from './types/app'
@@ -48,10 +49,15 @@ function loadBrowserData() {
 }
 
 function MainApp() {
-  const hydrateApp = useAppStore((state) => state.hydrateApp)
-  const receiveExternalTask = useAppStore((state) => state.receiveExternalTask)
-  const setLoading = useAppStore((state) => state.setLoading)
-  const setStatusMessage = useAppStore((state) => state.setStatusMessage)
+  // 初始化多 store 架构的桥接和同步
+  useStoreMessageBridge()
+  useDerivedStateSync()
+
+  // 使用新架构的 hooks
+  const hydrateApp = useAppHydration()
+  const receiveExternalTask = useReceiveExternalTask()
+  const setLoading = useUiStore((state) => state.setLoading)
+  const setStatusMessage = useUiStore((state) => state.setStatusMessage)
 
   useEffect(() => {
     if (!isTauriRuntime() || getCurrentWindowLabel() !== 'main') return
@@ -144,7 +150,7 @@ function MainApp() {
       })
 
       // Load areas from localStorage
-      void useAppStore.getState().loadAreas()
+      void useUiStore.getState().loadAreas()
 
       setLoading(false)
       return
@@ -162,7 +168,7 @@ function MainApp() {
         })
 
         // 初始化 allAreas
-        return useAppStore.getState().loadAreas()
+        return useUiStore.getState().loadAreas()
       })
       .catch((error) => {
         hydrateApp({

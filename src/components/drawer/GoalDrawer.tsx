@@ -122,6 +122,9 @@ export function GoalDrawer() {
                   <span>进度</span>
                   <span>{goal.progress}%</span>
                 </div>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200/70">
+                  <div className="h-2 rounded-full bg-indigo-500 transition-all" style={{ width: `${goal.progress}%` }} />
+                </div>
                 <textarea
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
