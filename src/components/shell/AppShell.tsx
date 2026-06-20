@@ -13,13 +13,13 @@ import { ReminderDrawer } from '../drawer/ReminderDrawer'
 import { CalendarEventDrawer } from '../drawer/CalendarEventDrawer'
 import { SystemReminderDrawer } from '../drawer/SystemReminderDrawer'
 import { QuickCaptureModal } from '../modal/QuickCaptureModal'
-import { isTauriRuntime } from '../../lib/desktopApi'
-import { useAppStore } from '../../store/appStore'
+import { isTauriRuntime } from '../../lib/runtime'
+import { useUiStore } from '../../store/uiStore'
 
 export function AppShell() {
-  const currentView = useAppStore((state) => state.currentView)
-  const statusMessage = useAppStore((state) => state.statusMessage)
-  const isLoading = useAppStore((state) => state.isLoading)
+  const currentView = useUiStore((state) => state.currentView)
+  const statusMessage = useUiStore((state) => state.statusMessage)
+  const isLoading = useUiStore((state) => state.isLoading)
 
   return (
     <main className="mesh-bg relative flex h-screen overflow-hidden select-none text-slate-800">

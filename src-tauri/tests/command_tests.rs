@@ -1,137 +1,107 @@
 use goal_desk_tauri::domain::GoalStatus;
-use goal_desk_tauri::{
-    create_goal_record, create_task_for_goal_record, goal_snapshot_data, today_snapshot_data,
-    update_goal_record, update_goal_status_record,
-};
+use goal_desk_tauri::repository::{SqliteRepository, TaskRepository};
+use goal_desk_tauri::service::{GoalService, TaskService};
 use uuid::Uuid;
+
+fn temp_repo(prefix: &str) -> SqliteRepository {
+    let path = std::env::temp_dir().join(format!("{prefix}-{}.sqlite", Uuid::new_v4()));
+    SqliteRepository::new(path)
+}
 
 #[test]
 fn today_snapshot_exposes_the_timeline_command_contract() {
-    let path = std::env::temp_dir().join(format!("goal-desk-command-test-{}.sqlite", Uuid::new_v4()));
-    let snapshot = today_snapshot_data(&path).unwrap();
-
-    assert!(snapshot.is_empty());
-
-    let _ = std::fs::remove_file(path);
+    let repo = temp_repo("cmd-today");
+    let service = GoalService::new(repo);
+    let summaries = service.goal_summaries().unwrap();
+    assert!(summaries.is_empty());
 }
 
 #[test]
 fn goal_snapshot_exposes_progress_cards_from_rust() {
-    let path = std::env::temp_dir().join(format!("goal-desk-command-test-{}.sqlite", Uuid::new_v4()));
-    let snapshot = goal_snapshot_data(&path).unwrap();
-
-    assert!(snapshot.is_empty());
-
-    let _ = std::fs::remove_file(path);
+    let repo = temp_repo("cmd-goal");
+    let service = GoalService::new(repo);
+    let summaries = service.goal_summaries().unwrap();
+    assert!(summaries.is_empty());
 }
 
 #[test]
 fn create_goal_command_persists_goal_for_future_snapshot_loads() {
-    let path = std::env::temp_dir().join(format!("goal-desk-command-test-{}.sqlite", Uuid::new_v4()));
+    let repo = temp_repo("cmd-create");
+    let service = GoalService::new(repo);
 
-    let _created = create_goal_record(
-        &path,
-        "Release Beta Version".to_string(),
-        "Product".to_string(),
-        "Complete content, acceptance, and release checklist for Beta.".to_string(),
-        GoalStatus::Active,
-    )
-    .unwrap();
+    let _created = service
+        .create_goal("Release Beta Version", "Product", "Complete content, acceptance, and release checklist for Beta.")
+        .unwrap();
 
-    let snapshot = goal_snapshot_data(&path).unwrap();
-
-    assert!(snapshot.iter().any(|goal| goal.title == "Release Beta Version" && goal.area == "Product"));
-
-    let _ = std::fs::remove_file(path);
+    let summaries = service.goal_summaries().unwrap();
+    assert!(summaries.iter().any(|g| g.title == "Release Beta Version" && g.area == "Product"));
 }
 
 #[test]
 fn update_goal_command_persists_edited_fields_for_future_snapshot_loads() {
-    let path = std::env::temp_dir().join(format!("goal-desk-command-test-{}.sqlite", Uuid::new_v4()));
+    let repo = temp_repo("cmd-update");
+    let service = GoalService::new(repo);
 
-    let created = create_goal_record(
-        &path,
-        "Release Beta Version".to_string(),
-        "Product".to_string(),
-        "Complete content, acceptance, and release checklist for Beta.".to_string(),
-        GoalStatus::Active,
-    )
-    .unwrap();
+    let created = service
+        .create_goal("Release Beta Version", "Product", "Complete content, acceptance, and release checklist for Beta.")
+        .unwrap();
 
-    let updated = update_goal_record(
-        &path,
-        created.id.to_string(),
-        "Release GA Version".to_string(),
-        "Commercialization".to_string(),
-        "Complete pricing, migration guide, and announcement schedule for GA release.".to_string(),
-        GoalStatus::Paused,
-    )
-    .unwrap();
+    let updated = service
+        .update_goal_fields(
+            &created.id.to_string(),
+            "Release GA Version",
+            "Commercialization",
+            "Complete pricing, migration guide, and announcement schedule for GA release.",
+        )
+        .unwrap();
 
-    let snapshot = goal_snapshot_data(&path).unwrap();
+    let summaries = service.goal_summaries().unwrap();
 
     assert_eq!(updated.title, "Release GA Version");
     assert_eq!(updated.description, "Complete pricing, migration guide, and announcement schedule for GA release.");
-    assert_eq!(updated.status, GoalStatus::Paused);
-    assert!(snapshot.iter().any(|goal| goal.title == "Release GA Version" && goal.area == "Commercialization"));
-
-    let _ = std::fs::remove_file(path);
+    assert!(summaries.iter().any(|g| g.title == "Release GA Version" && g.area == "Commercialization"));
 }
 
 #[test]
 fn update_goal_status_command_persists_status_for_future_snapshot_loads() {
-    let path = std::env::temp_dir().join(format!("goal-desk-command-test-{}.sqlite", Uuid::new_v4()));
+    let repo = temp_repo("cmd-status");
+    let service = GoalService::new(repo);
 
-    let created = create_goal_record(
-        &path,
-        "Finalize workspace".to_string(),
-        "Independent Development".to_string(),
-        "Connect state machine, goal drawer, and data persistence.".to_string(),
-        GoalStatus::Active,
-    )
-    .unwrap();
+    let created = service
+        .create_goal("Finalize workspace", "Independent Development", "Connect state machine, goal drawer, and data persistence.")
+        .unwrap();
 
-    let updated = update_goal_status_record(&path, created.id.to_string(), GoalStatus::Completed).unwrap();
-    let reloaded = goal_snapshot_data(&path).unwrap();
+    let updated = service
+        .update_goal_status(&created.id.to_string(), GoalStatus::Completed)
+        .unwrap();
+    let summaries = service.goal_summaries().unwrap();
 
     assert_eq!(updated.status, GoalStatus::Completed);
-    assert!(reloaded.iter().any(|goal| goal.title == "Finalize workspace" && goal.status == GoalStatus::Completed));
-
-    let _ = std::fs::remove_file(path);
+    assert!(summaries.iter().any(|g| g.title == "Finalize workspace" && g.status == GoalStatus::Completed));
 }
 
 #[test]
 fn create_task_for_goal_persists_goal_linkage() {
-    let path = std::env::temp_dir().join(format!("goal-desk-command-test-{}.sqlite", Uuid::new_v4()));
+    let repo = temp_repo("cmd-task-link");
+    let goal_service = GoalService::new(repo.clone());
+    let task_service = TaskService::new(repo.clone());
 
-    let goal = create_goal_record(
-        &path,
-        "Ship goal-linked tasks".to_string(),
-        "Product".to_string(),
-        "Tasks created from a goal drawer must remain linked after persistence.".to_string(),
-        GoalStatus::Active,
-    )
-    .unwrap();
+    let goal = goal_service
+        .create_goal("Ship goal-linked tasks", "Product", "Tasks created from a goal drawer must remain linked after persistence.")
+        .unwrap();
 
-    let task = create_task_for_goal_record(
-        &path,
-        goal.id.to_string(),
-        "Write linked task persistence test".to_string(),
-    )
-    .unwrap();
+    let task = task_service
+        .create_task_for_goal(&goal.id.to_string(), "Write linked task persistence test")
+        .unwrap();
 
     assert_eq!(task.title, "Write linked task persistence test");
     assert_eq!(task.linked_goal_id, Some(goal.id));
     assert_eq!(task.linked_goal_label.as_deref(), Some("Ship goal-linked tasks"));
 
-    let reloaded_tasks = goal_desk_tauri::repository::SqliteRepository::new(path.clone())
-        .load_desk_tasks()
-        .unwrap();
-    assert!(reloaded_tasks.iter().any(|saved| {
+    let tasks = TaskRepository::list(&repo).unwrap();
+    assert!(tasks.iter().any(|saved| {
         saved.id == task.id
             && saved.linked_goal_id == Some(goal.id)
             && saved.linked_goal_label.as_deref() == Some("Ship goal-linked tasks")
     }));
-
-    let _ = std::fs::remove_file(path);
 }

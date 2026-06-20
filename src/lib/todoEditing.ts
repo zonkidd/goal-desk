@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AreaWithStats, GoalCard } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
+import { getTaskStatusActions } from './taskPresentation'
 
 export interface TodoEditingDraft {
   title: string
@@ -96,7 +97,7 @@ interface CreateTodoEditingSessionInput {
   createGoal: (
     input: { title: string; area?: string; description?: string },
     options?: { openGoalWorkspace?: boolean },
-  ) => Promise<string | undefined>
+  ) => Promise<{ goal?: import('../types/app').GoalCard; openGoalWorkspace: boolean }>
 }
 
 export function createTodoEditingSession(input: CreateTodoEditingSessionInput): TodoEditingSession {
@@ -172,14 +173,16 @@ export function createTodoEditingSession(input: CreateTodoEditingSessionInput): 
         return nextDraft
       },
       createAndLinkGoal: async (nextDraft = baseDraft) => {
-        const goalId = await input.createGoal(
+        const result = await input.createGoal(
           { title: nextDraft.newGoalTitle, area: nextDraft.newGoalArea },
           { openGoalWorkspace: false },
         )
 
-        if (!goalId) {
+        if (!result?.goal) {
           return { goalId: undefined, draft: nextDraft }
         }
+
+        const goalId = result.goal.id
 
         const linkedDraft = updateDraft(
           {
@@ -391,19 +394,4 @@ function toDatetimeLocal(date: Date) {
   const offset = date.getTimezoneOffset()
   const local = new Date(date.getTime() - offset * 60 * 1000)
   return local.toISOString().slice(0, 16)
-}
-
-function getTaskStatusActions(status: TaskStatus): TaskStatus[] {
-  switch (status) {
-    case 'TODO':
-      return ['IN_PROGRESS', 'DONE']
-    case 'IN_PROGRESS':
-      return ['PAUSED', 'DONE']
-    case 'PAUSED':
-      return ['IN_PROGRESS', 'DONE']
-    case 'DONE':
-      return []
-    default:
-      return []
-  }
 }

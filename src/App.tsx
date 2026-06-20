@@ -3,10 +3,12 @@ import { useEffect } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { AppShell } from './components/shell/AppShell'
 import { QuickCaptureWindow } from './components/modal/QuickCaptureWindow'
-import { getCurrentWindowLabel, isTauriRuntime, loadDesktopSnapshot } from './lib/desktopApi'
+import { getCurrentWindowLabel, isTauriRuntime } from './lib/runtime'
+import { loadDesktopSnapshot } from './lib/desktopSnapshot'
 import { getRuntimeModeStatusMessage } from './lib/taskPresentation'
 import { useUiStore } from './store/uiStore'
-import { useStoreMessageBridge, useDerivedStateSync, useAppHydration, useReceiveExternalTask } from './hooks/useStoreComposition'
+import { useAreaStore } from './store/areaStore'
+import { useDerivedStateSync, useAppHydration, useReceiveExternalTask } from './hooks/useStoreComposition'
 import type { Task } from './types/task'
 import type { GoalCard } from './types/app'
 import type { AreaWithStats } from './types/app'
@@ -49,8 +51,7 @@ function loadBrowserData() {
 }
 
 function MainApp() {
-  // 初始化多 store 架构的桥接和同步
-  useStoreMessageBridge()
+  // 初始化多 store 架构的同步
   useDerivedStateSync()
 
   // 使用新架构的 hooks
@@ -150,7 +151,7 @@ function MainApp() {
       })
 
       // Load areas from localStorage
-      void useUiStore.getState().loadAreas()
+      void useAreaStore.getState().loadAreas()
 
       setLoading(false)
       return
@@ -168,7 +169,7 @@ function MainApp() {
         })
 
         // 初始化 allAreas
-        return useUiStore.getState().loadAreas()
+        return useAreaStore.getState().loadAreas()
       })
       .catch((error) => {
         hydrateApp({

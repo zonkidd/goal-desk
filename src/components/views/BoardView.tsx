@@ -1,7 +1,9 @@
 import { motion } from 'framer-motion'
 import { GlassCard } from '../common/GlassCard'
 import { GlassPanel } from '../common/GlassPanel'
-import { useAppStore } from '../../store/appStore'
+import { useUiStore } from '../../store/uiStore'
+import { useTaskStore } from '../../store/taskStore'
+import { useGoalStore } from '../../store/goalStore'
 import type { TaskStatus } from '../../types/task'
 
 const columns: Array<{ title: string; statuses: TaskStatus[]; bg: string }> = [
@@ -11,10 +13,10 @@ const columns: Array<{ title: string; statuses: TaskStatus[]; bg: string }> = [
 ]
 
 export function BoardView() {
-  const tasks = useAppStore((state) => state.tasks)
-  const goals = useAppStore((state) => state.baseGoals)
-  const activeArea = useAppStore((state) => state.activeArea)
-  const openTaskDrawer = useAppStore((state) => state.openTaskDrawer)
+  const tasks = useTaskStore((state) => state.tasks)
+  const goals = useGoalStore((state) => state.baseGoals)
+  const activeArea = useUiStore((state) => state.activeArea)
+  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
   const visibleTasks =
     activeArea === 'ALL' ? tasks : tasks.filter((task) => task.linkedGoalId && goals.some((goal) => goal.id === task.linkedGoalId && goal.area === activeArea))
 
@@ -27,7 +29,7 @@ export function BoardView() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-3 items-start gap-5">
         {columns.map((column) => (
           <GlassPanel key={column.title} className={`rounded-3xl p-4 ${column.bg}`}>
             <h2 className="mb-4 text-sm font-black text-slate-700">{column.title}</h2>

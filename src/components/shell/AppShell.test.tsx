@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { AppShell } from './AppShell'
-import { useAppStore } from '../../store/appStore'
+import { useUiStore } from '../../store/uiStore'
 
 // Mock all child components
 vi.mock('./Sidebar', () => ({
@@ -64,23 +64,13 @@ vi.mock('../modal/QuickCaptureModal', () => ({
   QuickCaptureModal: () => <div>QuickCaptureModal</div>,
 }))
 
-vi.mock('../../lib/desktopApi', () => ({
+vi.mock('../../lib/runtime', () => ({
   isTauriRuntime: () => false,
 }))
 
-// Mock Zustand store
-vi.mock('../../store/appStore', () => ({
-  useAppStore: Object.assign(
-    vi.fn(),
-    {
-      getState: vi.fn(() => ({
-        selectedCalendarEventId: null,
-        selectedReminderId: null,
-        closeCalendarEventDrawer: vi.fn(),
-        closeReminderDrawer: vi.fn(),
-      })),
-    }
-  ),
+// Mock Zustand stores
+vi.mock('../../store/uiStore', () => ({
+  useUiStore: vi.fn(),
 }))
 
 describe('AppShell', () => {
@@ -89,15 +79,11 @@ describe('AppShell', () => {
   })
 
   it('当 currentView 是 "calendar" 时应该渲染 CalendarView', () => {
-    vi.mocked(useAppStore).mockImplementation((selector: any) => {
+    vi.mocked(useUiStore).mockImplementation((selector: any) => {
       const state = {
         currentView: 'calendar',
         statusMessage: 'Test',
         isLoading: false,
-        selectedCalendarEventId: null,
-        selectedReminderId: null,
-        closeCalendarEventDrawer: vi.fn(),
-        closeReminderDrawer: vi.fn(),
       }
       return selector(state)
     })
@@ -107,15 +93,11 @@ describe('AppShell', () => {
   })
 
   it('当 currentView 是 "reminders" 时应该渲染 RemindersView', () => {
-    vi.mocked(useAppStore).mockImplementation((selector: any) => {
+    vi.mocked(useUiStore).mockImplementation((selector: any) => {
       const state = {
         currentView: 'reminders',
         statusMessage: 'Test',
         isLoading: false,
-        selectedCalendarEventId: null,
-        selectedReminderId: null,
-        closeCalendarEventDrawer: vi.fn(),
-        closeReminderDrawer: vi.fn(),
       }
       return selector(state)
     })

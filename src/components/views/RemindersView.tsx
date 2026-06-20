@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { LayoutGrid, Clock, ChevronDown } from 'lucide-react'
 import { GlassCard } from '../common/GlassCard'
 import { GlassPanel } from '../common/GlassPanel'
-import { useAppStore, useToggleSystemReminder } from '../../store/appStore'
+import { useUiStore } from '../../store/uiStore'
+import { useEventkitStore } from '../../store/eventkitStore'
+import { useToggleSystemReminder } from '../../store/appStore'
 import { groupRemindersByList, groupRemindersByTime } from '../../lib/reminderUtils'
 import type { ReminderItem } from '../../types/app'
 
@@ -32,9 +34,9 @@ export function RemindersView() {
   const [hideCompleted, setHideCompleted] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['overdue', 'today']))
 
-  const systemReminders = useAppStore((state) => state.systemReminders)
+  const systemReminders = useEventkitStore((state) => state.systemReminders)
   const toggleSystemReminderDone = useToggleSystemReminder()
-  const openReminderDrawer = useAppStore((state) => state.openReminderDrawer)
+  const openReminderDrawer = useUiStore((state) => state.openReminderDrawer)
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroups((prev) => {

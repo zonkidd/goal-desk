@@ -3,7 +3,11 @@ import { Pause, Play, CheckCircle2, Archive, Plus, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { GlassCard } from '../common/GlassCard'
 import { AreaSelectWithCreate } from '../shared/AreaSelectWithCreate'
-import { useAppStore, useSelectedGoal } from '../../store/appStore'
+import { useSelectedGoal } from '../../store/appStore'
+import { useGoalStore } from '../../store/goalStore'
+import { useTaskStore } from '../../store/taskStore'
+import { useAreaStore } from '../../store/areaStore'
+import { useUiStore } from '../../store/uiStore'
 import type { GoalStatus } from '../../types/app'
 
 const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
@@ -17,14 +21,16 @@ const statusActions: Array<{ status: GoalStatus; label: string; icon: typeof Pla
 
 export function GoalDrawer() {
   const goal = useSelectedGoal()
-  const isOpen = useAppStore((state) => state.isGoalDrawerOpen)
-  const closeGoalDrawer = useAppStore((state) => state.closeGoalDrawer)
-  const updateGoalFields = useAppStore((state) => state.updateGoalFields)
-  const updateGoalStatus = useAppStore((state) => state.updateGoalStatus)
-  const createTaskForGoal = useAppStore((state) => state.createTaskForGoal)
-  const allAreas = useAppStore((state) => state.allAreas)
-  const createArea = useAppStore((state) => state.createArea)
-  const tasks = useAppStore((state) => state.tasks)
+  const isOpen = useUiStore((state) => state.isGoalDrawerOpen)
+  const closeGoalDrawer = useUiStore((state) => state.closeGoalDrawer)
+  const updateGoalFields = useGoalStore((state) => state.updateGoalFields)
+  const updateGoalStatus = useGoalStore((state) => state.updateGoalStatus)
+  const createTaskForGoal = useTaskStore((state) => state.createTaskForGoal)
+  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
+  const closeGoalDrawerForTask = useUiStore((state) => state.closeGoalDrawer)
+  const allAreas = useAreaStore((state) => state.allAreas)
+  const createArea = useAreaStore((state) => state.createArea)
+  const tasks = useTaskStore((state) => state.tasks)
   const [title, setTitle] = useState('')
   const [area, setArea] = useState('')
   const [description, setDescription] = useState('')
@@ -145,8 +151,12 @@ export function GoalDrawer() {
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      void createTaskForGoal(goal.id, taskTitle)
+                    onClick={async () => {
+                      const task = await createTaskForGoal(goal, taskTitle)
+                      if (task) {
+                        openTaskDrawer(task.id)
+                        closeGoalDrawerForTask()
+                      }
                       setTaskTitle('')
                     }}
                     className="flex items-center gap-2 rounded-2xl bg-slate-900 px-4 text-sm font-bold text-white"

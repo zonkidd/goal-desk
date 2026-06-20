@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react'
-import { useAppStore } from '../../store/appStore'
+import { useUiStore } from '../../store/uiStore'
 
 const titles = {
   inbox: 'Inbox',
@@ -12,8 +12,8 @@ const titles = {
 }
 
 export function TopBar() {
-  const currentView = useAppStore((state) => state.currentView)
-  const openQuickCapture = useAppStore((state) => state.openQuickCapture)
+  const currentView = useUiStore((state) => state.currentView)
+  const openQuickCapture = useUiStore((state) => state.openQuickCapture)
 
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-white/40 bg-white/30 px-10 backdrop-blur-md">

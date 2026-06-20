@@ -60,6 +60,16 @@ function createHarness({ task = buildTask(), goals = [buildGoal()] } = {}) {
   return { session, calls }
 }
 
+test('todo editing session exposes start and complete actions', () => {
+  const { session } = createHarness({
+    task: buildTask({ status: 'TODO' }),
+    goals: [],
+  })
+
+  assert.equal(session.capabilities.canChangeStatus, true)
+  assert.deepEqual(session.capabilities.statusActions, ['IN_PROGRESS', 'DONE'])
+})
+
 test('in-progress todo editing session only exposes pause and complete actions', () => {
   const { session } = createHarness({
     task: buildTask({ status: 'IN_PROGRESS' }),
@@ -68,6 +78,16 @@ test('in-progress todo editing session only exposes pause and complete actions',
 
   assert.equal(session.capabilities.canChangeStatus, true)
   assert.deepEqual(session.capabilities.statusActions, ['PAUSED', 'DONE'])
+})
+
+test('paused todo editing session exposes resume and complete actions', () => {
+  const { session } = createHarness({
+    task: buildTask({ status: 'PAUSED' }),
+    goals: [],
+  })
+
+  assert.equal(session.capabilities.canChangeStatus, true)
+  assert.deepEqual(session.capabilities.statusActions, ['IN_PROGRESS', 'DONE'])
 })
 
 test('done todo editing session exposes no status actions', () => {

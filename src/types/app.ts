@@ -3,6 +3,7 @@ export interface TimelineItem {
   title: string
   timeLabel: string
   startsAt?: Date // 完整的开始时间，用于日期分组和排序
+  occurrenceDate?: Date // 该次出现对应的日期（多日任务展开时使用）
   source: 'todo' | 'reminder' | 'calendar'
   readonly: boolean
   done: boolean

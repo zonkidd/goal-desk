@@ -2,12 +2,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RemindersView } from './RemindersView'
-import { useAppStore } from '../../store/appStore'
+import { useUiStore } from '../../store/uiStore'
+import { useEventkitStore } from '../../store/eventkitStore'
 
-// Mock dependencies
 const mockToggleSystemReminder = vi.fn()
+vi.mock('../../store/uiStore', () => ({
+  useUiStore: vi.fn()
+}))
+vi.mock('../../store/taskStore', () => ({
+  useTaskStore: vi.fn()
+}))
+vi.mock('../../store/goalStore', () => ({
+  useGoalStore: vi.fn()
+}))
+vi.mock('../../store/eventkitStore', () => ({
+  useEventkitStore: vi.fn()
+}))
 vi.mock('../../store/appStore', () => ({
-  useAppStore: vi.fn(),
   useToggleSystemReminder: () => mockToggleSystemReminder
 }))
 
@@ -32,13 +43,17 @@ describe('RemindersView', () => {
   ]
 
   beforeEach(() => {
-    // 设置基础 Mock - 使用统一的测试数据
-    (useAppStore as any).mockImplementation((selector) => {
+    ;(useUiStore as any).mockImplementation((selector: any) => {
+      const mockState = {
+        currentView: 'reminders',
+        openReminderDrawer: vi.fn(),
+      }
+      return selector(mockState)
+    })
+    ;(useEventkitStore as any).mockImplementation((selector: any) => {
       const mockState = {
         systemReminders: mockReminderData,
-        currentView: 'reminders',
         toggleSystemReminderDone: vi.fn(),
-        openReminderDrawer: vi.fn(),
       }
       return selector(mockState)
     })
@@ -426,14 +441,11 @@ describe('RemindersView', () => {
         { id: '5', title: '提醒5', done: false, listTitle: '个人' },
       ]
 
-      ;(useAppStore as any).mockImplementation((selector) => {
-        const mockState = {
-          systemReminders: mockReminders,
-          currentView: 'reminders',
-          toggleSystemReminderDone: vi.fn(),
-          openReminderDrawer: vi.fn(),
-        }
-        return selector(mockState)
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
       })
 
       render(<RemindersView />)
@@ -456,14 +468,11 @@ describe('RemindersView', () => {
         { id: '4', title: '个人事项2', done: false, listTitle: '个人' },
       ]
 
-      ;(useAppStore as any).mockImplementation((selector) => {
-        const mockState = {
-          systemReminders: mockReminders,
-          currentView: 'reminders',
-          toggleSystemReminderDone: vi.fn(),
-          openReminderDrawer: vi.fn(),
-        }
-        return selector(mockState)
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
       })
 
       render(<RemindersView />)
@@ -492,14 +501,11 @@ describe('RemindersView', () => {
         { id: '4', title: '未来7天提醒', dueAt: new Date(now.getTime() + 3 * 86400000), done: false, listTitle: '个人' },
       ]
 
-      ;(useAppStore as any).mockImplementation((selector) => {
-        const mockState = {
-          systemReminders: mockReminders,
-          currentView: 'reminders',
-          toggleSystemReminderDone: vi.fn(),
-          openReminderDrawer: vi.fn(),
-        }
-        return selector(mockState)
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
       })
 
       render(<RemindersView />)
@@ -527,14 +533,11 @@ describe('RemindersView', () => {
         { id: 'r1', title: '未完成提醒', done: false, listTitle: '工作' },
       ]
 
-      ;(useAppStore as any).mockImplementation((selector) => {
-        const mockState = {
-          systemReminders: mockReminders,
-          currentView: 'reminders',
-          toggleSystemReminderDone: vi.fn(),
-          openReminderDrawer: vi.fn(),
-        }
-        return selector(mockState)
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
       })
 
       render(<RemindersView />)
@@ -555,14 +558,11 @@ describe('RemindersView', () => {
         { id: 'r2', title: '已完成提醒', done: true, listTitle: '工作' },
       ]
 
-      ;(useAppStore as any).mockImplementation((selector) => {
-        const mockState = {
-          systemReminders: mockReminders,
-          currentView: 'reminders',
-          toggleSystemReminderDone: vi.fn(),
-          openReminderDrawer: vi.fn(),
-        }
-        return selector(mockState)
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
       })
 
       render(<RemindersView />)
@@ -586,14 +586,11 @@ describe('RemindersView', () => {
         { id: 'r2', title: '未完成提醒', done: false, listTitle: '工作' },
       ]
 
-      ;(useAppStore as any).mockImplementation((selector) => {
-        const mockState = {
-          systemReminders: mockReminders,
-          currentView: 'reminders',
-          toggleSystemReminderDone: vi.fn(),
-          openReminderDrawer: vi.fn(),
-        }
-        return selector(mockState)
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
       })
 
       render(<RemindersView />)
@@ -622,14 +619,11 @@ describe('RemindersView', () => {
         { id: 'r2', title: '未完成提醒', done: false, listTitle: '工作' },
       ]
 
-      ;(useAppStore as any).mockImplementation((selector) => {
-        const mockState = {
-          systemReminders: mockReminders,
-          currentView: 'reminders',
-          toggleSystemReminderDone: vi.fn(),
-          openReminderDrawer: vi.fn(),
-        }
-        return selector(mockState)
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
       })
 
       render(<RemindersView />)
@@ -840,16 +834,16 @@ describe('RemindersView', () => {
     it('should open drawer when clicking reminder item in list view', async () => {
       const mockOpenReminderDrawer = vi.fn()
 
-      ;(useAppStore as any).mockImplementation((selector) => {
-        const mockState = {
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openReminderDrawer: mockOpenReminderDrawer })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({
           systemReminders: [
             { id: '1', title: '完成Q2绩效自评', done: false, listTitle: '工作' },
           ],
-          currentView: 'reminders',
           toggleSystemReminderDone: vi.fn(),
-          openReminderDrawer: mockOpenReminderDrawer,
-        }
-        return selector(mockState)
+        })
       })
 
       render(<RemindersView />)
@@ -868,16 +862,16 @@ describe('RemindersView', () => {
     it('should open drawer when clicking reminder item in time view', async () => {
       const mockOpenReminderDrawer = vi.fn()
 
-      ;(useAppStore as any).mockImplementation((selector) => {
-        const mockState = {
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openReminderDrawer: mockOpenReminderDrawer })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({
           systemReminders: [
             { id: '2', title: '今天的提醒', done: false, dueAt: new Date() },
           ],
-          currentView: 'reminders',
           toggleSystemReminderDone: vi.fn(),
-          openReminderDrawer: mockOpenReminderDrawer,
-        }
-        return selector(mockState)
+        })
       })
 
       render(<RemindersView />)
@@ -907,16 +901,16 @@ describe('RemindersView', () => {
     })
 
     it('should make reminder title clickable', () => {
-      ;(useAppStore as any).mockImplementation((selector) => {
-        const mockState = {
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({
           systemReminders: [
             { id: '1', title: '完成Q2绩效自评', done: false, listTitle: '工作' },
           ],
-          currentView: 'reminders',
           toggleSystemReminderDone: vi.fn(),
-          openReminderDrawer: vi.fn(),
-        }
-        return selector(mockState)
+        })
       })
 
       render(<RemindersView />)
@@ -933,16 +927,16 @@ describe('RemindersView', () => {
     it('should not open drawer when clicking checkbox', async () => {
       const mockOpenReminderDrawer = vi.fn()
 
-      ;(useAppStore as any).mockImplementation((selector) => {
-        const mockState = {
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openReminderDrawer: mockOpenReminderDrawer })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({
           systemReminders: [
             { id: '1', title: '完成Q2绩效自评', done: false, listTitle: '工作' },
           ],
-          currentView: 'reminders',
           toggleSystemReminderDone: vi.fn(),
-          openReminderDrawer: mockOpenReminderDrawer,
-        }
-        return selector(mockState)
+        })
       })
 
       render(<RemindersView />)

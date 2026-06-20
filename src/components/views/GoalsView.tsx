@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { GlassCard } from '../common/GlassCard'
 import { GlassPanel } from '../common/GlassPanel'
 import { AreaSelectWithCreate } from '../shared/AreaSelectWithCreate'
-import { useAppStore, selectFilteredGoals } from '../../store/appStore'
+import { useAreaStore } from '../../store/areaStore'
+import { useUiStore } from '../../store/uiStore'
+import { useGoalStore } from '../../store/goalStore'
 import type { GoalCard, GoalStatus } from '../../types/app'
 
 const goalStatuses: GoalStatus[] = ['ACTIVE', 'PAUSED', 'READY_TO_COMPLETE', 'COMPLETED', 'ARCHIVED']
@@ -16,13 +18,14 @@ const statusColumns: Array<{ title: string; statuses: GoalStatus[]; bg: string; 
 ]
 
 export function GoalsView() {
-  const goals = useAppStore(selectFilteredGoals)
-  const allAreas = useAppStore((state) => state.allAreas)
-  const activeArea = useAppStore((state) => state.activeArea)
-  const setActiveArea = useAppStore((state) => state.setActiveArea)
-  const createGoal = useAppStore((state) => state.createGoal)
-  const createArea = useAppStore((state) => state.createArea)
-  const openGoalDrawer = useAppStore((state) => state.openGoalDrawer)
+  const baseGoals = useGoalStore((state) => state.baseGoals)
+  const activeArea = useUiStore((state) => state.activeArea)
+  const goals = activeArea === 'ALL' ? baseGoals : baseGoals.filter(goal => goal.area === activeArea)
+  const allAreas = useAreaStore((state) => state.allAreas)
+  const setActiveArea = useUiStore((state) => state.setActiveArea)
+  const createGoal = useGoalStore((state) => state.createGoal)
+  const createArea = useAreaStore((state) => state.createArea)
+  const openGoalDrawer = useUiStore((state) => state.openGoalDrawer)
   const [title, setTitle] = useState('')
   const [area, setArea] = useState('')
   const [description, setDescription] = useState('')
@@ -46,11 +49,15 @@ export function GoalsView() {
   }, [activeArea])
 
   const handleCreateGoal = () => {
-    void createGoal({ title, area, description }).then((goalId) => {
-      if (!goalId) return
+    void createGoal({ title, area, description }).then((result) => {
+      if (!result?.goal) return
       setTitle('')
       setArea(activeArea === 'ALL' ? '' : activeArea)
       setDescription('')
+      if (result.openGoalWorkspace) {
+        openGoalDrawer(result.goal.id)
+      }
+      void useAreaStore.getState().loadAreas()
     })
   }
 
@@ -153,7 +160,7 @@ export function GoalsView() {
           {isAreaBoard ? (
             <AreaGoalBoard goals={visibleGoals} onOpenGoal={openGoalDrawer} />
           ) : (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 items-start gap-4">
               {visibleGoals.map((goal) => (
                 <GoalTile key={goal.id} goal={goal} onOpenGoal={openGoalDrawer} />
               ))}
@@ -179,7 +186,7 @@ export function GoalsView() {
 
 function AreaGoalBoard({ goals, onOpenGoal }: { goals: GoalCard[]; onOpenGoal: (goalId: string) => void }) {
   return (
-    <div className="grid grid-cols-3 gap-5">
+    <div className="grid grid-cols-3 items-start gap-5">
       {statusColumns.map((column) => {
         const columnGoals = goals.filter((goal) => column.statuses.includes(goal.status))
         return (

@@ -1,7 +1,11 @@
 import { Calendar, CheckSquare, Inbox, KanbanSquare, Link, PauseCircle, Plus, Sun, Target, Workflow } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '../../lib/cn'
-import { useAppStore } from '../../store/appStore'
+import { useGoalStore } from '../../store/goalStore'
+import { useTaskStore } from '../../store/taskStore'
+import { useAreaStore } from '../../store/areaStore'
+import { useUiStore } from '../../store/uiStore'
+import { useEventkitStore } from '../../store/eventkitStore'
 import type { ViewKey } from '../../types/app'
 
 const navItems: Array<{ key: ViewKey; label: string; icon: typeof Inbox }> = [
@@ -14,22 +18,23 @@ const navItems: Array<{ key: ViewKey; label: string; icon: typeof Inbox }> = [
 ]
 
 export function Sidebar() {
-  const currentView = useAppStore((state) => state.currentView)
-  const activeArea = useAppStore((state) => state.activeArea)
-  const allAreas = useAppStore((state) => state.allAreas)
-  const setView = useAppStore((state) => state.setView)
-  const setActiveArea = useAppStore((state) => state.setActiveArea)
-  const openQuickCapture = useAppStore((state) => state.openQuickCapture)
-  const goals = useAppStore((state) => state.baseGoals)
-  const inboxCount = useAppStore((state) => state.tasks.filter((task) => task.status === 'TODO' || task.status === 'IN_PROGRESS').length)
-  const pausedCount = useAppStore((state) => state.tasks.filter((task) => task.status === 'PAUSED').length)
+  const currentView = useUiStore((state) => state.currentView)
+  const activeArea = useUiStore((state) => state.activeArea)
+  const allAreas = useAreaStore((state) => state.allAreas)
+  const setView = useUiStore((state) => state.setView)
+  const setActiveArea = useUiStore((state) => state.setActiveArea)
+  const openQuickCapture = useUiStore((state) => state.openQuickCapture)
+  const goals = useGoalStore((state) => state.baseGoals)
+  const tasks = useTaskStore((state) => state.tasks)
+  const inboxCount = tasks.filter((task) => task.status === 'TODO' || task.status === 'IN_PROGRESS').length
+  const pausedCount = tasks.filter((task) => task.status === 'PAUSED').length
   const areaSummary = allAreas.slice(0, 3)
 
   // EventKit 集成状态
-  const eventkitPermissions = useAppStore((state) => state.eventkitPermissions)
-  const eventkitData = useAppStore((state) => state.eventkitData)
-  const requestCalendarAccess = useAppStore((state) => state.requestCalendarAccess)
-  const requestRemindersAccess = useAppStore((state) => state.requestRemindersAccess)
+  const eventkitPermissions = useEventkitStore((state) => state.eventkitPermissions)
+  const eventkitData = useEventkitStore((state) => state.eventkitData)
+  const requestCalendarAccess = useEventkitStore((state) => state.requestCalendarAccess)
+  const requestRemindersAccess = useEventkitStore((state) => state.requestRemindersAccess)
 
   return (
     <aside className="glass-panel relative z-20 flex h-full w-[260px] shrink-0 flex-col justify-between border-r border-white/50">

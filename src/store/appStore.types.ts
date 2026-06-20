@@ -8,7 +8,7 @@
 import type { AreaFilter, AreaWithStats, GoalCard, GoalStatus, IntegrationStatus, ReminderItem, RawAgendaItem, ViewKey } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
 import type { InboxTaskGroups, TodayAttentionGroups, TodayRelevantGoal } from '../lib/workspaceDerivation'
-import type { AuthorizationStatus } from '../lib/desktopApi'
+import type { AuthorizationStatus } from '../lib/eventkitIntegration'
 
 export interface HydratePayload {
   tasks: Task[]
@@ -26,10 +26,11 @@ export interface AppStoreState {
   tasks: Task[]
   todayFocusTasks: Task[]
   todayAttentionGroups: TodayAttentionGroups
+  todayTimeline: RawAgendaItem[]
   todayRelevantGoals: TodayRelevantGoal[]
   inbox: InboxTaskGroups
   showCompletedTodos: boolean
-  baseTimeline: RawAgendaItem[]
+  rawTimeline: RawAgendaItem[]
   baseGoals: GoalCard[]
   systemReminders: ReminderItem[]
   integrationStatus: IntegrationStatus

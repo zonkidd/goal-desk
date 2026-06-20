@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'vitest'
-import { deriveGoalRecords, deriveTodayAttentionGroups, getTodayFocusTasks } from './workspaceDerivation'
+import { deriveGoalRecords, deriveTodayAttentionGroups, deriveTodayAgenda, filterAgendaByArea, getTodayFocusTasks } from './workspaceDerivation'
 import type { Task } from '../types/task'
 import type { GoalCard } from '../types/app'
 
@@ -320,5 +320,165 @@ describe('workspaceDerivation - 已推进天数计算', () => {
       : 0
 
     expect(daysPassed).toBe(0)
+  })
+})
+
+describe('workspaceDerivation - 多日任务展开', () => {
+  test('跨天任务应在每天生成独立的 timeline item，id 保持纯净，occurrenceDate 标记日期', () => {
+    const now = new Date('2026-06-03T10:00:00+08:00')
+    const tasks: Task[] = [
+      {
+        id: 't1',
+        title: '跨天任务',
+        status: 'IN_PROGRESS',
+        plannedStartAt: new Date('2026-06-01T09:00:00+08:00'),
+        dueDate: new Date('2026-06-05T18:00:00+08:00'),
+        content: '',
+        activityLogs: [],
+        showInTimeline: true,
+      },
+    ]
+
+    const agenda = deriveTodayAgenda([], tasks, now)
+    const todoItems = agenda.filter((item) => item.source === 'todo')
+
+    expect(todoItems).toHaveLength(5)
+
+    // id 保持纯净 — 不带 --day-N 后缀
+    for (const item of todoItems) {
+      expect(item.id).toBe('t1')
+    }
+
+    // occurrenceDate 标记每天的日期
+    const dayMs = 24 * 60 * 60 * 1000
+    const startDay = new Date('2026-06-01T00:00:00+08:00')
+    for (let i = 0; i < 5; i++) {
+      const expected = new Date(startDay.getTime() + i * dayMs)
+      const actual = todoItems[i].occurrenceDate as Date
+      expect(actual.getFullYear()).toBe(expected.getFullYear())
+      expect(actual.getMonth()).toBe(expected.getMonth())
+      expect(actual.getDate()).toBe(expected.getDate())
+    }
+
+    // startsAt 保留原始开始时间（用于排序）
+    for (const item of todoItems) {
+      expect((item.startsAt as Date).getTime()).toBe(new Date('2026-06-01T09:00:00+08:00').getTime())
+    }
+  })
+
+  test('单天任务（dueDate 等于 plannedStartAt）不展开', () => {
+    const now = new Date('2026-06-03T10:00:00+08:00')
+    const tasks: Task[] = [
+      {
+        id: 't1',
+        title: '单天任务',
+        status: 'IN_PROGRESS',
+        plannedStartAt: new Date('2026-06-03T09:00:00+08:00'),
+        dueDate: new Date('2026-06-03T18:00:00+08:00'),
+        content: '',
+        activityLogs: [],
+        showInTimeline: true,
+      },
+    ]
+
+    const agenda = deriveTodayAgenda([], tasks, now)
+    const todoItems = agenda.filter((item) => item.source === 'todo')
+
+    expect(todoItems).toHaveLength(1)
+    expect(todoItems[0].id).toBe('t1')
+  })
+
+  test('无 dueDate 的任务不展开', () => {
+    const now = new Date('2026-06-03T10:00:00+08:00')
+    const tasks: Task[] = [
+      {
+        id: 't1',
+        title: '无截止任务',
+        status: 'IN_PROGRESS',
+        plannedStartAt: new Date('2026-06-03T09:00:00+08:00'),
+        content: '',
+        activityLogs: [],
+        showInTimeline: true,
+      },
+    ]
+
+    const agenda = deriveTodayAgenda([], tasks, now)
+    const todoItems = agenda.filter((item) => item.source === 'todo')
+
+    expect(todoItems).toHaveLength(1)
+    expect(todoItems[0].id).toBe('t1')
+  })
+
+  test('showInTimeline=false 的跨天任务，起始日仍显示但中间天不显示', () => {
+    const now = new Date('2026-06-03T10:00:00+08:00')
+    const tasks: Task[] = [
+      {
+        id: 't1',
+        title: '不显示在时间轴',
+        status: 'IN_PROGRESS',
+        plannedStartAt: new Date('2026-06-01T09:00:00+08:00'),
+        dueDate: new Date('2026-06-05T18:00:00+08:00'),
+        content: '',
+        activityLogs: [],
+        showInTimeline: false,
+      },
+    ]
+
+    const agenda = deriveTodayAgenda([], tasks, now)
+    const todoItems = agenda.filter((item) => item.source === 'todo')
+
+    expect(todoItems).toHaveLength(0)
+  })
+})
+
+describe('workspaceDerivation - filterAgendaByArea 多日任务', () => {
+  test('跨天任务展开后，filterAgendaByArea 通过纯净 id 正确匹配', () => {
+    const now = new Date('2026-06-03T10:00:00+08:00')
+    const goals: GoalCard[] = [
+      { id: 'g1', title: '工作目标', area: '工作', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
+    ]
+    const tasks: Task[] = [
+      {
+        id: 't1',
+        title: '跨天任务',
+        status: 'IN_PROGRESS',
+        linkedGoalId: 'g1',
+        plannedStartAt: new Date('2026-06-01T09:00:00+08:00'),
+        dueDate: new Date('2026-06-05T18:00:00+08:00'),
+        content: '',
+        activityLogs: [],
+        showInTimeline: true,
+      },
+    ]
+
+    const agenda = deriveTodayAgenda([], tasks, now)
+    const visibleTasks = tasks.filter((t) => t.linkedGoalId === 'g1')
+    const filtered = filterAgendaByArea(agenda, visibleTasks)
+
+    // 5 天展开，全部匹配领域 g1
+    const todoItems = filtered.filter((item) => item.source === 'todo')
+    expect(todoItems).toHaveLength(5)
+  })
+
+  test('跨天任务不在可见列表中时，filterAgendaByArea 正确过滤', () => {
+    const now = new Date('2026-06-03T10:00:00+08:00')
+    const tasks: Task[] = [
+      {
+        id: 't1',
+        title: '跨天任务',
+        status: 'IN_PROGRESS',
+        plannedStartAt: new Date('2026-06-01T09:00:00+08:00'),
+        dueDate: new Date('2026-06-05T18:00:00+08:00'),
+        content: '',
+        activityLogs: [],
+        showInTimeline: true,
+      },
+    ]
+
+    const agenda = deriveTodayAgenda([], tasks, now)
+    const filtered = filterAgendaByArea(agenda, []) // 空可见列表
+
+    const todoItems = filtered.filter((item) => item.source === 'todo')
+    expect(todoItems).toHaveLength(0)
   })
 })

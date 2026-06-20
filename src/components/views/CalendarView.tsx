@@ -5,7 +5,8 @@ import { DayPicker } from 'react-day-picker'
 import { zhCN } from 'date-fns/locale'
 import { GlassCard } from '../common/GlassCard'
 import { GlassPanel } from '../common/GlassPanel'
-import { useAppStore, selectFilteredTimeline } from '../../store/appStore'
+import { useUiStore } from '../../store/uiStore'
+import { useTaskStore } from '../../store/taskStore'
 import type { TimelineItem } from '../../types/app'
 import { TimelineBuilder } from '../../lib/TimelineBuilder'
 import { formatDateKey } from '../../lib/calendarUtils'
@@ -86,10 +87,10 @@ export function CalendarView() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [hideCompleted, setHideCompleted] = useState(false)
 
-  const baseTimeline = useAppStore((state) => state.baseTimeline)
-  const openTaskDrawer = useAppStore((state) => state.openTaskDrawer)
-  const openReminderDrawer = useAppStore((state) => state.openReminderDrawer)
-  const openCalendarEventDrawer = useAppStore((state) => state.openCalendarEventDrawer)
+  const todayTimeline = useTaskStore((state) => state.todayTimeline)
+  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
+  const openReminderDrawer = useUiStore((state) => state.openReminderDrawer)
+  const openCalendarEventDrawer = useUiStore((state) => state.openCalendarEventDrawer)
 
   const weekDays = getWeekDays(weekStart)
 
@@ -216,11 +217,11 @@ function WeekView({
 }) {
   const weekRange = `${weekDays[0].date.getFullYear()}年${weekDays[0].date.getMonth() + 1}月${weekDays[0].dayNumber}日 - ${weekDays[6].date.getMonth() + 1}月${weekDays[6].dayNumber}日`
 
-  // 从 store 获取 baseTimeline (CalendarView 有自己的 hideCompleted 过滤逻辑)
-  const baseTimeline = useAppStore((state) => state.baseTimeline)
+  // 从 store 获取 todayTimeline (CalendarView 有自己的 hideCompleted 过滤逻辑)
+  const todayTimeline = useTaskStore((state) => state.todayTimeline)
 
   // 按日期分组
-  const timelineByDate = TimelineBuilder.groupByDate(baseTimeline)
+  const timelineByDate = TimelineBuilder.groupByDate([...todayTimeline])
 
   return (
     <GlassPanel className="rounded-3xl p-6">
@@ -320,7 +321,7 @@ function WeekDayColumn({
         <AnimatePresence>
           {filteredEvents.map((event, idx) => (
             <WeekEventCard
-              key={event.id}
+              key={`${formatDateKey(day.date)}-${event.id}`}
               event={event}
               index={idx}
               onClick={() => onEventClick(event)}
@@ -383,8 +384,8 @@ function DayView({
   hideCompleted: boolean
   onEventClick: (event: TimelineItem) => void
 }) {
-  const baseTimeline = useAppStore((state) => state.baseTimeline)
-  const timelineByDate = TimelineBuilder.groupByDate(baseTimeline)
+  const todayTimeline = useTaskStore((state) => state.todayTimeline)
+  const timelineByDate = TimelineBuilder.groupByDate([...todayTimeline])
 
   // 获取选中日期的事件
   const selectedDateKey = formatDateKey(selectedDate)
@@ -460,7 +461,7 @@ function DayView({
             {filteredEvents.length > 0 ? (
               filteredEvents.map((event, idx) => (
                 <DayEventCard
-                  key={event.id}
+                  key={`${selectedDateKey}-${event.id}`}
                   event={event}
                   index={idx}
                   onClick={() => onEventClick(event)}

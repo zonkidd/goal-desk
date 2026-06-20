@@ -30,20 +30,25 @@ node src/lib/todoEditing.test.mjs # 前端 .mjs 测试无 npm script，直跑
 
 - `src/App.tsx`：按环境分流——Tauri 下 `quick-capture` 窗口渲染 `QuickCaptureWindow`，否则渲染 `AppShell`。主窗口拦截关闭事件改为隐藏。
 - `src/lib/desktopApi.ts`：**前端 ↔ Tauri command 边界层**——负责 `invoke()`、Tauri 运行时判断、Rust `snake_case` → 前端 `camelCase` 的 payload 规范化、EventKit 时间线合并。改 payload/枚举时**必须同步检查此文件**。
-- `src/store/appStore.ts`：Zustand 状态容器；Tauri 下调用 `desktopApi` 持久化，浏览器预览用内存/mock。
-- `src/lib/workspaceDerivation.ts` / `workspaceMutations.ts`：工作区派生逻辑和变更操作。
+- `src/store/appStore.ts`：Zustand 状态容器（re-export facade）；组合 `taskStore`、`goalStore`、`uiStore`、`eventkitStore`。
+- `src/store/taskStore.ts` / `goalStore.ts` / `uiStore.ts` / `eventkitStore.ts`：分拆的 Zustand stores，各自管理独立状态切片。
+- `src/hooks/useStoreComposition.ts`：协调跨 store 交互——水合、派生状态同步、消息桥接。使用 `WorkspaceEngine` 计算派生状态。
+- `src/lib/WorkspaceEngine.ts`：派生状态计算引擎——接收原子状态（tasks, goals, timeline, filters），返回不可变快照。
+- `src/lib/workspaceDerivation.ts`：底层派生函数（`getTodayFocusTasks`、`getInboxTaskGroups` 等），被 WorkspaceEngine 调用。
+- `src/lib/mutationAdapter.ts`：**MutationAdapter 接口**——定义所有持久化操作的契约。`tauriAdapter.ts`（Tauri 后端）和 `browserAdapter.ts`（浏览器预览）分别实现。
+- `src/lib/workspaceMutations.ts`：re-export 层，`createWorkspaceMutationAdapter()` 根据运行时返回对应 adapter。
 - `src/components/`：`shell/` 框架、`views/` 主视图（Today/Inbox/Goals/Board）、`drawer/` 详情面板、`modal/` 弹窗和独立窗口。
-- `src/mock/prototypeData.ts`：浏览器预览和初始体验数据。
-- `src-tauri/src/domain.rs`：核心领域类型和纯逻辑（时间线、目标进度、快速捕获解析）。
-- `src-tauri/src/repository.rs`：SQLite 表初始化、兼容性补列、读写。
-- `src-tauri/src/lib.rs`：Tauri runtime、命令处理、demo seed、全局快捷键 `alt+space`、Bear URL Scheme、EventKit 同步。
+- `src-tauri/src/domain.rs`：核心领域类型和纯逻辑（状态转换、时间线、快速捕获解析）。
+- `src-tauri/src/repository.rs`：SQLite 表初始化、兼容性补列、CRUD traits（`GoalRepository`、`TaskRepository`、`AreaRepository`）。
+- `src-tauri/src/service.rs`：**Service Layer**——`GoalService`、`TaskService`、`AreaService`。封装业务逻辑（验证、UUID 解析、错误映射），Tauri commands 调用 service 而非直接操作 repository。
+- `src-tauri/src/lib.rs`：Tauri runtime、命令处理（thin dispatchers → service layer）、全局快捷键 `alt+space`、Bear URL Scheme、EventKit 同步。
 - `src-tauri/src/eventkit.rs` + `src-tauri/native/`：macOS EventKit 桥接——修改后需在 Tauri 环境手动验证权限。
 
 ## 测试注意事项
 
 - **前端 .mjs 测试**未挂 npm script：`node src/lib/<name>.test.mjs`、`node src/store/appStore.test.mjs`。
 - **Playwright**配置：headed、单 worker、固定 1280×720 viewport、失败截图。本地调试用 `playwright.local.config.ts`（headless、无 webServer）。
-- **Rust 集成测试**在 `src-tauri/tests/`：`command_tests.rs`、`domain_tests.rs`、`repository_tests.rs`。
+- **Rust 集成测试**在 `src-tauri/tests/`：`command_tests.rs`、`domain_tests.rs`、`repository_tests.rs`、`service_tests.rs`。
 - **跨层改动**（desktopApi payload、Rust serde 枚举、SQLite schema）必须同步检查 TS 类型、Rust domain 类型、repository 列名。
 
 ## 开发流程

@@ -1,13 +1,45 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useState } from 'react'
-import { useAppStore } from '../../store/appStore'
-import { QuickCaptureForm } from './QuickCaptureForm'
+import { useTaskStore } from '../../store/taskStore'
+import { useUiStore } from '../../store/uiStore'
+import { QuickCaptureForm, type CreationMode } from './QuickCaptureForm'
 
 export function QuickCaptureModal() {
-  const isOpen = useAppStore((state) => state.isQuickCaptureOpen)
-  const closeQuickCapture = useAppStore((state) => state.closeQuickCapture)
-  const addTask = useAppStore((state) => state.addTask)
+  const isOpen = useUiStore((state) => state.isQuickCaptureOpen)
+  const closeQuickCapture = useUiStore((state) => state.closeQuickCapture)
+  const addTask = useTaskStore((state) => state.addTask)
+  const createAndLinkReminder = useTaskStore((state) => state.createAndLinkReminder)
+  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
+  const setView = useUiStore((state) => state.setView)
   const [value, setValue] = useState('')
+
+  const handleSubmit = async (mode: CreationMode) => {
+    const trimmed = value.trim()
+    if (!trimmed) return
+
+    if (mode === 'local') {
+      // 仅创建本地任务
+      const task = await addTask(trimmed)
+      if (task) {
+        openTaskDrawer(task.id)
+        setView('inbox')
+      }
+    } else if (mode === 'reminder') {
+      // 仅创建系统提醒
+      await createAndLinkReminder('', trimmed)
+    } else if (mode === 'both') {
+      // 创建本地任务并关联系统提醒
+      const task = await addTask(trimmed)
+      if (task) {
+        await createAndLinkReminder(task.id, trimmed)
+        openTaskDrawer(task.id)
+        setView('inbox')
+      }
+    }
+
+    setValue('')
+    closeQuickCapture()
+  }
 
   return (
     <AnimatePresence>
@@ -32,11 +64,7 @@ export function QuickCaptureModal() {
             <QuickCaptureForm
               value={value}
               onChange={setValue}
-              onSubmit={() => {
-                void addTask(value)
-                setValue('')
-                closeQuickCapture()
-              }}
+              onSubmit={handleSubmit}
               onClose={closeQuickCapture}
             />
           </motion.div>

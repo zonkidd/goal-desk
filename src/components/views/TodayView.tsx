@@ -3,7 +3,10 @@ import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { GlassCard } from '../common/GlassCard'
 import { GlassPanel } from '../common/GlassPanel'
-import { useAppStore, selectFilteredTimeline } from '../../store/appStore'
+import { useUiStore } from '../../store/uiStore'
+import { useTaskStore } from '../../store/taskStore'
+import { useGoalStore } from '../../store/goalStore'
+import { useEventkitStore } from '../../store/eventkitStore'
 import { getTaskTimeInfo, getUrgencyColor, getUrgencyIcon } from '../../lib/taskPresentation'
 import type { Task } from '../../types/task'
 
@@ -31,16 +34,18 @@ function getTimelineStyles(source: 'todo' | 'reminder' | 'calendar') {
 }
 
 export function TodayView() {
-  const todayAttentionGroups = useAppStore((state) => state.todayAttentionGroups)
-  const todayRelevantGoals = useAppStore((state) => state.todayRelevantGoals)
-  const timeline = useAppStore(selectFilteredTimeline)
+  const todayAttentionGroups = useTaskStore((state) => state.todayAttentionGroups)
+  const todayRelevantGoals = useGoalStore((state) => state.todayRelevantGoals)
+  const showCompletedTodos = useUiStore((state) => state.showCompletedTodos)
+  const rawTimeline = useTaskStore((state) => state.todayTimeline)
+  const timeline = showCompletedTodos ? rawTimeline : rawTimeline.filter(item => !item.done)
   const ongoingTasks = todayAttentionGroups.ongoing
-  const openReminderDrawer = useAppStore((state) => state.openReminderDrawer)
-  const openTaskDrawer = useAppStore((state) => state.openTaskDrawer)
-  const openGoalDrawer = useAppStore((state) => state.openGoalDrawer)
-  const eventkitPermissions = useAppStore((state) => state.eventkitPermissions)
-  const requestCalendarAccess = useAppStore((state) => state.requestCalendarAccess)
-  const requestRemindersAccess = useAppStore((state) => state.requestRemindersAccess)
+  const openReminderDrawer = useUiStore((state) => state.openReminderDrawer)
+  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
+  const openGoalDrawer = useUiStore((state) => state.openGoalDrawer)
+  const eventkitPermissions = useEventkitStore((state) => state.eventkitPermissions)
+  const requestCalendarAccess = useEventkitStore((state) => state.requestCalendarAccess)
+  const requestRemindersAccess = useEventkitStore((state) => state.requestRemindersAccess)
 
   // 横幅关闭状态
   const [bannerDismissed, setBannerDismissed] = useState(() => {

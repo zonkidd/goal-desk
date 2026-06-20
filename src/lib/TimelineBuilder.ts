@@ -154,10 +154,10 @@ export class TimelineBuilder {
     const grouped = new Map<string, RawAgendaItem[]>()
 
     for (const item of timeline) {
-      // 只处理有明确日期的项
-      if (!item.startsAt) continue
+      const dateSource = item.occurrenceDate || item.startsAt
+      if (!dateSource) continue
 
-      const date = item.startsAt instanceof Date ? item.startsAt : new Date(item.startsAt)
+      const date = dateSource instanceof Date ? dateSource : new Date(dateSource)
       const dateKey = formatDateKey(date)
 
       const existing = grouped.get(dateKey) || []
@@ -168,9 +168,9 @@ export class TimelineBuilder {
     // 对每个日期的事件按时间排序
     for (const [dateKey, items] of grouped.entries()) {
       items.sort((a, b) => {
-        const dateA = a.startsAt instanceof Date ? a.startsAt : new Date(a.startsAt!)
-        const dateB = b.startsAt instanceof Date ? b.startsAt : new Date(b.startsAt!)
-        return dateA.getTime() - dateB.getTime()
+        const dateA = (a.occurrenceDate || a.startsAt) instanceof Date ? (a.occurrenceDate || a.startsAt) : new Date((a.occurrenceDate || a.startsAt)!)
+        const dateB = (b.occurrenceDate || b.startsAt) instanceof Date ? (b.occurrenceDate || b.startsAt) : new Date((b.occurrenceDate || b.startsAt)!)
+        return dateA!.getTime() - dateB!.getTime()
       })
       grouped.set(dateKey, items)
     }

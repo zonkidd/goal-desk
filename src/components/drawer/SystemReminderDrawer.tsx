@@ -1,16 +1,17 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { CheckSquare, X, Tag, ExternalLink } from 'lucide-react'
 import { useState } from 'react'
-import { useAppStore } from '../../store/appStore'
-import { openSystemReminder } from '../../lib/desktopApi'
+import { useEventkitStore } from '../../store/eventkitStore'
+import { useUiStore } from '../../store/uiStore'
+import { openSystemReminder } from '../../lib/eventkitIntegration'
 
 const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
 
 export function SystemReminderDrawer() {
-  const systemReminders = useAppStore((state) => state.systemReminders)
-  const isOpen = useAppStore((state) => state.isReminderDrawerOpen)
-  const reminderId = useAppStore((state) => state.selectedReminderId)
-  const onClose = useAppStore((state) => state.closeReminderDrawer)
+  const systemReminders = useEventkitStore((state) => state.systemReminders)
+  const isOpen = useUiStore((state) => state.isReminderDrawerOpen)
+  const reminderId = useUiStore((state) => state.selectedReminderId)
+  const onClose = useUiStore((state) => state.closeReminderDrawer)
 
   const reminder = systemReminders.find((r) => r.id === reminderId)
 

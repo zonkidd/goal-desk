@@ -1,83 +1,30 @@
-// 测试辅助函数 - 创建最小化的 AppStoreState mock
-import type { AppStoreState } from './appStore'
+import type { GoalCard, RawAgendaItem } from '../types/app'
+import type { Task } from '../types/task'
 
-export function createMockAppStoreState(overrides: Partial<AppStoreState> = {}): AppStoreState {
-  const baseState: AppStoreState = {
-    currentView: 'inbox',
-    activeArea: 'ALL',
-    allAreas: [],
-    tasks: [],
-    todayFocusTasks: [],
-    todayAttentionGroups: { overdue: [], dueToday: [], ongoing: [] },
-    todayRelevantGoals: [],
-    inbox: {
-      activeTasks: [],
-      pausedTasks: [],
-      completed: {
-        totalCount: 0,
-        visibleTasks: [],
-        isCollapsedByDefault: true,
-      },
-    },
+export interface MockTimelineSelectorState {
+  todayTimeline: RawAgendaItem[]
+  showCompletedTodos: boolean
+}
+
+export interface MockGoalSelectorState {
+  baseGoals: GoalCard[]
+  activeArea: string
+  tasks: Task[]
+}
+
+export function createMockTimelineState(overrides: Partial<MockTimelineSelectorState> = {}): MockTimelineSelectorState {
+  return {
+    todayTimeline: [],
     showCompletedTodos: false,
-    baseTimeline: [],
-    baseGoals: [],
-    systemReminders: [],
-    integrationStatus: {
-      calendar: 'not_determined',
-      reminders: 'not_determined',
-    },
-    eventkitPermissions: {
-      calendar: 'not_determined',
-      reminders: 'not_determined',
-    },
-    eventkitData: {
-      calendarEventCount: 0,
-      reminderCount: 0,
-    },
-    statusMessage: '',
-    isLoading: false,
-    isTaskDrawerOpen: false,
-    isGoalDrawerOpen: false,
-    isReminderDrawerOpen: false,
-    isCalendarEventDrawerOpen: false,
-    isQuickCaptureOpen: false,
-    // Actions - 空实现
-    setView: () => {},
-    setActiveArea: () => {},
-    hydrateApp: () => {},
-    setLoading: () => {},
-    setStatusMessage: () => {},
-    receiveExternalTask: () => {},
-    openTaskDrawer: () => {},
-    closeTaskDrawer: () => {},
-    openGoalDrawer: () => {},
-    closeGoalDrawer: () => {},
-    openReminderDrawer: () => {},
-    closeReminderDrawer: () => {},
-    openCalendarEventDrawer: () => {},
-    closeCalendarEventDrawer: () => {},
-    openQuickCapture: () => {},
-    closeQuickCapture: () => {},
-    setShowCompletedTodos: () => {},
-    addTask: async () => {},
-    createGoal: async () => undefined,
-    updateGoalFields: async () => {},
-    updateGoalStatus: async () => {},
-    createTaskForGoal: async () => {},
-    addTaskNote: async () => {},
-    updateTaskStatus: async () => {},
-    updateTaskContent: async () => {},
-    updateTaskFields: async () => {},
-    toggleSystemReminderDone: async () => {},
-    loadAreas: async () => {},
-    createArea: async () => {},
-    renameArea: async () => {},
-    deleteArea: async () => {},
-    requestCalendarAccess: async () => {},
-    requestRemindersAccess: async () => {},
-    refreshEventkitData: async () => {},
+    ...overrides,
   }
+}
 
-  return { ...baseState, ...overrides }
+export function createMockGoalState(overrides: Partial<MockGoalSelectorState> = {}): MockGoalSelectorState {
+  return {
+    baseGoals: [],
+    activeArea: 'ALL',
+    tasks: [],
+    ...overrides,
+  }
 }

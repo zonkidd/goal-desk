@@ -1,6 +1,5 @@
 import type { AreaFilter, GoalCard, RawAgendaItem, TodayAgenda } from '../types/app'
-import type { Task, TaskStatus } from '../types/task'
-import { TimelineBuilder } from './TimelineBuilder'
+import type { Task } from '../types/task'
 
 export interface TodayAttentionGroups {
   overdue: Task[]
@@ -18,16 +17,6 @@ export interface TodayRelevantGoal {
   urgencyScore: number
 }
 
-export interface WorkspaceDerivedState {
-  goals: GoalCard[]
-  timeline: TodayAgenda
-  todayFocusTasks: Task[]
-  todayAttentionGroups: TodayAttentionGroups
-  todayRelevantGoals: TodayRelevantGoal[]
-  inbox: InboxTaskGroups
-  visibleTasks: Task[]
-}
-
 export interface InboxTaskGroups {
   activeTasks: Task[]
   pausedTasks: Task[]
@@ -35,48 +24,6 @@ export interface InboxTaskGroups {
     totalCount: number
     visibleTasks: Task[]
     isCollapsedByDefault: true
-  }
-}
-
-interface DeriveWorkspaceStateInput {
-  baseTimeline: RawAgendaItem[]
-  baseGoals: GoalCard[]
-  tasks: Task[]
-  activeArea: AreaFilter
-  showCompletedTodos?: boolean
-  now?: Date
-}
-
-/**
- * @deprecated 使用 WorkspaceEngine.computeSnapshot() 替代
- * 保留此函数仅用于向后兼容
- */
-export function deriveWorkspaceState(input: DeriveWorkspaceStateInput): WorkspaceDerivedState {
-  const goals = deriveGoalRecords(input.baseGoals, input.tasks)
-  const visibleGoals = filterGoalsByArea(goals, input.activeArea)
-  const visibleTasks = filterTasksByArea(input.tasks, goals, input.activeArea)
-  const todayFocusTasks =
-    input.activeArea === 'ALL'
-      ? getTodayFocusTasks(input.tasks, goals, input.activeArea, input.now)
-      : filterTasksByArea(getTodayFocusTasks(input.tasks, goals, input.activeArea, input.now), goals, input.activeArea)
-  const timeline =
-    input.activeArea === 'ALL'
-      ? deriveTodayAgenda(input.baseTimeline, input.tasks, input.now)
-      : filterAgendaByArea(deriveTodayAgenda(input.baseTimeline, input.tasks, input.now), visibleTasks)
-  const todayAttentionGroups =
-    input.activeArea === 'ALL'
-      ? deriveTodayAttentionGroups(input.tasks, input.now)
-      : deriveTodayAttentionGroups(visibleTasks, input.now)
-  const todayRelevantGoals = deriveTodayRelevantGoals(goals, todayAttentionGroups)
-
-  return {
-    goals: visibleGoals,
-    timeline,
-    todayFocusTasks,
-    todayAttentionGroups,
-    todayRelevantGoals,
-    inbox: getInboxTaskGroups(visibleTasks, input.showCompletedTodos ?? false),
-    visibleTasks,
   }
 }
 
@@ -190,45 +137,57 @@ export function getTodayFocusTasks(tasks: Task[], goals: GoalCard[] = [], areaFi
  */
 export function deriveTodayAgenda(baseTimeline: RawAgendaItem[], tasks: Task[], now = new Date()): TodayAgenda {
   const today = startOfDay(now)
-  const taskItems = tasks
-    .filter((task) => {
-      // 必须是进行中状态
-      if (task.status !== 'IN_PROGRESS') return false
+  const taskItems: RawAgendaItem[] = []
 
-      // 必须有计划开始时间
-      if (!task.plannedStartAt) return false
+  for (const task of tasks) {
+    if (task.status !== 'IN_PROGRESS') continue
+    if (!task.plannedStartAt) continue
 
-      // 时间区间判断：今天在任务的开始和结束时间之间
-      const startDay = startOfDay(task.plannedStartAt)
-      const endDay = task.dueDate ? startOfDay(task.dueDate) : undefined
+    const startDay = startOfDay(task.plannedStartAt)
+    const endDay = task.dueDate ? startOfDay(task.dueDate) : undefined
 
-      // 判断今天是否在时间范围内
-      const isInTimeRange = startDay.getTime() <= today.getTime() && (!endDay || today.getTime() <= endDay.getTime())
-      if (!isInTimeRange) return false
+    const isInTimeRange = startDay.getTime() <= today.getTime() && (!endDay || today.getTime() <= endDay.getTime())
+    if (!isInTimeRange) continue
 
-      // 判断是否是今天开始的任务
-      const isStartingToday = startDay.getTime() === today.getTime()
+    const isStartingToday = startDay.getTime() === today.getTime()
+    if (!isStartingToday && task.showInTimeline !== true) continue
 
-      // 逻辑：今天开始的任务自动显示，跨天任务需要勾选 showInTimeline
-      if (isStartingToday) {
-        return true // 今天开始的任务，自动显示
-      } else {
-        return task.showInTimeline === true // 跨天任务，需要勾选
+    const isMultiDay = endDay && endDay.getTime() > startDay.getTime()
+
+    if (!isMultiDay) {
+      taskItems.push({
+        id: task.id,
+        title: task.title,
+        timeLabel: formatTimeLabel(task.plannedStartAt),
+        source: 'todo' as const,
+        readonly: false,
+        done: false,
+        sourceLabel: task.linkedGoalLabel || 'Desk Task',
+        startsAt: task.plannedStartAt,
+        linkedGoalId: task.linkedGoalId,
+      })
+    } else {
+      const dayMs = 24 * 60 * 60 * 1000
+      const totalDays = Math.round((endDay.getTime() - startDay.getTime()) / dayMs)
+
+      for (let i = 0; i <= totalDays; i++) {
+        const dayDate = new Date(startDay.getTime() + i * dayMs)
+        taskItems.push({
+          id: task.id,
+          title: task.title,
+          timeLabel: formatTimeLabel(task.plannedStartAt),
+          source: 'todo' as const,
+          readonly: false,
+          done: false,
+          sourceLabel: task.linkedGoalLabel || 'Desk Task',
+          startsAt: task.plannedStartAt,
+          occurrenceDate: dayDate,
+          linkedGoalId: task.linkedGoalId,
+        })
       }
-    })
-    .map((task) => ({
-      id: task.id,
-      title: task.title,
-      timeLabel: formatTimeLabel(task.plannedStartAt as Date),
-      source: 'todo' as const,
-      readonly: false,
-      done: false,
-      sourceLabel: task.linkedGoalLabel || 'Desk Task',
-      startsAt: task.plannedStartAt,
-      linkedGoalId: task.linkedGoalId,
-    }))
+    }
+  }
 
-  // 合并基础议程（事件、提醒）和任务项
   const merged = [...baseTimeline.filter((item) => item.source !== 'todo'), ...taskItems]
   return merged.sort((left, right) => timeLabelSortValue(left.timeLabel) - timeLabelSortValue(right.timeLabel))
 }

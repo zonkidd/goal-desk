@@ -2,11 +2,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Sidebar } from './Sidebar'
-import { useAppStore } from '../../store/appStore'
+import { useUiStore } from '../../store/uiStore'
+import { useGoalStore } from '../../store/goalStore'
+import { useTaskStore } from '../../store/taskStore'
+import { useEventkitStore } from '../../store/eventkitStore'
 
-// Mock Zustand store
-vi.mock('../../store/appStore', () => ({
-  useAppStore: vi.fn(),
+// Mock Zustand stores
+vi.mock('../../store/uiStore', () => ({
+  useUiStore: vi.fn(),
+}))
+vi.mock('../../store/goalStore', () => ({
+  useGoalStore: vi.fn(),
+}))
+vi.mock('../../store/taskStore', () => ({
+  useTaskStore: vi.fn(),
+}))
+vi.mock('../../store/eventkitStore', () => ({
+  useEventkitStore: vi.fn(),
 }))
 
 describe('Sidebar', () => {
@@ -15,7 +27,7 @@ describe('Sidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // 设置默认的 store 状态
-    vi.mocked(useAppStore).mockImplementation((selector: any) => {
+    vi.mocked(useUiStore).mockImplementation((selector: any) => {
       const state = {
         currentView: 'inbox',
         activeArea: 'ALL',
@@ -23,8 +35,19 @@ describe('Sidebar', () => {
         setView: mockSetView,
         setActiveArea: vi.fn(),
         openQuickCapture: vi.fn(),
-        baseGoals: [],
-        tasks: [],
+      }
+      return selector(state)
+    })
+    vi.mocked(useGoalStore).mockImplementation((selector: any) => {
+      const state = { baseGoals: [] }
+      return selector(state)
+    })
+    vi.mocked(useTaskStore).mockImplementation((selector: any) => {
+      const state = { tasks: [] }
+      return selector(state)
+    })
+    vi.mocked(useEventkitStore).mockImplementation((selector: any) => {
+      const state = {
         eventkitPermissions: { calendar: 'not_determined', reminders: 'not_determined' },
         eventkitData: { calendarEventCount: 0, reminderCount: 0 },
         requestCalendarAccess: vi.fn(),

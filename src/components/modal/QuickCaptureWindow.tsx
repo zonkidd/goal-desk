@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { captureTask, hideCurrentWindow } from '../../lib/desktopApi'
-import { QuickCaptureForm } from './QuickCaptureForm'
+import { captureTask, createSystemReminder } from '../../lib/tauriCommands'
+import { hideCurrentWindow } from '../../lib/runtime'
+import { QuickCaptureForm, type CreationMode } from './QuickCaptureForm'
 
 export function QuickCaptureWindow() {
   const [value, setValue] = useState('')
@@ -14,14 +15,29 @@ export function QuickCaptureWindow() {
     }
   }
 
-  async function submitCapture() {
+  async function handleSubmit(mode: CreationMode) {
     const trimmed = value.trim()
     if (!trimmed) return
 
     try {
-      await captureTask(trimmed)
+      if (mode === 'local') {
+        // 仅创建本地任务
+        await captureTask(trimmed)
+        setStatus('已保存到本地收集箱')
+      } else if (mode === 'reminder') {
+        // 仅创建系统提醒
+        await createSystemReminder(trimmed)
+        setStatus('已创建系统提醒')
+      } else if (mode === 'both') {
+        // 创建本地任务并关联系统提醒
+        const task = await captureTask(trimmed)
+        if (task) {
+          await createSystemReminder(trimmed)
+        }
+        setStatus('已保存到本地收集箱并创建系统提醒')
+      }
+
       setValue('')
-      setStatus('已保存到本地收集箱')
       await closeWindow()
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error))
@@ -34,7 +50,7 @@ export function QuickCaptureWindow() {
         <QuickCaptureForm
           value={value}
           onChange={setValue}
-          onSubmit={() => void submitCapture()}
+          onSubmit={handleSubmit}
           onClose={() => void closeWindow()}
         />
         {status && <p className="mt-3 px-2 text-xs font-medium text-slate-500">{status}</p>}

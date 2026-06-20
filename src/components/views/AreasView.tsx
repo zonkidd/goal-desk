@@ -2,16 +2,17 @@ import { ArrowRight, Plus, Pencil, Trash2, X, Check } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { GlassCard } from '../common/GlassCard'
-import { useAppStore } from '../../store/appStore'
+import { useAreaStore } from '../../store/areaStore'
+import { useUiStore } from '../../store/uiStore'
 
 export function AreasView() {
-  const allAreas = useAppStore((state) => state.allAreas)
-  const setView = useAppStore((state) => state.setView)
-  const setActiveArea = useAppStore((state) => state.setActiveArea)
-  const loadAreas = useAppStore((state) => state.loadAreas)
-  const createArea = useAppStore((state) => state.createArea)
-  const renameArea = useAppStore((state) => state.renameArea)
-  const deleteArea = useAppStore((state) => state.deleteArea)
+  const allAreas = useAreaStore((state) => state.allAreas)
+  const loadAreas = useAreaStore((state) => state.loadAreas)
+  const createArea = useAreaStore((state) => state.createArea)
+  const renameArea = useAreaStore((state) => state.renameArea)
+  const deleteArea = useAreaStore((state) => state.deleteArea)
+  const setView = useUiStore((state) => state.setView)
+  const setActiveArea = useUiStore((state) => state.setActiveArea)
 
   const [isCreating, setIsCreating] = useState(false)
   const [newAreaTitle, setNewAreaTitle] = useState('')
@@ -106,7 +107,7 @@ export function AreasView() {
         </GlassCard>
       )}
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:grid-cols-3">
         {[...allAreas].sort((a, b) => {
           if (a.isSystem && !b.isSystem) return -1
           if (!a.isSystem && b.isSystem) return 1

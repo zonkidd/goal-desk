@@ -1,20 +1,19 @@
 import { create } from 'zustand'
+import { isTauriRuntime } from '../lib/runtime'
 import {
-  isTauriRuntime,
   setSystemReminderCompleted as persistSystemReminderCompleted,
   requestCalendarAccess as apiRequestCalendarAccess,
   requestRemindersAccess as apiRequestRemindersAccess,
   fetchCalendarEvents,
   fetchReminders,
   type AuthorizationStatus,
-} from '../lib/desktopApi'
+} from '../lib/eventkitIntegration'
 import { PermissionManager, type PermissionType } from '../lib/PermissionManager'
-import { getRuntimeModeStatusMessage } from '../lib/taskPresentation'
 import type { IntegrationStatus, ReminderItem, RawAgendaItem } from '../types/app'
 
 export interface EventkitStoreState {
-  // 基础数据
-  baseTimeline: RawAgendaItem[]
+  // 原始 EventKit 数据（日历事件 + 系统提醒，只读）
+  rawTimeline: RawAgendaItem[]
   systemReminders: ReminderItem[]
   integrationStatus: IntegrationStatus
 
@@ -40,11 +39,6 @@ export interface EventkitStoreState {
   requestCalendarAccess: () => Promise<void>
   requestRemindersAccess: () => Promise<void>
   refreshEventkitData: () => Promise<void>
-  setStatusMessage: (message: string) => void
-}
-
-function formatErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 function createDateRange() {
@@ -65,7 +59,7 @@ const permissionManager = new PermissionManager(async (type: PermissionType) => 
 
 export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
   // 初始状态
-  baseTimeline: [],
+  rawTimeline: [],
   systemReminders: [],
   integrationStatus: {
     calendar: 'not_determined',
@@ -86,7 +80,7 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
     permissionManager.updateState(data.integrationStatus)
 
     set({
-      baseTimeline: data.timeline,
+      rawTimeline: data.timeline,
       systemReminders: data.systemReminders,
       integrationStatus: data.integrationStatus,
       eventkitPermissions: permissionManager.getState(),
@@ -106,9 +100,8 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
                 }
               : reminder,
           ),
-          baseTimeline: state.baseTimeline.map((item) => (item.id === reminderId ? { ...item, done } : item)),
+          rawTimeline: state.rawTimeline.map((item) => (item.id === reminderId ? { ...item, done } : item)),
         }))
-        get().setStatusMessage(getRuntimeModeStatusMessage(false))
         return null
       }
 
@@ -117,7 +110,7 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
         systemReminders: state.systemReminders.map((reminder) =>
           reminder.id === reminderId ? updatedReminder : reminder,
         ),
-        baseTimeline: state.baseTimeline.map((item) =>
+        rawTimeline: state.rawTimeline.map((item) =>
           item.id === reminderId
             ? {
                 ...item,
@@ -126,10 +119,8 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
             : item,
         ),
       }))
-      get().setStatusMessage(updatedReminder.done ? 'Apple Reminder completed' : 'Apple Reminder reopened')
       return updatedReminder
     } catch (error) {
-      get().setStatusMessage(`Unable to update Apple Reminder · ${formatErrorMessage(error)}`)
       return null
     }
   },
@@ -141,7 +132,6 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
       set({
         eventkitPermissions: permissionManager.getState(),
       })
-      get().setStatusMessage(status === 'granted' ? 'Calendar access granted' : `Calendar access ${status}`)
     } catch (error) {
       permissionManager.updateState({
         ...permissionManager.getState(),
@@ -150,7 +140,6 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
       set({
         eventkitPermissions: permissionManager.getState(),
       })
-      get().setStatusMessage(`Unable to request calendar access · ${formatErrorMessage(error)}`)
     }
   },
 
@@ -161,7 +150,6 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
       set({
         eventkitPermissions: permissionManager.getState(),
       })
-      get().setStatusMessage(status === 'granted' ? 'Reminders access granted' : `Reminders access ${status}`)
     } catch (error) {
       permissionManager.updateState({
         ...permissionManager.getState(),
@@ -170,7 +158,6 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
       set({
         eventkitPermissions: permissionManager.getState(),
       })
-      get().setStatusMessage(`Unable to request reminders access · ${formatErrorMessage(error)}`)
     }
   },
 
@@ -204,15 +191,8 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
           reminderCount,
         },
       })
-      get().setStatusMessage('EventKit data refreshed')
     } catch (error) {
-      get().setStatusMessage(`Unable to refresh EventKit data · ${formatErrorMessage(error)}`)
+      // error handled by caller
     }
-  },
-
-  // 设置状态消息（桥接到 uiStore）
-  setStatusMessage: (message: string) => {
-    // 这个方法会在稍后被组合 hook 覆盖，指向 uiStore.setStatusMessage
-    console.warn('setStatusMessage called before being linked to uiStore')
   },
 }))

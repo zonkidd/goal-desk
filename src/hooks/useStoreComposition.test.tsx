@@ -4,17 +4,17 @@ import React from 'react'
 import { useTaskStore } from '../store/taskStore'
 import { useEventkitStore } from '../store/eventkitStore'
 import { useToggleSystemReminder } from './useStoreComposition'
-import * as desktopApi from '../lib/desktopApi'
 
-// Mock desktopApi
-vi.mock('../lib/desktopApi', () => ({
+vi.mock('../lib/runtime', () => ({
   isTauriRuntime: vi.fn(() => true),
+}))
+
+vi.mock('../lib/eventkitIntegration', () => ({
   setSystemReminderCompleted: vi.fn(),
 }))
 
 describe('useToggleSystemReminder', () => {
   beforeEach(() => {
-    // Reset stores
     useTaskStore.setState({
       tasks: [
         {
@@ -53,9 +53,9 @@ describe('useToggleSystemReminder', () => {
     vi.clearAllMocks()
   })
 
-  it('应该在切换 System Reminder 时同步关联的 Task', async () => {
-    // Mock the desktopApi to return updated reminder
-    vi.mocked(desktopApi.setSystemReminderCompleted).mockResolvedValue({
+  it('should sync related Task when toggling System Reminder', async () => {
+    const { setSystemReminderCompleted } = await import('../lib/eventkitIntegration')
+    vi.mocked(setSystemReminderCompleted).mockResolvedValue({
       id: 'reminder-1',
       title: 'Buy milk reminder',
       done: true,
@@ -69,14 +69,12 @@ describe('useToggleSystemReminder', () => {
       await result.current('reminder-1', true)
     })
 
-    // Verify task was synced
     const taskState = useTaskStore.getState()
     const task = taskState.tasks.find((t) => t.id === 'task-1')
     expect(task?.status).toBe('DONE')
   })
 
-  it('应该在取消完成时同步 Task 状态回 TODO', async () => {
-    // Set task as DONE first
+  it('should sync Task back to TODO when unmarking reminder', async () => {
     useTaskStore.setState({
       tasks: [
         {
@@ -92,7 +90,8 @@ describe('useToggleSystemReminder', () => {
       ],
     })
 
-    vi.mocked(desktopApi.setSystemReminderCompleted).mockResolvedValue({
+    const { setSystemReminderCompleted } = await import('../lib/eventkitIntegration')
+    vi.mocked(setSystemReminderCompleted).mockResolvedValue({
       id: 'reminder-1',
       title: 'Buy milk reminder',
       done: false,
@@ -106,14 +105,14 @@ describe('useToggleSystemReminder', () => {
       await result.current('reminder-1', false)
     })
 
-    // Verify task was synced back to TODO
     const taskState = useTaskStore.getState()
     const task = taskState.tasks.find((t) => t.id === 'task-1')
     expect(task?.status).toBe('TODO')
   })
 
-  it('不应同步没有关联 System Reminder 的 Task', async () => {
-    vi.mocked(desktopApi.setSystemReminderCompleted).mockResolvedValue({
+  it('should not sync unrelated Tasks', async () => {
+    const { setSystemReminderCompleted } = await import('../lib/eventkitIntegration')
+    vi.mocked(setSystemReminderCompleted).mockResolvedValue({
       id: 'reminder-2',
       title: 'Other reminder',
       done: true,
@@ -127,7 +126,6 @@ describe('useToggleSystemReminder', () => {
       await result.current('reminder-2', true)
     })
 
-    // Verify task-2 was not affected
     const taskState = useTaskStore.getState()
     const task = taskState.tasks.find((t) => t.id === 'task-2')
     expect(task?.status).toBe('TODO')

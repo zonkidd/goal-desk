@@ -3,33 +3,43 @@ import { AlignLeft, Bell, BookOpen, Calendar, CheckCircle, Clock, Folder, Plus, 
 import { useMemo, useState } from 'react'
 import { DayPicker } from 'react-day-picker'
 import { zhCN } from 'date-fns/locale'
-import { isTauriRuntime, openTaskInBear } from '../../lib/desktopApi'
+import { isTauriRuntime } from '../../lib/runtime'
+import { openTaskInBear } from '../../lib/tauriCommands'
 import { useTodoEditingSession } from '../../lib/todoEditing'
 import { AreaSelectWithCreate } from '../shared/AreaSelectWithCreate'
 import { ActivityLogTimeline } from './ActivityLogTimeline'
 import { MarkdownContent } from './MarkdownContent'
 import { StatusMachineButtons } from './StatusMachineButtons'
-import { useAppStore, useSelectedTask, selectFilteredGoals } from '../../store/appStore'
+import { useSelectedTask } from '../../store/appStore'
+import { selectFilteredGoals } from '../../store/appStore.selectors'
+import { useEventkitStore } from '../../store/eventkitStore'
+import { useGoalStore } from '../../store/goalStore'
+import { useTaskStore } from '../../store/taskStore'
+import { useAreaStore } from '../../store/areaStore'
+import { useUiStore } from '../../store/uiStore'
 import type { TaskStatus } from '../../types/task'
+import type { GoalCard } from '../../types/app'
 
 const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
 
 export function TaskDrawer() {
   const task = useSelectedTask()
-  const isOpen = useAppStore((state) => state.isTaskDrawerOpen)
-  const closeTaskDrawer = useAppStore((state) => state.closeTaskDrawer)
-  const updateTaskStatus = useAppStore((state) => state.updateTaskStatus)
-  const updateTaskContent = useAppStore((state) => state.updateTaskContent)
-  const updateTaskFields = useAppStore((state) => state.updateTaskFields)
-  const addTaskNote = useAppStore((state) => state.addTaskNote)
-  const createGoal = useAppStore((state) => state.createGoal)
-  const activeArea = useAppStore((state) => state.activeArea)
-  const allAreas = useAppStore((state) => state.allAreas)
-  const createArea = useAppStore((state) => state.createArea)
-  const goals = useAppStore(selectFilteredGoals)
-  const systemReminders = useAppStore((state) => state.systemReminders)
-  const createAndLinkReminder = useAppStore((state) => state.createAndLinkReminder)
-  const unlinkTaskFromReminder = useAppStore((state) => state.unlinkTaskFromReminder)
+  const isOpen = useUiStore((state) => state.isTaskDrawerOpen)
+  const closeTaskDrawer = useUiStore((state) => state.closeTaskDrawer)
+  const updateTaskStatus = useTaskStore((state) => state.updateTaskStatus)
+  const updateTaskContent = useTaskStore((state) => state.updateTaskContent)
+  const _updateTaskFields = useTaskStore((state) => state.updateTaskFields)
+  const addTaskNote = useTaskStore((state) => state.addTaskNote)
+  const createGoal = useGoalStore((state) => state.createGoal)
+  const activeArea = useUiStore((state) => state.activeArea)
+  const allAreas = useAreaStore((state) => state.allAreas)
+  const createArea = useAreaStore((state) => state.createArea)
+  const goals = useGoalStore(selectFilteredGoals as (state: any) => GoalCard[])
+  const systemReminders = useEventkitStore((state) => state.systemReminders)
+  const createAndLinkReminder = useTaskStore((state) => state.createAndLinkReminder)
+  const unlinkTaskFromReminder = useTaskStore((state) => state.unlinkTaskFromReminder)
+  const updateTaskFields = (taskId: string, input: Parameters<typeof _updateTaskFields>[1]) =>
+    _updateTaskFields(taskId, input, goals)
   const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null)
   const [statusNote, setStatusNote] = useState('')
   const [logNote, setLogNote] = useState('')

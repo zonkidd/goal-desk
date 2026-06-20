@@ -1,11 +1,20 @@
-import test from 'node:test'
-import assert from 'node:assert/strict'
-import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+
+vi.mock('../../lib/tauriCommands', () => ({
+  captureTask: vi.fn(),
+  createSystemReminder: vi.fn(),
+}))
+
+vi.mock('../../lib/runtime', () => ({
+  hideCurrentWindow: vi.fn(),
+}))
 
 import { QuickCaptureWindow } from './QuickCaptureWindow'
 
-test('quick capture window renders a close control for the native window shell', () => {
-  const markup = renderToStaticMarkup(<QuickCaptureWindow />)
-
-  assert.match(markup, /aria-label="Close quick capture"/)
+describe('QuickCaptureWindow', () => {
+  it('should render close control', () => {
+    render(<QuickCaptureWindow />)
+    expect(screen.getByRole('button', { name: /close quick capture/i })).toBeInTheDocument()
+  })
 })

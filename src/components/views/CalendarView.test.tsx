@@ -1,11 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { CalendarView } from './CalendarView'
-import { useAppStore } from '../../store/appStore'
+import { useUiStore } from '../../store/uiStore'
+import { useTaskStore } from '../../store/taskStore'
 
-// Mock appStore
-vi.mock('../../store/appStore', () => ({
-  useAppStore: vi.fn()
+vi.mock('../../store/uiStore', () => ({
+  useUiStore: vi.fn()
+}))
+
+vi.mock('../../store/taskStore', () => ({
+  useTaskStore: vi.fn()
+}))
+
+vi.mock('../../store/goalStore', () => ({
+  useGoalStore: vi.fn()
+}))
+
+vi.mock('../../store/eventkitStore', () => ({
+  useEventkitStore: vi.fn()
 }))
 
 // Mock framer-motion
@@ -22,13 +34,20 @@ describe('CalendarView', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 5, 16, 12, 0, 0))
 
-    ;(useAppStore as any).mockImplementation((selector: any) => {
+    ;(useUiStore as any).mockImplementation((selector: any) => {
       const mockState = {
-        timeline: [],
-        baseTimeline: [],
         currentView: 'calendar',
         openTaskDrawer: vi.fn(),
         openReminderDrawer: vi.fn(),
+        openCalendarEventDrawer: vi.fn(),
+      }
+      return selector(mockState)
+    })
+
+    ;(useTaskStore as any).mockImplementation((selector: any) => {
+      const mockState = {
+        todayTimeline: [],
+        tasks: [],
       }
       return selector(mockState)
     })

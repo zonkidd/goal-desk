@@ -365,6 +365,48 @@ describe('TimelineBuilder', () => {
       expect(result.size).toBe(1)
       expect(result.get('2026-06-16')).toHaveLength(1)
     })
+
+    it('应该按 occurrenceDate 分组而非 startsAt', () => {
+      const timeline: TimelineItem[] = [
+        {
+          id: 't1',
+          title: '跨天任务 第1天',
+          timeLabel: '09:00',
+          source: 'todo',
+          readonly: false,
+          done: false,
+          startsAt: new Date('2026-06-01T09:00:00'),
+          occurrenceDate: new Date('2026-06-01T00:00:00'),
+        },
+        {
+          id: 't1',
+          title: '跨天任务 第2天',
+          timeLabel: '09:00',
+          source: 'todo',
+          readonly: false,
+          done: false,
+          startsAt: new Date('2026-06-01T09:00:00'),
+          occurrenceDate: new Date('2026-06-02T00:00:00'),
+        },
+        {
+          id: 't1',
+          title: '跨天任务 第3天',
+          timeLabel: '09:00',
+          source: 'todo',
+          readonly: false,
+          done: false,
+          startsAt: new Date('2026-06-01T09:00:00'),
+          occurrenceDate: new Date('2026-06-03T00:00:00'),
+        },
+      ]
+
+      const result = TimelineBuilder.groupByDate(timeline)
+
+      expect(result.size).toBe(3)
+      expect(result.get('2026-06-01')).toHaveLength(1)
+      expect(result.get('2026-06-02')).toHaveLength(1)
+      expect(result.get('2026-06-03')).toHaveLength(1)
+    })
   })
 
   describe('applyAreaFilter', () => {

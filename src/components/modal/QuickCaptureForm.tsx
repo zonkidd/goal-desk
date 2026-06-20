@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Sparkles, X } from 'lucide-react'
 
+export type CreationMode = 'local' | 'reminder' | 'both'
+
 interface QuickCaptureFormProps {
   value: string
   onChange: (value: string) => void
-  onSubmit: () => void
+  onSubmit: (mode: CreationMode) => void
   onClose?: () => void
   compact?: boolean
 }
@@ -16,7 +18,7 @@ export function QuickCaptureForm({
   onClose,
   compact = false,
 }: QuickCaptureFormProps) {
-  const [creationMode, setCreationMode] = useState<'local' | 'reminder' | 'both'>('local')
+  const [creationMode, setCreationMode] = useState<CreationMode>('local')
 
   return (
     <div className={`glass-panel rounded-[28px] border border-white/80 p-6 shadow-2xl ${compact ? '' : ''}`}>
@@ -38,7 +40,7 @@ export function QuickCaptureForm({
       </div>
       <p className="mb-3 text-sm text-slate-500">先把想法收进来。后面我们再把它解析成具体时间和提醒。</p>
 
-      {/* 创建模式选择器 */}
+      {/* 创建方式选择器 */}
       <div className="mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
         <div className="mb-2 text-xs font-bold text-slate-600">创建方式</div>
         <div className="flex items-center gap-3">
@@ -106,7 +108,7 @@ export function QuickCaptureForm({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
-            onSubmit()
+            onSubmit(creationMode)
           } else if (event.key === 'Escape' && onClose) {
             onClose()
           }

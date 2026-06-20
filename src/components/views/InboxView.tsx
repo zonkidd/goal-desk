@@ -1,15 +1,16 @@
 import { AlignLeft, Calendar, ChevronDown, ChevronRight, CheckCircle2, Pause, PauseCircle, PlusCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { GlassPanel } from '../common/GlassPanel'
-import { useAppStore } from '../../store/appStore'
+import { useUiStore } from '../../store/uiStore'
+import { useTaskStore } from '../../store/taskStore'
 import { getTaskContentBadgeLabel } from '../../lib/taskPresentation'
 
 export function InboxView() {
-  const groupedTasks = useAppStore((state) => state.inbox)
-  const showCompleted = useAppStore((state) => state.showCompletedTodos)
-  const openTaskDrawer = useAppStore((state) => state.openTaskDrawer)
-  const addTask = useAppStore((state) => state.addTask)
-  const setShowCompleted = useAppStore((state) => state.setShowCompletedTodos)
+  const groupedTasks = useTaskStore((state) => state.inbox)
+  const showCompleted = useUiStore((state) => state.showCompletedTodos)
+  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
+  const addTask = useTaskStore((state) => state.addTask)
+  const setShowCompleted = useUiStore((state) => state.setShowCompletedTodos)
 
   return (
     <section id="inbox" className="screen active">
