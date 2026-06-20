@@ -1,10 +1,9 @@
 import { create } from 'zustand'
-import { isTauriRuntime } from '../lib/desktopApi'
-import { BROWSER_PREVIEW_STATUS, createBrowserTaskNote, createWorkspaceMutationAdapter } from '../lib/workspaceMutations'
-import { logActionForTransition } from '../lib/taskPresentation'
+import { isTauriRuntime } from '../lib/runtime'
+import { createWorkspaceMutationAdapter } from '../lib/workspaceMutations'
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 import type { InboxTaskGroups, TodayAttentionGroups } from '../lib/workspaceDerivation'
-import type { GoalCard } from '../types/app'
+import type { GoalCard, TodayAgenda } from '../types/app'
 
 export interface TaskStoreState {
   // 基础数据
@@ -13,12 +12,14 @@ export interface TaskStoreState {
   // 派生状态（需要跨 store 计算）
   todayFocusTasks: Task[]
   todayAttentionGroups: TodayAttentionGroups
+  todayTimeline: TodayAgenda
   inbox: InboxTaskGroups
 
   // Actions
   hydrateTasks: (tasks: Task[]) => void
   updateTodayFocusTasks: (tasks: Task[]) => void
   updateTodayAttentionGroups: (groups: TodayAttentionGroups) => void
+  updateTodayTimeline: (timeline: TodayAgenda) => void
   updateInbox: (inbox: InboxTaskGroups) => void
   replaceTask: (task: Task) => Task[]
   syncTasksForSystemReminder: (reminderId: string, done: boolean) => Task[]
@@ -40,7 +41,9 @@ export interface TaskStoreState {
     },
     availableGoals: GoalCard[],
   ) => Promise<void>
-  setStatusMessage: (message: string) => void
+  linkTaskToReminder: (taskId: string, reminderId: string) => Promise<void>
+  unlinkTaskFromReminder: (taskId: string) => Promise<void>
+  createAndLinkReminder: (taskId: string, title: string, dueAt?: Date) => Promise<string>
 }
 
 function replaceTaskInArray(tasks: Task[], nextTask: Task) {
@@ -76,6 +79,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   tasks: [],
   todayFocusTasks: [],
   todayAttentionGroups: { overdue: [], dueToday: [], ongoing: [] },
+  todayTimeline: [],
   inbox: {
     activeTasks: [],
     pausedTasks: [],
@@ -92,6 +96,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   // 更新派生状态
   updateTodayFocusTasks: (tasks) => set({ todayFocusTasks: tasks }),
   updateTodayAttentionGroups: (groups) => set({ todayAttentionGroups: groups }),
+  updateTodayTimeline: (timeline) => set({ todayTimeline: timeline }),
   updateInbox: (inbox) => set({ inbox }),
 
   // 替换任务
@@ -113,20 +118,12 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
     const adapter = createWorkspaceMutationAdapter()
 
     try {
-      const { task: nextTask, statusMessage } = await adapter.createTask(title)
+      const { task: nextTask } = await adapter.createTask(title)
       if (!nextTask) return null
 
       get().replaceTask(nextTask)
-      get().setStatusMessage(statusMessage || BROWSER_PREVIEW_STATUS)
-
-      // 打开任务抽屉并切换到 inbox 视图
-      const { useUiStore } = require('./uiStore')
-      useUiStore.getState().openTaskDrawer(nextTask.id)
-      useUiStore.getState().setView('inbox')
-
       return nextTask
     } catch (error) {
-      get().setStatusMessage(`Unable to save task · ${error instanceof Error ? error.message : String(error)}`)
       return null
     }
   },
@@ -136,54 +133,26 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
     const adapter = createWorkspaceMutationAdapter()
 
     try {
-      const { task: nextTask, statusMessage } = await adapter.createTaskForGoal(goal, title)
+      const { task: nextTask } = await adapter.createTaskForGoal(goal, title)
       if (!nextTask) return null
 
       get().replaceTask(nextTask)
-      get().setStatusMessage(statusMessage || BROWSER_PREVIEW_STATUS)
-
-      // 打开任务抽屉并关闭目标抽屉
-      const { useUiStore } = require('./uiStore')
-      useUiStore.getState().openTaskDrawer(nextTask.id)
-      useUiStore.getState().closeGoalDrawer()
-
       return nextTask
     } catch (error) {
-      get().setStatusMessage(`Unable to create task · ${error instanceof Error ? error.message : String(error)}`)
       return null
     }
   },
 
   // 添加任务备注
   addTaskNote: async (taskId, note) => {
-    const trimmed = note.trim()
-    if (!trimmed) return
     const adapter = createWorkspaceMutationAdapter()
-
     try {
-      if (isTauriRuntime()) {
-        const { task: updatedTask, statusMessage } = await adapter.addTaskNote(taskId, trimmed)
-        get().replaceTask(updatedTask as Task)
-        get().setStatusMessage(statusMessage || BROWSER_PREVIEW_STATUS)
-        return
+      const { task: updatedTask } = await adapter.addTaskNote(taskId, note)
+      if (updatedTask) {
+        get().replaceTask(updatedTask)
       }
-
-      set((state) => ({
-        tasks: state.tasks.map((task) =>
-          task.id === taskId
-            ? {
-                ...task,
-                activityLogs: [
-                  createBrowserTaskNote(trimmed),
-                  ...task.activityLogs,
-                ],
-              }
-            : task,
-        ),
-      }))
-      get().setStatusMessage(BROWSER_PREVIEW_STATUS)
     } catch (error) {
-      get().setStatusMessage(`Unable to save activity log · ${error instanceof Error ? error.message : String(error)}`)
+      // error handled by caller
     }
   },
 
@@ -191,40 +160,12 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   updateTaskStatus: async (taskId, status, note) => {
     const adapter = createWorkspaceMutationAdapter()
     try {
-      if (isTauriRuntime()) {
-        const { task: updatedTask, statusMessage } = await adapter.updateTaskStatus(taskId, status, note)
-        get().replaceTask(updatedTask as Task)
-        get().setStatusMessage(statusMessage || BROWSER_PREVIEW_STATUS)
-        return
+      const { task: updatedTask } = await adapter.updateTaskStatus(taskId, status, note)
+      if (updatedTask) {
+        get().replaceTask(updatedTask)
       }
-
-      set((state) => {
-        const currentTask = state.tasks.find((task) => task.id === taskId)
-        const fromStatus = currentTask?.status || 'TODO'
-        const action = logActionForTransition(fromStatus, status)
-
-        return {
-          tasks: state.tasks.map((task) =>
-            task.id === taskId
-              ? {
-                  ...task,
-                  status,
-                  activityLogs: [
-                    {
-                      action,
-                      note: note?.trim() || undefined,
-                      timestamp: new Date(),
-                    },
-                    ...task.activityLogs,
-                  ],
-                }
-              : task,
-          ),
-        }
-      })
-      get().setStatusMessage(BROWSER_PREVIEW_STATUS)
     } catch (error) {
-      get().setStatusMessage(`Unable to save task status · ${error instanceof Error ? error.message : String(error)}`)
+      // error handled by caller
     }
   },
 
@@ -232,80 +173,37 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   updateTaskContent: async (taskId, content) => {
     const adapter = createWorkspaceMutationAdapter()
     try {
-      if (isTauriRuntime()) {
-        const { task: updatedTask, statusMessage } = await adapter.updateTaskContent(taskId, content)
-        get().replaceTask(updatedTask as Task)
-        get().setStatusMessage(statusMessage || BROWSER_PREVIEW_STATUS)
-        return
+      const { task: updatedTask } = await adapter.updateTaskContent(taskId, content)
+      if (updatedTask) {
+        get().replaceTask(updatedTask)
       }
-
-      set((state) => ({
-        tasks: state.tasks.map((task) =>
-          task.id === taskId
-            ? {
-                ...task,
-                content,
-              }
-            : task,
-        ),
-      }))
-      get().setStatusMessage(BROWSER_PREVIEW_STATUS)
     } catch (error) {
-      get().setStatusMessage(`Unable to save markdown notes · ${error instanceof Error ? error.message : String(error)}`)
+      // error handled by caller
     }
   },
 
   // 更新任务字段
   updateTaskFields: async (taskId, input, availableGoals) => {
-    const trimmedTitle = input.title.trim()
-    if (!trimmedTitle) return
     const adapter = createWorkspaceMutationAdapter()
-
     try {
-      if (isTauriRuntime()) {
-        const { task: updatedTask, statusMessage } = await adapter.updateTaskFields(taskId, {
-          title: trimmedTitle,
-          plannedStartAt: input.plannedStartAt,
-          dueDate: input.dueDate,
-          linkedGoalId: input.linkedGoalId,
-          availableGoals,
-          showInTimeline: input.showInTimeline,
-          systemReminderId: input.systemReminderId,
-        })
-        get().replaceTask(updatedTask as Task)
-        get().setStatusMessage(statusMessage || BROWSER_PREVIEW_STATUS)
-        return
+      const { task: updatedTask } = await adapter.updateTaskFields(taskId, {
+        title: input.title,
+        plannedStartAt: input.plannedStartAt,
+        dueDate: input.dueDate,
+        linkedGoalId: input.linkedGoalId,
+        availableGoals,
+        showInTimeline: input.showInTimeline,
+        systemReminderId: input.systemReminderId,
+      })
+      if (updatedTask) {
+        get().replaceTask(updatedTask)
       }
-
-      set((state) => ({
-        tasks: state.tasks.map((task) =>
-          task.id === taskId
-            ? {
-                ...task,
-                title: trimmedTitle,
-                plannedStartAt: input.plannedStartAt,
-                dueDate: input.dueDate,
-                linkedGoalId: input.linkedGoalId,
-                linkedGoalLabel: input.linkedGoalId
-                  ? availableGoals.find((goal) => goal.id === input.linkedGoalId)?.title
-                  : undefined,
-                showInTimeline: input.showInTimeline ?? task.showInTimeline,
-                systemReminderId: input.systemReminderId ?? task.systemReminderId,
-                updatedAt: new Date(),
-              }
-            : task,
-        ),
-      }))
-      get().setStatusMessage(BROWSER_PREVIEW_STATUS)
     } catch (error) {
-      get().setStatusMessage(`Unable to save task details · ${error instanceof Error ? error.message : String(error)}`)
+      // error handled by caller
     }
   },
 
-  // 设置状态消息（桥接到 uiStore）
-  setStatusMessage: (message: string) => {
-    console.warn('setStatusMessage called before being linked to uiStore')
-  },
+
 
   // 关联任务到系统提醒
   linkTaskToReminder: async (taskId: string, reminderId: string) => {
@@ -314,26 +212,15 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
     if (!task) return
 
     try {
-      if (isTauriRuntime()) {
-        const { task: updatedTask, statusMessage } = await adapter.updateTaskFields(taskId, {
-          title: task.title,
-          systemReminderId: reminderId,
-        }, [])
-        get().replaceTask(updatedTask as Task)
-        get().setStatusMessage(statusMessage || BROWSER_PREVIEW_STATUS)
-        return
+      const { task: updatedTask } = await adapter.updateTaskFields(taskId, {
+        title: task.title,
+        systemReminderId: reminderId,
+      })
+      if (updatedTask) {
+        get().replaceTask(updatedTask)
       }
-
-      set((state) => ({
-        tasks: state.tasks.map((t) =>
-          t.id === taskId
-            ? { ...t, systemReminderId: reminderId, updatedAt: new Date() }
-            : t,
-        ),
-      }))
-      get().setStatusMessage(BROWSER_PREVIEW_STATUS)
     } catch (error) {
-      get().setStatusMessage(`Unable to link reminder · ${error instanceof Error ? error.message : String(error)}`)
+      // error handled by caller
     }
   },
 
@@ -344,26 +231,15 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
     if (!task) return
 
     try {
-      if (isTauriRuntime()) {
-        const { task: updatedTask, statusMessage } = await adapter.updateTaskFields(taskId, {
-          title: task.title,
-          systemReminderId: undefined,
-        }, [])
-        get().replaceTask(updatedTask as Task)
-        get().setStatusMessage(statusMessage || BROWSER_PREVIEW_STATUS)
-        return
+      const { task: updatedTask } = await adapter.updateTaskFields(taskId, {
+        title: task.title,
+        systemReminderId: undefined,
+      })
+      if (updatedTask) {
+        get().replaceTask(updatedTask)
       }
-
-      set((state) => ({
-        tasks: state.tasks.map((t) =>
-          t.id === taskId
-            ? { ...t, systemReminderId: undefined, updatedAt: new Date() }
-            : t,
-        ),
-      }))
-      get().setStatusMessage(BROWSER_PREVIEW_STATUS)
     } catch (error) {
-      get().setStatusMessage(`Unable to unlink reminder · ${error instanceof Error ? error.message : String(error)}`)
+      // error handled by caller
     }
   },
 
@@ -388,10 +264,8 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
             : task,
         ),
       }))
-      get().setStatusMessage(BROWSER_PREVIEW_STATUS)
       return mockReminderId
     } catch (error) {
-      get().setStatusMessage(`Unable to create reminder · ${error instanceof Error ? error.message : String(error)}`)
       return ''
     }
   },
