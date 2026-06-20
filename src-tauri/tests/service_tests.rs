@@ -362,3 +362,59 @@ fn app_service_shares_repository() {
     let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
     assert_eq!(s.progress, 100);
 }
+
+// ============================================================================
+// GoalService.goal_summaries() Optimization Tests
+// ============================================================================
+
+#[test]
+fn goal_summaries_returns_correct_progress() {
+    let repo = temp_repo("summaries_progress");
+    let goal_service = GoalService::new(repo.clone());
+    let task_service = TaskService::new(repo);
+
+    let g1 = goal_service.create_goal("G1", "Work", "").unwrap();
+    let g2 = goal_service.create_goal("G2", "Work", "").unwrap();
+
+    let t1 = task_service.create_task_for_goal(&g1.id.to_string(), "T1").unwrap();
+    let _t2 = task_service.create_task_for_goal(&g1.id.to_string(), "T2").unwrap();
+    let _t3 = task_service.create_task_for_goal(&g2.id.to_string(), "T3").unwrap();
+
+    task_service.update_task_status(&t1.id.to_string(), TaskStatus::Done, None).unwrap();
+
+    let summaries = goal_service.goal_summaries().unwrap();
+    let s1 = summaries.iter().find(|g| g.id == g1.id.to_string()).unwrap();
+    let s2 = summaries.iter().find(|g| g.id == g2.id.to_string()).unwrap();
+
+    assert_eq!(s1.task_count, 2);
+    assert_eq!(s1.progress, 50);
+    assert_eq!(s2.task_count, 1);
+    assert_eq!(s2.progress, 0);
+}
+
+#[test]
+fn goal_summaries_includes_area_title() {
+    let repo = temp_repo("summaries_area");
+    let service = GoalService::new(repo);
+    let goal = service.create_goal("Goal", "Work Area", "").unwrap();
+    let summaries = service.goal_summaries().unwrap();
+    let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
+    assert_eq!(s.area, "Work Area");
+}
+
+#[test]
+fn goal_summaries_next_todo_picks_first_incomplete() {
+    let repo = temp_repo("summaries_next_todo");
+    let goal_service = GoalService::new(repo.clone());
+    let task_service = TaskService::new(repo);
+
+    let goal = goal_service.create_goal("Goal", "Work", "").unwrap();
+    let t1 = task_service.create_task_for_goal(&goal.id.to_string(), "First").unwrap();
+    let _t2 = task_service.create_task_for_goal(&goal.id.to_string(), "Second").unwrap();
+
+    task_service.update_task_status(&t1.id.to_string(), TaskStatus::Done, None).unwrap();
+
+    let summaries = goal_service.goal_summaries().unwrap();
+    let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
+    assert_eq!(s.next_todo, "Second");
+}

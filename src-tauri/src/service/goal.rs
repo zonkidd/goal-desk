@@ -2,6 +2,7 @@ use crate::domain::{
     Goal, GoalStatus, GoalSummary, TaskStatus,
 };
 use crate::repository::{AreaRepository, GoalRepository, SqliteRepository, TaskRepository};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 pub struct GoalService {
@@ -109,19 +110,27 @@ impl GoalService {
         let areas = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;
         let tasks = TaskRepository::list(&self.repo).map_err(|e| e.to_string())?;
 
+        let area_titles: HashMap<Uuid, String> = areas
+            .iter()
+            .map(|a| (a.id, a.title.clone()))
+            .collect();
+
+        let mut tasks_by_goal: HashMap<Uuid, Vec<&crate::domain::DeskTask>> = HashMap::new();
+        for task in &tasks {
+            if let Some(goal_id) = task.linked_goal_id {
+                tasks_by_goal.entry(goal_id).or_default().push(task);
+            }
+        }
+
         Ok(goals
             .iter()
             .map(|goal| {
                 let area_title = goal
                     .area_id
-                    .and_then(|aid| areas.iter().find(|a| a.id == aid))
-                    .map(|a| a.title.clone())
+                    .and_then(|aid| area_titles.get(&aid).cloned())
                     .unwrap_or_else(|| "Unsorted".to_string());
 
-                let goal_tasks: Vec<_> = tasks
-                    .iter()
-                    .filter(|t| t.linked_goal_id == Some(goal.id))
-                    .collect();
+                let goal_tasks = tasks_by_goal.get(&goal.id).map(|v| v.as_slice()).unwrap_or(&[]);
 
                 let task_count = goal_tasks.len();
                 let done_count = goal_tasks
