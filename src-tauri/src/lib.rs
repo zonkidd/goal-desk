@@ -1,19 +1,18 @@
 pub mod domain;
 pub mod eventkit;
 pub mod repository;
+pub mod service;
 pub mod time_parser;
-pub mod workspace_session;
 
 use chrono::Local;
 use domain::{
-    goal_progress, parse_quick_capture, today_timeline, Area, CalendarEvent, DeskTask, Goal,
-    GoalStatus, GoalSummary, TaskActivityAction, TaskActivityLog, TaskStatus, TimelineItem,
-    WorkspaceSnapshot, UNCATEGORIZED_AREA_ID,
+    today_timeline, CalendarEvent, DeskTask,
+    GoalStatus, GoalSummary, TaskStatus, TimelineItem,
+    WorkspaceSnapshot,
 };
 use eventkit::{SystemAgendaSnapshot, SystemReminder};
 use repository::SqliteRepository;
 use tauri::{AppHandle, Manager, TitleBarStyle, WebviewUrl, WebviewWindowBuilder};
-use uuid::Uuid;
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 
@@ -23,289 +22,17 @@ pub fn today_snapshot_data(path: &std::path::Path) -> Result<Vec<TimelineItem>, 
     Ok(timeline_from_workspace(&snapshot))
 }
 
-pub fn goal_snapshot_data(path: &std::path::Path) -> Result<Vec<GoalSummary>, String> {
-    let repository = SqliteRepository::new(path.to_path_buf());
-    let snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
-    Ok(goal_summaries(&snapshot))
-}
-
-pub fn create_goal_record(
-    path: &std::path::Path,
-    title: String,
-    area: String,
-    description: String,
-    status: GoalStatus,
-) -> Result<Goal, String> {
-    use workspace_session::WorkspaceSession;
-
-    let trimmed_title = title.trim();
-    if trimmed_title.is_empty() {
-        return Err("Goal title cannot be empty".to_string());
-    }
-
-    let trimmed_area = area.trim();
-    let area_title = if trimmed_area.is_empty() {
-        "未分类"
-    } else {
-        trimmed_area
-    };
-
-    let repository = SqliteRepository::new(path.to_path_buf());
-    let mut session = WorkspaceSession::load(&repository)?;
-    let goal = session.create_goal(
-        trimmed_title.to_string(),
-        area_title.to_string(),
-        description,
-        status,
-    )?;
-
-    // 提交 snapshot 变更，这将自动保存至 goals 独立表中
-    session.commit()?;
-
-    Ok(goal)
-}
-
-pub fn update_goal_record(
-    path: &std::path::Path,
-    goal_id: String,
-    title: String,
-    area: String,
-    description: String,
-    status: GoalStatus,
-) -> Result<Goal, String> {
-    use repository::GoalRepository;
-    use workspace_session::WorkspaceSession;
-
-    let trimmed_title = title.trim();
-    if trimmed_title.is_empty() {
-        return Err("Goal title cannot be empty".to_string());
-    }
-
-    let trimmed_area = area.trim();
-    let area_title = if trimmed_area.is_empty() {
-        "未分类"
-    } else {
-        trimmed_area
-    };
-
-    let goal_id = Uuid::parse_str(&goal_id).map_err(|error| error.to_string())?;
-    let repository = SqliteRepository::new(path.to_path_buf());
-
-    // 加载 session 并确保 area 存在
-    let mut session = WorkspaceSession::load(&repository)?;
-    let area_id = session.ensure_area(area_title);
-
-    // 读取并更新 goal
-    let mut goal = GoalRepository::find(&repository, goal_id)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| format!("Goal not found: {goal_id}"))?;
-
-    goal.title = trimmed_title.to_string();
-    goal.area_id = Some(area_id);
-    goal.description = description;
-    goal.status = status;
-
-    // 提交 snapshot 变更（如果创建了新 area）
-    session.commit()?;
-
-    // 持久化 goal 更新
-    GoalRepository::update(&repository, &goal)
-        .map_err(|error| error.to_string())?;
-    Ok(goal)
-}
-
-pub fn update_goal_status_record(
-    path: &std::path::Path,
-    goal_id: String,
-    status: GoalStatus,
-) -> Result<Goal, String> {
-    use repository::GoalRepository;
-
-    let goal_id = Uuid::parse_str(&goal_id).map_err(|error| error.to_string())?;
-    let repository = SqliteRepository::new(path.to_path_buf());
-
-    // 使用 GoalRepository trait 读取单个 goal
-    let mut goal = GoalRepository::find(&repository, goal_id)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| format!("Goal not found: {goal_id}"))?;
-
-    // 使用领域方法验证状态转换
-    if !goal.can_transition_to(status) {
-        return Err(format!(
-            "Invalid status transition from {:?} to {:?}",
-            goal.status, status
-        ));
-    }
-
-    goal.status = status;
-
-    // 使用 GoalRepository trait 更新单个字段
-    GoalRepository::update(&repository, &goal)
-        .map_err(|error| error.to_string())?;
-    Ok(goal)
-}
-
-pub fn create_task_for_goal_record(
-    path: &std::path::Path,
-    goal_id: String,
-    title: String,
-) -> Result<DeskTask, String> {
-    let trimmed_title = title.trim();
-    if trimmed_title.is_empty() {
-        return Err("Task title cannot be empty".to_string());
-    }
-
-    let goal_id = Uuid::parse_str(&goal_id).map_err(|error| error.to_string())?;
-    let repository = SqliteRepository::new(path.to_path_buf());
-    let snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
-    let goal = snapshot
-        .goals
-        .iter()
-        .find(|goal| goal.id == goal_id)
-        .ok_or_else(|| format!("Goal not found: {goal_id}"))?;
-
-    let mut tasks = repository.load_desk_tasks().map_err(|error| error.to_string())?;
-
-    // 使用 Goal 的领域方法创建任务
-    let task = goal.create_task(trimmed_title.to_string());
-
-    tasks.insert(0, task.clone());
-    repository
-        .save_desk_tasks(&tasks)
-        .map_err(|error| error.to_string())?;
-    Ok(task)
-}
-
 fn timeline_from_workspace(snapshot: &WorkspaceSnapshot) -> Vec<TimelineItem> {
     let now = Local::now();
     today_timeline(
         now.date_naive(),
-        &snapshot.todos,
         &snapshot.reminders,
         &empty_calendar_events(now),
     )
 }
 
-fn goal_summaries(snapshot: &WorkspaceSnapshot) -> Vec<GoalSummary> {
-    snapshot
-        .goals
-        .iter()
-        .map(|goal| {
-            let progress = goal_progress(goal.id, &snapshot.todos, &snapshot.milestones);
-            GoalSummary {
-                id: goal.id.to_string(),
-                title: goal.title.clone(),
-                area: goal
-                    .area_id
-                    .and_then(|area_id| snapshot.areas.iter().find(|area| area.id == area_id))
-                    .map(|area| area.title.clone())
-                    .unwrap_or_else(|| "Unsorted".to_string()),
-                description: goal.description.clone(),
-                status: goal.status,
-                progress: progress.percent,
-                task_count: snapshot
-                    .todos
-                    .iter()
-                    .filter(|todo| todo.goal_id == Some(goal.id))
-                    .count(),
-                next_todo: snapshot
-                    .todos
-                    .iter()
-                    .find(|todo| todo.goal_id == Some(goal.id) && !todo.completed)
-                    .map(|todo| todo.title.clone())
-                    .unwrap_or_default(),
-            }
-        })
-        .collect()
-}
-
-pub fn list_areas_with_stats(path: &std::path::Path) -> Result<Vec<domain::AreaWithStats>, String> {
-    let repository = SqliteRepository::new(path.to_path_buf());
-    let snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
-
-    let mut areas_with_stats: Vec<domain::AreaWithStats> = snapshot
-        .areas
-        .iter()
-        .map(|area| {
-            let goals_in_area: Vec<&Goal> = snapshot
-                .goals
-                .iter()
-                .filter(|goal| goal.area_id == Some(area.id))
-                .collect();
-
-            let goal_count = goals_in_area.len();
-            let active_goal_count = goals_in_area
-                .iter()
-                .filter(|goal| goal.status == GoalStatus::Active)
-                .count();
-
-            domain::AreaWithStats {
-                id: area.id,
-                title: area.title.clone(),
-                goal_count,
-                active_goal_count,
-                is_system: area.is_system,
-            }
-        })
-        .collect();
-
-    areas_with_stats.sort_by(|a, b| a.title.cmp(&b.title));
-    Ok(areas_with_stats)
-}
-
-pub fn create_area_record(path: &std::path::Path, title: String) -> Result<Area, String> {
-    use repository::AreaRepository;
-
-    let trimmed_title = title.trim();
-    if trimmed_title.is_empty() {
-        return Err("Area title cannot be empty".to_string());
-    }
-
-    let repository = SqliteRepository::new(path.to_path_buf());
-
-    // 检查是否已存在
-    let existing_areas = AreaRepository::list(&repository).map_err(|error| error.to_string())?;
-    if existing_areas.iter().any(|area| area.title.to_lowercase() == trimmed_title.to_lowercase()) {
-        return Err(format!("Area '{}' already exists", trimmed_title));
-    }
-
-    let area = Area {
-        id: Uuid::new_v4(),
-        title: trimmed_title.to_string(),
-        is_system: false,
-    };
-
-    AreaRepository::create(&repository, &area)
-        .map_err(|error| error.to_string())?;
-    Ok(area)
-}
-
-pub fn rename_area_record(path: &std::path::Path, area_id: String, new_title: String) -> Result<Area, String> {
-    use repository::AreaRepository;
-
-    let trimmed_title = new_title.trim();
-    if trimmed_title.is_empty() {
-        return Err("Area title cannot be empty".to_string());
-    }
-
-    let area_id = Uuid::parse_str(&area_id).map_err(|error| error.to_string())?;
-    let repository = SqliteRepository::new(path.to_path_buf());
-
-    // 检查是否已存在同名 area
-    let existing_areas = AreaRepository::list(&repository).map_err(|error| error.to_string())?;
-    if existing_areas.iter().any(|area| area.id != area_id && area.title.to_lowercase() == trimmed_title.to_lowercase()) {
-        return Err(format!("Area '{}' already exists", trimmed_title));
-    }
-
-    let mut area = AreaRepository::find(&repository, area_id)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| format!("Area not found: {}", area_id))?;
-
-    area.title = trimmed_title.to_string();
-
-    AreaRepository::update(&repository, &area)
-        .map_err(|error| error.to_string())?;
-    Ok(area)
+fn empty_calendar_events(_now: chrono::DateTime<Local>) -> Vec<CalendarEvent> {
+    Vec::new()
 }
 
 pub fn reset_all_data_record(path: &std::path::Path) -> Result<(), String> {
@@ -318,7 +45,6 @@ pub fn reset_all_data_record(path: &std::path::Path) -> Result<(), String> {
             "
             DELETE FROM desk_task_activity_logs;
             DELETE FROM desk_tasks;
-            DELETE FROM milestones;
             DELETE FROM todos;
             DELETE FROM projects;
             DELETE FROM goals;
@@ -330,80 +56,13 @@ pub fn reset_all_data_record(path: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn delete_area_record(path: &std::path::Path, area_id: String, force: bool) -> Result<domain::DeleteAreaResult, String> {
-    use repository::{AreaRepository, GoalRepository};
-
-    let area_id = Uuid::parse_str(&area_id).map_err(|error| error.to_string())?;
-    let repository = SqliteRepository::new(path.to_path_buf());
-
-    // 1. 检查 area 是否存在且不是系统 area
-    let area = AreaRepository::find(&repository, area_id)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| format!("Area not found: {}", area_id))?;
-
-    if area.is_system {
-        return Ok(domain::DeleteAreaResult {
-            success: false,
-            message: "系统领域无法删除".to_string(),
-            affected_goal_count: 0,
-            reassigned_to_area_id: None,
-        });
-    }
-
-    // 2. 统计关联 goals
-    let affected_goals = GoalRepository::list_by_area(&repository, area_id)
-        .map_err(|error| error.to_string())?;
-    let affected_goal_count = affected_goals.len();
-
-    // 3. force=false 且有关联 goals 时拒绝删除
-    if affected_goal_count > 0 && !force {
-        return Ok(domain::DeleteAreaResult {
-            success: false,
-            message: format!("该领域有 {} 个关联目标，请先处理或使用强制删除", affected_goal_count),
-            affected_goal_count,
-            reassigned_to_area_id: None,
-        });
-    }
-
-    // 4. force=true 时将 goals 移动到"未分类"
-    let uncategorized_id = Uuid::parse_str(UNCATEGORIZED_AREA_ID).unwrap();
-    if force && affected_goal_count > 0 {
-        for mut goal in affected_goals {
-            goal.area_id = Some(uncategorized_id);
-            GoalRepository::update(&repository, &goal)
-                .map_err(|error| error.to_string())?;
-        }
-    }
-
-    // 5. 删除 area
-    AreaRepository::delete(&repository, area_id)
-        .map_err(|error| error.to_string())?;
-
-    Ok(domain::DeleteAreaResult {
-        success: true,
-        message: "领域已删除".to_string(),
-        affected_goal_count,
-        reassigned_to_area_id: if affected_goal_count > 0 {
-            Some(uncategorized_id)
-        } else {
-            None
-        },
-    })
-}
-
 fn empty_workspace_snapshot() -> WorkspaceSnapshot {
     WorkspaceSnapshot {
         areas: Vec::new(),
         projects: Vec::new(),
         goals: Vec::new(),
-        todos: Vec::new(),
         reminders: Vec::new(),
-        milestones: Vec::new(),
     }
-}
-
-fn empty_calendar_events(_now: chrono::DateTime<Local>) -> Vec<CalendarEvent> {
-    Vec::new()
 }
 
 fn workspace_repository<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<SqliteRepository, String> {
@@ -422,9 +81,7 @@ fn load_or_seed_workspace<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Works
     if snapshot.areas.is_empty()
         && snapshot.projects.is_empty()
         && snapshot.goals.is_empty()
-        && snapshot.todos.is_empty()
         && snapshot.reminders.is_empty()
-        && snapshot.milestones.is_empty()
     {
         let empty = empty_workspace_snapshot();
         repository
@@ -445,12 +102,6 @@ fn load_or_seed_desk_tasks<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Vec<
     } else {
         Ok(tasks)
     }
-}
-
-fn persist_desk_tasks<R: tauri::Runtime>(app: &AppHandle<R>, tasks: &[DeskTask]) -> Result<(), String> {
-    workspace_repository(app)?
-        .save_desk_tasks(tasks)
-        .map_err(|error| error.to_string())
 }
 
 fn ensure_quick_capture_window<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<tauri::WebviewWindow<R>, String> {
@@ -494,15 +145,27 @@ fn show_quick_capture_window_internal<R: tauri::Runtime>(app: &AppHandle<R>) -> 
 
 mod commands {
     use super::{
-        bear_note_url, create_goal_record, create_task_for_goal_record, eventkit, goal_summaries,
-        load_or_seed_desk_tasks, load_or_seed_workspace, parse_quick_capture, persist_desk_tasks,
-        show_quick_capture_window_internal, timeline_from_workspace, update_goal_record,
-        update_goal_status_record, workspace_repository, DeskTask, GoalStatus, GoalSummary,
-        SystemAgendaSnapshot, SystemReminder, TaskActivityAction, TaskActivityLog, TaskStatus, TimelineItem,
+        bear_note_url, eventkit, load_or_seed_desk_tasks,
+        load_or_seed_workspace, show_quick_capture_window_internal,
+        timeline_from_workspace, workspace_repository, DeskTask, GoalStatus,
+        GoalSummary, SystemAgendaSnapshot, SystemReminder, TaskStatus, TimelineItem,
     };
+    use crate::service::{AreaService, GoalService, TaskService};
     use chrono::{Datelike, Duration, Local, TimeZone};
     use tauri::{AppHandle, Emitter};
     use uuid::Uuid;
+
+    fn goal_service(app: &AppHandle) -> Result<GoalService, String> {
+        Ok(GoalService::new(workspace_repository(app)?))
+    }
+
+    fn task_service(app: &AppHandle) -> Result<TaskService, String> {
+        Ok(TaskService::new(workspace_repository(app)?))
+    }
+
+    fn area_service(app: &AppHandle) -> Result<AreaService, String> {
+        Ok(AreaService::new(workspace_repository(app)?))
+    }
 
     fn maybe_create_task_system_reminder(
         app: &AppHandle,
@@ -519,47 +182,16 @@ mod commands {
         reminder_id: &str,
         done: bool,
     ) -> Result<(), String> {
-        let mut tasks = load_or_seed_desk_tasks(app)?;
-        let mut changed = false;
-
-        for task in &mut tasks {
-            if task.system_reminder_id.as_deref() != Some(reminder_id) {
-                continue;
-            }
-
-            let next_status = if done { TaskStatus::Done } else { TaskStatus::Todo };
-            if task.status == next_status {
-                continue;
-            }
-
-            task.status = next_status;
-            task.activity_logs.insert(
-                0,
-                TaskActivityLog {
-                    action: if done {
-                        TaskActivityAction::Completed
-                    } else {
-                        TaskActivityAction::Resumed
-                    },
-                    note: Some("Synced from Apple Reminders.".to_string()),
-                    timestamp: Local::now(),
-                },
-            );
-            changed = true;
-        }
-
-        if changed {
-            persist_desk_tasks(app, &tasks)?;
-        }
-
-        Ok(())
+        let service = task_service(app)?;
+        service.sync_linked_tasks_for_system_reminder(reminder_id, done)
     }
 
     fn goal_summary_by_id(app: &AppHandle, goal_id: &str) -> Result<GoalSummary, String> {
-        let snapshot = load_or_seed_workspace(app)?;
-        goal_summaries(&snapshot)
+        let service = goal_service(app)?;
+        service
+            .goal_summaries()?
             .into_iter()
-            .find(|goal| goal.id == goal_id)
+            .find(|g| g.id == goal_id)
             .ok_or_else(|| format!("Goal not found: {goal_id}"))
     }
 
@@ -571,8 +203,8 @@ mod commands {
 
     #[tauri::command]
     pub fn goal_snapshot(app: AppHandle) -> Result<Vec<GoalSummary>, String> {
-        let snapshot = load_or_seed_workspace(&app)?;
-        Ok(goal_summaries(&snapshot))
+        let service = goal_service(&app)?;
+        service.goal_summaries()
     }
 
     #[tauri::command]
@@ -581,10 +213,10 @@ mod commands {
         title: String,
         area: String,
         description: String,
-        status: GoalStatus,
+        _status: GoalStatus,
     ) -> Result<GoalSummary, String> {
-        let path = workspace_repository(&app)?.path().to_path_buf();
-        let goal = create_goal_record(&path, title, area, description, status)?;
+        let service = goal_service(&app)?;
+        let goal = service.create_goal(&title, &area, &description)?;
         goal_summary_by_id(&app, &goal.id.to_string())
     }
 
@@ -596,7 +228,8 @@ mod commands {
         area: String,
         description: String,
     ) -> Result<GoalSummary, String> {
-        update_goal_record(&workspace_repository(&app)?.path().to_path_buf(), goal_id.clone(), title, area, description, goal_summary_by_id(&app, &goal_id)?.status)?;
+        let service = goal_service(&app)?;
+        service.update_goal_fields(&goal_id, &title, &area, &description)?;
         goal_summary_by_id(&app, &goal_id)
     }
 
@@ -606,20 +239,21 @@ mod commands {
         goal_id: String,
         status: GoalStatus,
     ) -> Result<GoalSummary, String> {
-        update_goal_status_record(&workspace_repository(&app)?.path().to_path_buf(), goal_id.clone(), status)?;
+        let service = goal_service(&app)?;
+        service.update_goal_status(&goal_id, status)?;
         goal_summary_by_id(&app, &goal_id)
     }
 
     #[tauri::command]
     pub fn list_areas(app: AppHandle) -> Result<Vec<super::domain::AreaWithStats>, String> {
-        let path = workspace_repository(&app)?.path().to_path_buf();
-        super::list_areas_with_stats(&path)
+        let service = goal_service(&app)?;
+        service.list_areas_with_stats()
     }
 
     #[tauri::command]
     pub fn create_area(app: AppHandle, title: String) -> Result<super::domain::Area, String> {
-        let path = workspace_repository(&app)?.path().to_path_buf();
-        super::create_area_record(&path, title)
+        let service = area_service(&app)?;
+        service.create_area(&title)
     }
 
     #[tauri::command]
@@ -628,8 +262,8 @@ mod commands {
         area_id: String,
         new_title: String,
     ) -> Result<super::domain::Area, String> {
-        let path = workspace_repository(&app)?.path().to_path_buf();
-        super::rename_area_record(&path, area_id, new_title)
+        let service = area_service(&app)?;
+        service.rename_area(&area_id, &new_title)
     }
 
     #[tauri::command]
@@ -638,8 +272,8 @@ mod commands {
         area_id: String,
         force: bool,
     ) -> Result<super::domain::DeleteAreaResult, String> {
-        let path = workspace_repository(&app)?.path().to_path_buf();
-        super::delete_area_record(&path, area_id, force)
+        let service = area_service(&app)?;
+        service.delete_area(&area_id, force)
     }
 
     #[tauri::command]
@@ -650,68 +284,47 @@ mod commands {
 
     #[tauri::command]
     pub fn desk_task_list(app: AppHandle) -> Result<Vec<DeskTask>, String> {
-        load_or_seed_desk_tasks(&app)
+        let service = task_service(&app)?;
+        service.list_tasks()
     }
 
     #[tauri::command]
     pub fn capture_task(app: AppHandle, input: String) -> Result<DeskTask, String> {
-        let now = Local::now();
-        let draft = parse_quick_capture(&input, now);
-        let title = draft.title.clone();
+        let service = task_service(&app)?;
+        let task = service.capture_task(&input)?;
 
-        if draft.title.trim().is_empty() {
-            return Err("Task title cannot be empty".to_string());
+        // EventKit: create system reminder if time was parsed
+        let reminder_time = task.planned_start_at.or(task.due_at);
+        if let Some(reminder_id) = maybe_create_task_system_reminder(&app, &task.title, reminder_time) {
+            let updated = service.update_task_system_reminder_id(&task.id.to_string(), Some(reminder_id))?;
+            let _ = app.emit("desk-task-created", &updated);
+            return Ok(updated);
         }
 
-        let mut tasks = load_or_seed_desk_tasks(&app)?;
-
-        // 优先使用 planned_start_at，否则用 due_at
-        let reminder_time = draft.planned_start_at.or(draft.due_at);
-        let system_reminder_id = maybe_create_task_system_reminder(&app, &title, reminder_time);
-
-        let task = DeskTask {
-            id: Uuid::new_v4(),
-            title,
-            content: String::new(),
-            status: TaskStatus::Todo,
-            planned_start_at: draft.planned_start_at,
-            due_at: draft.due_at,
-            linked_goal_id: None,
-            linked_goal_label: None,
-            bear_note_id: None,
-            system_reminder_id,
-            show_in_timeline: draft.planned_start_at.is_some() || draft.due_at.is_some(),
-            activity_logs: vec![TaskActivityLog {
-                action: TaskActivityAction::Created,
-                note: None,
-                timestamp: now,
-            }],
-        };
-
-        tasks.insert(0, task.clone());
-        persist_desk_tasks(&app, &tasks)?;
         let _ = app.emit("desk-task-created", &task);
         Ok(task)
     }
 
     #[tauri::command]
-    pub fn create_task_for_goal(app: AppHandle, goal_id: String, title: String) -> Result<DeskTask, String> {
-        let task = create_task_for_goal_record(&workspace_repository(&app)?.path().to_path_buf(), goal_id, title)?;
+    pub fn create_task_for_goal(
+        app: AppHandle,
+        goal_id: String,
+        title: String,
+    ) -> Result<DeskTask, String> {
+        let service = task_service(&app)?;
+        let task = service.create_task_for_goal(&goal_id, &title)?;
         let _ = app.emit("desk-task-created", &task);
         Ok(task)
     }
 
     #[tauri::command]
-    pub fn update_task_content(app: AppHandle, task_id: String, content: String) -> Result<DeskTask, String> {
-        let mut tasks = load_or_seed_desk_tasks(&app)?;
-        let task = tasks
-            .iter_mut()
-            .find(|task| task.id.to_string() == task_id)
-            .ok_or_else(|| format!("Task not found: {task_id}"))?;
-        task.content = content;
-        let updated = task.clone();
-        persist_desk_tasks(&app, &tasks)?;
-        Ok(updated)
+    pub fn update_task_content(
+        app: AppHandle,
+        task_id: String,
+        content: String,
+    ) -> Result<DeskTask, String> {
+        let service = task_service(&app)?;
+        service.update_task_content(&task_id, &content)
     }
 
     #[tauri::command]
@@ -725,44 +338,16 @@ mod commands {
         linked_goal_label: Option<String>,
         show_in_timeline: Option<bool>,
     ) -> Result<DeskTask, String> {
-        let trimmed_title = title.trim();
-        if trimmed_title.is_empty() {
-            return Err("Task title cannot be empty".to_string());
-        }
-
-        let mut tasks = load_or_seed_desk_tasks(&app)?;
-        let task = tasks
-            .iter_mut()
-            .find(|task| task.id.to_string() == task_id)
-            .ok_or_else(|| format!("Task not found: {task_id}"))?;
-
-        task.title = trimmed_title.to_string();
-        task.planned_start_at = planned_start_at
-            .map(|value| chrono::DateTime::parse_from_rfc3339(&value).map(|parsed| parsed.with_timezone(&Local)))
-            .transpose()
-            .map_err(|error| error.to_string())?;
-        task.due_at = due_at
-            .map(|value| chrono::DateTime::parse_from_rfc3339(&value).map(|parsed| parsed.with_timezone(&Local)))
-            .transpose()
-            .map_err(|error| error.to_string())?;
-        task.linked_goal_id = linked_goal_id
-            .as_deref()
-            .map(Uuid::parse_str)
-            .transpose()
-            .map_err(|error| error.to_string())?;
-        task.linked_goal_label = linked_goal_label.and_then(|value| {
-            let trimmed = value.trim().to_string();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed)
-            }
-        });
-        task.show_in_timeline = show_in_timeline.unwrap_or(task.show_in_timeline);
-
-        let updated = task.clone();
-        persist_desk_tasks(&app, &tasks)?;
-        Ok(updated)
+        let service = task_service(&app)?;
+        service.update_task_fields(
+            &task_id,
+            &title,
+            planned_start_at,
+            due_at,
+            linked_goal_id,
+            linked_goal_label,
+            show_in_timeline,
+        )
     }
 
     #[tauri::command]
@@ -772,83 +357,35 @@ mod commands {
         status: TaskStatus,
         note: Option<String>,
     ) -> Result<DeskTask, String> {
-        let mut tasks = load_or_seed_desk_tasks(&app)?;
-        let task = tasks
-            .iter_mut()
-            .find(|task| task.id.to_string() == task_id)
-            .ok_or_else(|| format!("Task not found: {task_id}"))?;
+        let service = task_service(&app)?;
 
-        // 使用领域方法验证状态转换
-        if !task.can_transition_to(status) {
-            return Err(format!(
-                "Invalid status transition from {:?} to {:?}",
-                task.status, status
-            ));
+        // EventKit sync must happen before status update (needs old task state)
+        use crate::repository::TaskRepository;
+        let repository = workspace_repository(&app)?;
+        let task_uuid = Uuid::parse_str(&task_id).map_err(|e| e.to_string())?;
+        if let Some(task) = TaskRepository::find(&repository, task_uuid)
+            .map_err(|e| e.to_string())?
+        {
+            if let Some(reminder_id) = task.system_reminder_id.as_deref() {
+                eventkit::set_system_reminder_completed(
+                    &app,
+                    reminder_id,
+                    matches!(status, TaskStatus::Done),
+                )?;
+            }
         }
 
-        if let Some(reminder_id) = task.system_reminder_id.as_deref() {
-            eventkit::set_system_reminder_completed(&app, reminder_id, matches!(status, TaskStatus::Done))?;
-        }
-
-        let previous_status = task.status;
-        task.status = status;
-        task.activity_logs.insert(
-            0,
-            TaskActivityLog {
-                action: match status {
-                    TaskStatus::Paused => TaskActivityAction::Paused,
-                    TaskStatus::Done => TaskActivityAction::Completed,
-                    TaskStatus::InProgress => {
-                        if previous_status == TaskStatus::Paused {
-                            TaskActivityAction::Resumed
-                        } else {
-                            TaskActivityAction::Started
-                        }
-                    }
-                    TaskStatus::Todo => TaskActivityAction::NoteAdded,
-                },
-                note: note.and_then(|value| {
-                    let trimmed = value.trim().to_string();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed)
-                    }
-                }),
-                timestamp: Local::now(),
-            },
-        );
-
-        let updated = task.clone();
-        persist_desk_tasks(&app, &tasks)?;
-        Ok(updated)
+        service.update_task_status(&task_id, status, note)
     }
 
     #[tauri::command]
-    pub fn add_task_note(app: AppHandle, task_id: String, note: String) -> Result<DeskTask, String> {
-        let trimmed = note.trim();
-        if trimmed.is_empty() {
-            return Err("Task note cannot be empty".to_string());
-        }
-
-        let mut tasks = load_or_seed_desk_tasks(&app)?;
-        let task = tasks
-            .iter_mut()
-            .find(|task| task.id.to_string() == task_id)
-            .ok_or_else(|| format!("Task not found: {task_id}"))?;
-
-        task.activity_logs.insert(
-            0,
-            TaskActivityLog {
-                action: TaskActivityAction::NoteAdded,
-                note: Some(trimmed.to_string()),
-                timestamp: Local::now(),
-            },
-        );
-
-        let updated = task.clone();
-        persist_desk_tasks(&app, &tasks)?;
-        Ok(updated)
+    pub fn add_task_note(
+        app: AppHandle,
+        task_id: String,
+        note: String,
+    ) -> Result<DeskTask, String> {
+        let service = task_service(&app)?;
+        service.add_task_note(&task_id, &note)
     }
 
     #[tauri::command]

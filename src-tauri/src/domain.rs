@@ -130,20 +130,6 @@ impl Goal {
         }
     }
 
-    /// 计算目标进度（0-100）
-    pub fn compute_progress(&self, tasks: &[DeskTask]) -> u8 {
-        let goal_tasks: Vec<_> = tasks.iter()
-            .filter(|t| t.linked_goal_id == Some(self.id))
-            .collect();
-
-        if goal_tasks.is_empty() {
-            return 0;
-        }
-
-        let done_count = goal_tasks.iter().filter(|t| t.status == TaskStatus::Done).count();
-        ((done_count as f64 / goal_tasks.len() as f64) * 100.0).round() as u8
-    }
-
     /// 创建关联到此 Goal 的新任务
     pub fn create_task(&self, title: String) -> DeskTask {
         DeskTask {
@@ -159,6 +145,7 @@ impl Goal {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![TaskActivityLog {
+                id: Uuid::new_v4(),
                 action: TaskActivityAction::Created,
                 note: None,
                 timestamp: Local::now(),
@@ -191,17 +178,6 @@ pub struct Project {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Todo {
-    pub id: Uuid,
-    pub goal_id: Option<Uuid>,
-    pub project_id: Option<Uuid>,
-    pub title: String,
-    pub scheduled_at: Option<DateTime<Local>>,
-    pub completed: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Reminder {
     pub id: Uuid,
     pub title: String,
@@ -220,15 +196,6 @@ pub struct CalendarEvent {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Milestone {
-    pub id: Uuid,
-    pub goal_id: Uuid,
-    pub title: String,
-    pub completed: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct TimelineItem {
     pub id: String,
     pub title: String,
@@ -242,6 +209,7 @@ pub struct TimelineItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskActivityLog {
+    pub id: Uuid,
     pub action: TaskActivityAction,
     pub note: Option<String>,
     pub timestamp: DateTime<Local>,
@@ -255,7 +223,6 @@ pub struct DeskTask {
     pub content: String,
     pub status: TaskStatus,
     pub planned_start_at: Option<DateTime<Local>>,
-    #[serde(rename = "dueDate")]
     pub due_at: Option<DateTime<Local>>,
     pub linked_goal_id: Option<Uuid>,
     pub linked_goal_label: Option<String>,
@@ -281,6 +248,7 @@ impl DeskTask {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![TaskActivityLog {
+                id: Uuid::new_v4(),
                 action: TaskActivityAction::Created,
                 note: None,
                 timestamp: Local::now(),
@@ -358,13 +326,6 @@ pub enum Urgency {
     None,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GoalProgress {
-    pub completed_units: usize,
-    pub total_units: usize,
-    pub percent: u8,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuickCaptureDraft {
     pub title: String,
@@ -377,9 +338,7 @@ pub struct WorkspaceSnapshot {
     pub areas: Vec<Area>,
     pub projects: Vec<Project>,
     pub goals: Vec<Goal>,
-    pub todos: Vec<Todo>,
     pub reminders: Vec<Reminder>,
-    pub milestones: Vec<Milestone>,
 }
 
 impl WorkspaceSnapshot {
@@ -423,27 +382,10 @@ impl WorkspaceSnapshot {
 
 pub fn today_timeline(
     day: NaiveDate,
-    todos: &[Todo],
     reminders: &[Reminder],
     events: &[CalendarEvent],
 ) -> Vec<TimelineItem> {
     let mut items = Vec::new();
-
-    for todo in todos {
-        if let Some(scheduled_at) = todo.scheduled_at {
-            if scheduled_at.date_naive() == day {
-                items.push(TimelineItem {
-                    id: todo.id.to_string(),
-                    title: todo.title.clone(),
-                    starts_at: scheduled_at,
-                    source: TimelineSource::Todo,
-                    read_only: false,
-                    completed: todo.completed,
-                    source_label: None,
-                });
-            }
-        }
-    }
 
     for reminder in reminders {
         if reminder.due_at.date_naive() == day {
@@ -475,40 +417,6 @@ pub fn today_timeline(
 
     items.sort_by_key(|item| item.starts_at);
     items
-}
-
-pub fn goal_progress(goal_id: Uuid, todos: &[Todo], milestones: &[Milestone]) -> GoalProgress {
-    let linked_todos = todos.iter().filter(|todo| todo.goal_id == Some(goal_id));
-    let linked_milestones = milestones.iter().filter(|milestone| milestone.goal_id == goal_id);
-
-    let mut completed_units = 0;
-    let mut total_units = 0;
-
-    for todo in linked_todos {
-        total_units += 1;
-        if todo.completed {
-            completed_units += 1;
-        }
-    }
-
-    for milestone in linked_milestones {
-        total_units += 1;
-        if milestone.completed {
-            completed_units += 1;
-        }
-    }
-
-    let percent = if total_units == 0 {
-        0
-    } else {
-        ((completed_units * 100) / total_units) as u8
-    };
-
-    GoalProgress {
-        completed_units,
-        total_units,
-        percent,
-    }
 }
 
 pub fn parse_quick_capture(input: &str, now: DateTime<Local>) -> QuickCaptureDraft {
@@ -561,74 +469,6 @@ mod tests {
 
         // 相同状态转换（幂等）
         assert!(goal.can_transition_to(GoalStatus::Archived));
-    }
-
-    #[test]
-    fn test_goal_progress_calculation() {
-        let goal = Goal {
-            id: Uuid::new_v4(),
-            area_id: None,
-            title: "Test".to_string(),
-            description: String::new(),
-            status: GoalStatus::Active,
-        };
-
-        // 空任务列表
-        assert_eq!(goal.compute_progress(&[]), 0);
-
-        // 一半完成
-        let tasks = vec![
-            DeskTask {
-                id: Uuid::new_v4(),
-                title: "Task 1".to_string(),
-                content: String::new(),
-                linked_goal_id: Some(goal.id),
-                linked_goal_label: Some(goal.title.clone()),
-                status: TaskStatus::Done,
-                planned_start_at: None,
-                due_at: None,
-                bear_note_id: None,
-                system_reminder_id: None,
-                show_in_timeline: false,
-                activity_logs: vec![],
-            },
-            DeskTask {
-                id: Uuid::new_v4(),
-                title: "Task 2".to_string(),
-                content: String::new(),
-                linked_goal_id: Some(goal.id),
-                linked_goal_label: Some(goal.title.clone()),
-                status: TaskStatus::Todo,
-                planned_start_at: None,
-                due_at: None,
-                bear_note_id: None,
-                system_reminder_id: None,
-                show_in_timeline: false,
-                activity_logs: vec![],
-            },
-        ];
-
-        assert_eq!(goal.compute_progress(&tasks), 50);
-
-        // 全部完成
-        let all_done_tasks = vec![
-            DeskTask {
-                id: Uuid::new_v4(),
-                title: "Task 1".to_string(),
-                content: String::new(),
-                linked_goal_id: Some(goal.id),
-                linked_goal_label: Some(goal.title.clone()),
-                status: TaskStatus::Done,
-                planned_start_at: None,
-                due_at: None,
-                bear_note_id: None,
-                system_reminder_id: None,
-                show_in_timeline: false,
-                activity_logs: vec![],
-            },
-        ];
-
-        assert_eq!(goal.compute_progress(&all_done_tasks), 100);
     }
 
     #[test]

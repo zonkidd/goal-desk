@@ -1,6 +1,6 @@
 use crate::domain::{
-    Area, DeskTask, Goal, GoalStatus, Milestone, Project, Reminder, TaskActivityAction,
-    TaskActivityLog, TaskStatus, Todo, WorkspaceSnapshot, UNCATEGORIZED_AREA_ID,
+    Area, DeskTask, Goal, GoalStatus, Project, Reminder, TaskActivityAction,
+    TaskActivityLog, TaskStatus, WorkspaceSnapshot, UNCATEGORIZED_AREA_ID,
 };
 use chrono::{DateTime, Local};
 use rusqlite::{params, Connection};
@@ -109,12 +109,6 @@ impl SqliteRepository {
                 due_at TEXT NOT NULL,
                 done INTEGER NOT NULL
             );
-            CREATE TABLE IF NOT EXISTS milestones (
-                id TEXT PRIMARY KEY,
-                goal_id TEXT NOT NULL,
-                title TEXT NOT NULL,
-                completed INTEGER NOT NULL
-            );
             CREATE TABLE IF NOT EXISTS desk_tasks (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -170,7 +164,6 @@ impl SqliteRepository {
             DELETE FROM projects;
             DELETE FROM todos;
             DELETE FROM reminders;
-            DELETE FROM milestones;
             ",
         )?;
 
@@ -206,20 +199,6 @@ impl SqliteRepository {
             )?;
         }
 
-        for todo in &snapshot.todos {
-            transaction.execute(
-                "INSERT INTO todos (id, goal_id, project_id, title, scheduled_at, completed) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![
-                    todo.id.to_string(),
-                    option_uuid(todo.goal_id),
-                    option_uuid(todo.project_id),
-                    todo.title,
-                    option_datetime(todo.scheduled_at),
-                    todo.completed as i64
-                ],
-            )?;
-        }
-
         for reminder in &snapshot.reminders {
             transaction.execute(
                 "INSERT INTO reminders (id, title, due_at, done) VALUES (?1, ?2, ?3, ?4)",
@@ -228,18 +207,6 @@ impl SqliteRepository {
                     reminder.title,
                     reminder.due_at.to_rfc3339(),
                     reminder.done as i64
-                ],
-            )?;
-        }
-
-        for milestone in &snapshot.milestones {
-            transaction.execute(
-                "INSERT INTO milestones (id, goal_id, title, completed) VALUES (?1, ?2, ?3, ?4)",
-                params![
-                    milestone.id.to_string(),
-                    milestone.goal_id.to_string(),
-                    milestone.title,
-                    milestone.completed as i64
                 ],
             )?;
         }
@@ -299,25 +266,6 @@ impl SqliteRepository {
             items
         };
 
-        let todos = {
-            let mut statement = connection.prepare(
-                "SELECT id, goal_id, project_id, title, scheduled_at, completed FROM todos ORDER BY title",
-            )?;
-            let mut rows = statement.query([])?;
-            let mut items = Vec::new();
-            while let Some(row) = rows.next()? {
-                items.push(Todo {
-                    id: parse_uuid(row.get::<_, String>(0)?)?,
-                    goal_id: parse_optional_uuid(row.get::<_, Option<String>>(1)?)?,
-                    project_id: parse_optional_uuid(row.get::<_, Option<String>>(2)?)?,
-                    title: row.get(3)?,
-                    scheduled_at: parse_optional_datetime(row.get::<_, Option<String>>(4)?)?,
-                    completed: row.get::<_, i64>(5)? != 0,
-                });
-            }
-            items
-        };
-
         let reminders = {
             let mut statement = connection.prepare("SELECT id, title, due_at, done FROM reminders ORDER BY due_at")?;
             let mut rows = statement.query([])?;
@@ -333,28 +281,11 @@ impl SqliteRepository {
             items
         };
 
-        let milestones = {
-            let mut statement = connection.prepare("SELECT id, goal_id, title, completed FROM milestones ORDER BY title")?;
-            let mut rows = statement.query([])?;
-            let mut items = Vec::new();
-            while let Some(row) = rows.next()? {
-                items.push(Milestone {
-                    id: parse_uuid(row.get::<_, String>(0)?)?,
-                    goal_id: parse_uuid(row.get::<_, String>(1)?)?,
-                    title: row.get(2)?,
-                    completed: row.get::<_, i64>(3)? != 0,
-                });
-            }
-            items
-        };
-
         Ok(WorkspaceSnapshot {
             areas,
             projects,
             goals,
-            todos,
             reminders,
-            milestones,
         })
     }
 
@@ -392,7 +323,7 @@ impl SqliteRepository {
                 transaction.execute(
                     "INSERT INTO desk_task_activity_logs (id, task_id, action, note, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
                     params![
-                        Uuid::new_v4().to_string(),
+                        log.id.to_string(),
                         task.id.to_string(),
                         task_activity_action_as_str(log.action),
                         log.note.as_deref(),
@@ -413,16 +344,18 @@ impl SqliteRepository {
         let mut logs_by_task_id: HashMap<String, Vec<TaskActivityLog>> = HashMap::new();
         {
             let mut statement = connection.prepare(
-                "SELECT task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC",
+                "SELECT id, task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC",
             )?;
             let mut rows = statement.query([])?;
 
             while let Some(row) = rows.next()? {
-                let task_id: String = row.get(0)?;
+                let log_id: String = row.get(0)?;
+                let task_id: String = row.get(1)?;
                 let log = TaskActivityLog {
-                    action: parse_task_activity_action(row.get::<_, String>(1)?)?,
-                    note: row.get(2)?,
-                    timestamp: parse_datetime(row.get::<_, String>(3)?)?,
+                    id: parse_uuid(log_id)?,
+                    action: parse_task_activity_action(row.get::<_, String>(2)?)?,
+                    note: row.get(3)?,
+                    timestamp: parse_datetime(row.get::<_, String>(4)?)?,
                 };
                 logs_by_task_id.entry(task_id).or_default().push(log);
             }
@@ -728,15 +661,16 @@ impl TaskRepository for SqliteRepository {
         let mut logs = Vec::new();
         {
             let mut statement = connection.prepare(
-                "SELECT action, note, timestamp FROM desk_task_activity_logs WHERE task_id = ?1 ORDER BY timestamp DESC"
+                "SELECT id, action, note, timestamp FROM desk_task_activity_logs WHERE task_id = ?1 ORDER BY timestamp DESC"
             )?;
             let mut rows = statement.query(params![id.to_string()])?;
 
             while let Some(row) = rows.next()? {
                 logs.push(TaskActivityLog {
-                    action: parse_task_activity_action(row.get::<_, String>(0)?)?,
-                    note: row.get(1)?,
-                    timestamp: parse_datetime(row.get::<_, String>(2)?)?,
+                    id: parse_uuid(row.get::<_, String>(0)?)?,
+                    action: parse_task_activity_action(row.get::<_, String>(1)?)?,
+                    note: row.get(2)?,
+                    timestamp: parse_datetime(row.get::<_, String>(3)?)?,
                 });
             }
         }
@@ -787,16 +721,18 @@ impl TaskRepository for SqliteRepository {
         let mut logs_by_task_id: HashMap<String, Vec<TaskActivityLog>> = HashMap::new();
         {
             let mut statement = connection.prepare(
-                "SELECT task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC"
+                "SELECT id, task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC"
             )?;
             let mut rows = statement.query([])?;
 
             while let Some(row) = rows.next()? {
-                let task_id: String = row.get(0)?;
+                let log_id: String = row.get(0)?;
+                let task_id: String = row.get(1)?;
                 let log = TaskActivityLog {
-                    action: parse_task_activity_action(row.get::<_, String>(1)?)?,
-                    note: row.get(2)?,
-                    timestamp: parse_datetime(row.get::<_, String>(3)?)?,
+                    id: parse_uuid(log_id)?,
+                    action: parse_task_activity_action(row.get::<_, String>(2)?)?,
+                    note: row.get(3)?,
+                    timestamp: parse_datetime(row.get::<_, String>(4)?)?,
                 };
                 logs_by_task_id.entry(task_id).or_default().push(log);
             }
@@ -837,16 +773,18 @@ impl TaskRepository for SqliteRepository {
         let mut logs_by_task_id: HashMap<String, Vec<TaskActivityLog>> = HashMap::new();
         {
             let mut statement = connection.prepare(
-                "SELECT task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC"
+                "SELECT id, task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC"
             )?;
             let mut rows = statement.query([])?;
 
             while let Some(row) = rows.next()? {
-                let task_id: String = row.get(0)?;
+                let log_id: String = row.get(0)?;
+                let task_id: String = row.get(1)?;
                 let log = TaskActivityLog {
-                    action: parse_task_activity_action(row.get::<_, String>(1)?)?,
-                    note: row.get(2)?,
-                    timestamp: parse_datetime(row.get::<_, String>(3)?)?,
+                    id: parse_uuid(log_id)?,
+                    action: parse_task_activity_action(row.get::<_, String>(2)?)?,
+                    note: row.get(3)?,
+                    timestamp: parse_datetime(row.get::<_, String>(4)?)?,
                 };
                 logs_by_task_id.entry(task_id).or_default().push(log);
             }
@@ -905,7 +843,7 @@ impl TaskRepository for SqliteRepository {
             transaction.execute(
                 "INSERT INTO desk_task_activity_logs (id, task_id, action, note, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![
-                    Uuid::new_v4().to_string(),
+                    log.id.to_string(),
                     task.id.to_string(),
                     task_activity_action_as_str(log.action),
                     log.note.as_deref(),
@@ -950,7 +888,7 @@ impl TaskRepository for SqliteRepository {
             transaction.execute(
                 "INSERT INTO desk_task_activity_logs (id, task_id, action, note, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![
-                    Uuid::new_v4().to_string(),
+                    log.id.to_string(),
                     task.id.to_string(),
                     task_activity_action_as_str(log.action),
                     log.note.as_deref(),
@@ -1362,6 +1300,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![TaskActivityLog {
+                id: Uuid::new_v4(),
                 action: TaskActivityAction::Created,
                 note: None,
                 timestamp: chrono::Local::now(),

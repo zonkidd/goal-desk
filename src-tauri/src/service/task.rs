@@ -219,6 +219,22 @@ impl TaskService {
         TaskRepository::find(&self.repo, task_uuid).map_err(|e| e.to_string())
     }
 
+    pub fn update_task_system_reminder_id(
+        &self,
+        task_id: &str,
+        reminder_id: Option<String>,
+    ) -> Result<DeskTask, String> {
+        let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
+
+        let mut task = TaskRepository::find(&self.repo, task_uuid)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Task not found: {task_id}"))?;
+
+        task.system_reminder_id = reminder_id;
+        TaskRepository::update(&self.repo, &task).map_err(|e| e.to_string())?;
+        Ok(task)
+    }
+
     pub fn sync_linked_tasks_for_system_reminder(
         &self,
         reminder_id: &str,

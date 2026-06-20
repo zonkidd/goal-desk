@@ -1,19 +1,11 @@
 import { create } from 'zustand'
-import { isTauriRuntime } from '../lib/runtime'
 import { createWorkspaceMutationAdapter } from '../lib/workspaceMutations'
 import type { GoalCard, GoalStatus } from '../types/app'
-import type { TodayRelevantGoal } from '../lib/workspaceDerivation'
 
 export interface GoalStoreState {
-  // 基础数据
   baseGoals: GoalCard[]
 
-  // 派生状态（需要跨 store 计算）
-  todayRelevantGoals: TodayRelevantGoal[]
-
-  // Actions
   hydrateGoals: (goals: GoalCard[]) => void
-  updateTodayRelevantGoals: (goals: TodayRelevantGoal[]) => void
   replaceGoal: (goal: GoalCard) => GoalCard[]
   createGoal: (
     input: { title: string; area?: string; description?: string },
@@ -30,24 +22,16 @@ function replaceGoalInArray(goals: GoalCard[], nextGoal: GoalCard) {
 }
 
 export const useGoalStore = create<GoalStoreState>((set, get) => ({
-  // 初始状态
   baseGoals: [],
-  todayRelevantGoals: [],
 
-  // Hydrate
   hydrateGoals: (goals) => set({ baseGoals: goals }),
 
-  // 更新派生状态
-  updateTodayRelevantGoals: (goals) => set({ todayRelevantGoals: goals }),
-
-  // 替换目标
   replaceGoal: (goal) => {
     const nextGoals = replaceGoalInArray(get().baseGoals, goal)
     set({ baseGoals: nextGoals })
     return nextGoals
   },
 
-  // 创建目标
   createGoal: async (input, options) => {
     const adapter = createWorkspaceMutationAdapter()
 
@@ -63,7 +47,6 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
     }
   },
 
-  // 更新目标字段
   updateGoalFields: async (goalId, input) => {
     const adapter = createWorkspaceMutationAdapter()
 
@@ -78,7 +61,6 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
     }
   },
 
-  // 更新目标状态
   updateGoalStatus: async (goalId, status) => {
     if (status === 'READY_TO_COMPLETE') {
       return null
@@ -98,7 +80,6 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
   },
 }))
 
-// 便捷选择器
 export function useSelectedGoal(selectedGoalId?: string) {
   return useGoalStore((state) => state.baseGoals.find((goal) => goal.id === selectedGoalId))
 }
