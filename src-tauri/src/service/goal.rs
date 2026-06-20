@@ -162,6 +162,55 @@ impl GoalService {
             .collect())
     }
 
+    pub fn get_goal_summary_by_id(&self, goal_id: &str) -> Result<GoalSummary, String> {
+        let goal_uuid = Uuid::parse_str(goal_id).map_err(|e| e.to_string())?;
+        self.repo.initialize().map_err(|e| e.to_string())?;
+
+        let goal = GoalRepository::find(&self.repo, goal_uuid)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Goal not found: {goal_id}"))?;
+
+        let area_title = goal
+            .area_id
+            .and_then(|aid| AreaRepository::find(&self.repo, aid).ok())
+            .flatten()
+            .map(|a| a.title)
+            .unwrap_or_else(|| "Unsorted".to_string());
+
+        let all_tasks = TaskRepository::list(&self.repo).map_err(|e| e.to_string())?;
+        let goal_tasks: Vec<_> = all_tasks
+            .iter()
+            .filter(|t| t.linked_goal_id == Some(goal_uuid))
+            .collect();
+
+        let task_count = goal_tasks.len();
+        let done_count = goal_tasks
+            .iter()
+            .filter(|t| t.status == crate::domain::TaskStatus::Done)
+            .count();
+        let progress = if task_count == 0 {
+            0
+        } else {
+            ((done_count as f64 / task_count as f64) * 100.0).round() as u8
+        };
+        let next_todo = goal_tasks
+            .iter()
+            .find(|t| t.status != crate::domain::TaskStatus::Done)
+            .map(|t| t.title.clone())
+            .unwrap_or_default();
+
+        Ok(GoalSummary {
+            id: goal.id.to_string(),
+            title: goal.title,
+            area: area_title,
+            description: goal.description,
+            status: goal.status,
+            progress,
+            task_count,
+            next_todo,
+        })
+    }
+
     pub fn list_areas_with_stats(&self) -> Result<Vec<crate::domain::AreaWithStats>, String> {
         self.repo.initialize().map_err(|e| e.to_string())?;
         let areas = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;

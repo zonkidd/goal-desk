@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { isTauriRuntime } from '../lib/runtime'
 import { createWorkspaceMutationAdapter } from '../lib/workspaceMutations'
+import { executeMutation } from './mutationHelper'
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 import type { GoalCard } from '../types/app'
 
@@ -80,65 +81,55 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
 
   addTask: async (title) => {
     const adapter = createWorkspaceMutationAdapter()
-    try {
-      const { task: nextTask } = await adapter.createTask(title)
-      if (!nextTask) return null
-      get().replaceTask(nextTask)
-      return nextTask
-    } catch (error) {
-      return null
-    }
+    const result = await executeMutation(
+      (a) => a.createTask(title),
+      adapter,
+      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
+    )
+    return result?.task ?? null
   },
 
   createTaskForGoal: async (goal, title) => {
     const adapter = createWorkspaceMutationAdapter()
-    try {
-      const { task: nextTask } = await adapter.createTaskForGoal(goal, title)
-      if (!nextTask) return null
-      get().replaceTask(nextTask)
-      return nextTask
-    } catch (error) {
-      return null
-    }
+    const result = await executeMutation(
+      (a) => a.createTaskForGoal(goal, title),
+      adapter,
+      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
+    )
+    return result?.task ?? null
   },
 
   addTaskNote: async (taskId, note) => {
     const adapter = createWorkspaceMutationAdapter()
-    try {
-      const { task: updatedTask } = await adapter.addTaskNote(taskId, note)
-      if (updatedTask) {
-        get().replaceTask(updatedTask)
-      }
-    } catch (error) {
-    }
+    await executeMutation(
+      (a) => a.addTaskNote(taskId, note),
+      adapter,
+      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
+    )
   },
 
   updateTaskStatus: async (taskId, status, note) => {
     const adapter = createWorkspaceMutationAdapter()
-    try {
-      const { task: updatedTask } = await adapter.updateTaskStatus(taskId, status, note)
-      if (updatedTask) {
-        get().replaceTask(updatedTask)
-      }
-    } catch (error) {
-    }
+    await executeMutation(
+      (a) => a.updateTaskStatus(taskId, status, note),
+      adapter,
+      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
+    )
   },
 
   updateTaskContent: async (taskId, content) => {
     const adapter = createWorkspaceMutationAdapter()
-    try {
-      const { task: updatedTask } = await adapter.updateTaskContent(taskId, content)
-      if (updatedTask) {
-        get().replaceTask(updatedTask)
-      }
-    } catch (error) {
-    }
+    await executeMutation(
+      (a) => a.updateTaskContent(taskId, content),
+      adapter,
+      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
+    )
   },
 
   updateTaskFields: async (taskId, input, availableGoals) => {
     const adapter = createWorkspaceMutationAdapter()
-    try {
-      const { task: updatedTask } = await adapter.updateTaskFields(taskId, {
+    await executeMutation(
+      (a) => a.updateTaskFields(taskId, {
         title: input.title,
         plannedStartAt: input.plannedStartAt,
         dueDate: input.dueDate,
@@ -146,12 +137,10 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
         availableGoals,
         showInTimeline: input.showInTimeline,
         systemReminderId: input.systemReminderId,
-      })
-      if (updatedTask) {
-        get().replaceTask(updatedTask)
-      }
-    } catch (error) {
-    }
+      }),
+      adapter,
+      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
+    )
   },
 
   linkTaskToReminder: async (taskId: string, reminderId: string) => {
@@ -167,6 +156,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
         get().replaceTask(updatedTask)
       }
     } catch (error) {
+      console.error('Failed to link task to reminder:', error)
     }
   },
 
@@ -183,6 +173,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
         get().replaceTask(updatedTask)
       }
     } catch (error) {
+      console.error('Failed to unlink task from reminder:', error)
     }
   },
 

@@ -6,9 +6,9 @@ import { zhCN } from 'date-fns/locale'
 import { GlassCard } from '../common/GlassCard'
 import { GlassPanel } from '../common/GlassPanel'
 import { useUiStore } from '../../store/uiStore'
-import { useTaskStore } from '../../store/taskStore'
+import { useWorkspaceDerived } from '../../hooks/useWorkspaceDerived'
 import type { TimelineItem } from '../../types/app'
-import { TimelineBuilder } from '../../lib/TimelineBuilder'
+import { groupByDate } from '../../lib/workspaceDerivation'
 import { formatDateKey } from '../../lib/calendarUtils'
 
 type ViewMode = 'week' | 'day'
@@ -87,7 +87,7 @@ export function CalendarView() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [hideCompleted, setHideCompleted] = useState(false)
 
-  const todayTimeline = useTaskStore((state) => state.todayTimeline)
+  const { today: { timeline: todayTimeline } } = useWorkspaceDerived()
   const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
   const openReminderDrawer = useUiStore((state) => state.openReminderDrawer)
   const openCalendarEventDrawer = useUiStore((state) => state.openCalendarEventDrawer)
@@ -218,10 +218,10 @@ function WeekView({
   const weekRange = `${weekDays[0].date.getFullYear()}年${weekDays[0].date.getMonth() + 1}月${weekDays[0].dayNumber}日 - ${weekDays[6].date.getMonth() + 1}月${weekDays[6].dayNumber}日`
 
   // 从 store 获取 todayTimeline (CalendarView 有自己的 hideCompleted 过滤逻辑)
-  const todayTimeline = useTaskStore((state) => state.todayTimeline)
+  const { today: { timeline: todayTimeline } } = useWorkspaceDerived()
 
   // 按日期分组
-  const timelineByDate = TimelineBuilder.groupByDate([...todayTimeline])
+  const timelineByDate = groupByDate([...todayTimeline])
 
   return (
     <GlassPanel className="rounded-3xl p-6">
@@ -384,8 +384,8 @@ function DayView({
   hideCompleted: boolean
   onEventClick: (event: TimelineItem) => void
 }) {
-  const todayTimeline = useTaskStore((state) => state.todayTimeline)
-  const timelineByDate = TimelineBuilder.groupByDate([...todayTimeline])
+  const { today: { timeline: todayTimeline } } = useWorkspaceDerived()
+  const timelineByDate = groupByDate([...todayTimeline])
 
   // 获取选中日期的事件
   const selectedDateKey = formatDateKey(selectedDate)

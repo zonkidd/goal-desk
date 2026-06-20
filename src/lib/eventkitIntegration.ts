@@ -1,7 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { IntegrationStatus, ReminderItem, TimelineItem } from '../types/app'
 import type { Task } from '../types/task'
-import { TimelineBuilder } from './TimelineBuilder'
 import { isTauriRuntime } from './runtime'
 
 // ============================================================================
@@ -197,18 +196,13 @@ export async function loadCalendarRange(
 // Snapshot Loading & Timeline Building
 // ============================================================================
 
-/**
- * 加载完整的桌面快照，包括 Tasks、Goals、EventKit 数据，并构建 Timeline
- */
-export async function loadEventKitSnapshot(tasks: Task[]): Promise<{
-  timeline: TimelineItem[]
+export async function loadRawEventKitData(): Promise<{
+  calendarEvents: RustCalendarEvent[]
+  reminders: RustReminder[]
   systemReminders: ReminderItem[]
   integrationStatus: IntegrationStatus
 }> {
-  const systemSnapshot = await invoke<RustSystemSnapshot>('eventkit_snapshot').catch((error) => {
-    console.error('EventKit snapshot failed:', error)
-    return undefined
-  })
+  const systemSnapshot = await invoke<RustSystemSnapshot>('eventkit_snapshot').catch(() => undefined)
 
   const systemReminders: ReminderItem[] =
     systemSnapshot?.reminders.map((item) => ({
@@ -224,17 +218,29 @@ export async function loadEventKitSnapshot(tasks: Task[]): Promise<{
     reminders: 'error' as const,
   }
 
-  const builtTimeline = systemSnapshot
-    ? TimelineBuilder.fromSnapshot({
-        events: systemSnapshot.calendarEvents,
-        reminders: systemSnapshot.reminders,
-        tasks,
-      })
-    : []
-
   return {
-    timeline: builtTimeline,
+    calendarEvents: systemSnapshot?.calendarEvents || [],
+    reminders: systemSnapshot?.reminders || [],
     systemReminders,
     integrationStatus,
+  }
+}
+
+/**
+ * @deprecated Use loadRawEventKitData() + convertEventKitToRawItems() instead
+ */
+export async function loadEventKitSnapshot(tasks: Task[]): Promise<{
+  timeline: TimelineItem[]
+  systemReminders: ReminderItem[]
+  integrationStatus: IntegrationStatus
+}> {
+  const raw = await loadRawEventKitData()
+  const { convertEventKitToRawItems } = await import('./workspaceDerivation')
+  const timeline = convertEventKitToRawItems(raw.calendarEvents, raw.reminders, tasks)
+
+  return {
+    timeline,
+    systemReminders: raw.systemReminders,
+    integrationStatus: raw.integrationStatus,
   }
 }

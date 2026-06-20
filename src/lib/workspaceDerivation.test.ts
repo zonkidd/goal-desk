@@ -1,7 +1,47 @@
 import { describe, test, expect, beforeEach } from 'vitest'
-import { deriveGoalRecords, deriveTodayAttentionGroups, deriveTodayAgenda, filterAgendaByArea, getTodayFocusTasks } from './workspaceDerivation'
+import { deriveGoalRecords, deriveTodayAttentionGroups, deriveTodayAgenda, filterAgendaByArea, getTodayFocusTasks, convertEventKitToRawItems, groupByDate, filterGoalsByArea, filterTasksByArea } from './workspaceDerivation'
 import type { Task } from '../types/task'
 import type { GoalCard } from '../types/app'
+
+describe('workspaceDerivation - Goal 进度派生', () => {
+  test('保留 Rust 已计算的 progress（taskCount > 0 时）', () => {
+    const goals: GoalCard[] = [
+      { id: 'g1', title: 'Goal', area: 'Work', status: 'ACTIVE', description: '', progress: 75, nextTodo: 'Task 3', taskCount: 4, createdAt: new Date(), updatedAt: new Date() },
+    ]
+    const tasks: Task[] = [
+      { id: 't1', title: 'Task 1', content: '', status: 'DONE', linkedGoalId: 'g1', activityLogs: [], showInTimeline: false },
+      { id: 't2', title: 'Task 2', content: '', status: 'TODO', linkedGoalId: 'g1', activityLogs: [], showInTimeline: false },
+    ]
+
+    const derived = deriveGoalRecords(goals, tasks)
+    expect(derived[0].progress).toBe(75)
+    expect(derived[0].taskCount).toBe(4)
+  })
+
+  test('从 tasks 计算 progress（taskCount = 0 时，浏览器场景）', () => {
+    const goals: GoalCard[] = [
+      { id: 'g1', title: 'Goal', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
+    ]
+    const tasks: Task[] = [
+      { id: 't1', title: 'Task 1', content: '', status: 'DONE', linkedGoalId: 'g1', activityLogs: [], showInTimeline: false },
+      { id: 't2', title: 'Task 2', content: '', status: 'DONE', linkedGoalId: 'g1', activityLogs: [], showInTimeline: false },
+      { id: 't3', title: 'Task 3', content: '', status: 'TODO', linkedGoalId: 'g1', activityLogs: [], showInTimeline: false },
+    ]
+
+    const derived = deriveGoalRecords(goals, tasks)
+    expect(derived[0].progress).toBe(67)
+    expect(derived[0].taskCount).toBe(3)
+  })
+
+  test('无关联任务时保持 progress 不变', () => {
+    const goals: GoalCard[] = [
+      { id: 'g1', title: 'Goal', area: 'Work', status: 'ACTIVE', description: '', progress: 50, nextTodo: '', taskCount: 2, createdAt: new Date(), updatedAt: new Date() },
+    ]
+
+    const derived = deriveGoalRecords(goals, [])
+    expect(derived[0].progress).toBe(50)
+  })
+})
 
 describe('workspaceDerivation - 今日焦点任务筛选', () => {
   let now: Date
@@ -480,5 +520,74 @@ describe('workspaceDerivation - filterAgendaByArea 多日任务', () => {
 
     const todoItems = filtered.filter((item) => item.source === 'todo')
     expect(todoItems).toHaveLength(0)
+  })
+})
+
+describe('convertEventKitToRawItems', () => {
+  const now = new Date('2026-06-16T12:00:00+08:00')
+
+  test('converts calendar events to RawAgendaItem', () => {
+    const result = convertEventKitToRawItems(
+      [{ id: 'ev1', title: 'Meeting', startsAt: '2026-06-16T14:00:00', endsAt: '2026-06-16T15:00:00', calendarTitle: 'Work' }],
+      [],
+      [],
+      now,
+    )
+    expect(result).toHaveLength(1)
+    expect(result[0].source).toBe('calendar')
+    expect(result[0].title).toBe('Meeting')
+    expect(result[0].readonly).toBe(true)
+  })
+
+  test('converts reminders to RawAgendaItem', () => {
+    const result = convertEventKitToRawItems(
+      [],
+      [{ id: 'rm1', title: 'Call mom', dueAt: '2026-06-16T18:00:00', done: false }],
+      [],
+      now,
+    )
+    expect(result).toHaveLength(1)
+    expect(result[0].source).toBe('reminder')
+    expect(result[0].title).toBe('Call mom')
+  })
+
+  test('deduplicates reminders linked to tasks', () => {
+    const tasks = [{ id: 't1', systemReminderId: 'rm1' } as any]
+    const result = convertEventKitToRawItems(
+      [],
+      [{ id: 'rm1', title: 'Linked reminder', dueAt: '2026-06-16T18:00:00', done: false }],
+      tasks,
+      now,
+    )
+    expect(result).toHaveLength(0)
+  })
+
+  test('filters out events from other days', () => {
+    const result = convertEventKitToRawItems(
+      [{ id: 'ev1', title: 'Tomorrow', startsAt: '2026-06-17T14:00:00', endsAt: '2026-06-17T15:00:00' }],
+      [],
+      [],
+      now,
+    )
+    expect(result).toHaveLength(0)
+  })
+})
+
+describe('groupByDate', () => {
+  test('groups items by date', () => {
+    const items = [
+      { id: '1', startsAt: new Date('2026-06-16T10:00:00'), timeLabel: '10:00' },
+      { id: '2', startsAt: new Date('2026-06-16T14:00:00'), timeLabel: '14:00' },
+      { id: '3', startsAt: new Date('2026-06-17T10:00:00'), timeLabel: '10:00' },
+    ] as any[]
+    const grouped = groupByDate(items)
+    expect(grouped.size).toBe(2)
+    expect(grouped.get('2026-06-16')).toHaveLength(2)
+    expect(grouped.get('2026-06-17')).toHaveLength(1)
+  })
+
+  test('returns empty map for empty input', () => {
+    const grouped = groupByDate([])
+    expect(grouped.size).toBe(0)
   })
 })

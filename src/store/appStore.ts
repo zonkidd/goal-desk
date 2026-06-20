@@ -2,7 +2,7 @@
  * appStore - 统一入口
  *
  * 组件直接使用具体 store（useTaskStore, useGoalStore 等），
- * 或通过组合 hooks（useTodayViewModel, useInboxViewModel）获取派生数据。
+ * 或通过 useWorkspaceDerived hook 获取派生数据。
  */
 
 export { useUiStore } from './uiStore'
@@ -10,16 +10,12 @@ export { useTaskStore } from './taskStore'
 export { useGoalStore } from './goalStore'
 export { useEventkitStore } from './eventkitStore'
 export { useAreaStore } from './areaStore'
-export { useDerivedStore } from './derivedStore'
 
 export {
-  useDerivedStateSync,
   useAppHydration,
   useReceiveExternalTask,
   useToggleSystemReminder,
   useReloadWorkspaceAfterAreaChange,
-  useTodayViewModel,
-  useInboxViewModel,
 } from '../hooks/useStoreComposition'
 
 export { selectFilteredTimeline, selectFilteredGoals } from './appStore.selectors'

@@ -32,12 +32,8 @@ describe('Store action results', () => {
   beforeEach(() => {
     useTaskStore.setState({
       tasks: [],
-      todayFocusTasks: [],
-      todayAttentionGroups: { overdue: [], dueToday: [], ongoing: [] },
-      todayTimeline: [],
-      inbox: { activeTasks: [], pausedTasks: [], completed: { totalCount: 0, visibleTasks: [], isCollapsedByDefault: true } },
     })
-    useGoalStore.setState({ baseGoals: [], todayRelevantGoals: [] })
+    useGoalStore.setState({ baseGoals: [] })
     useEventkitStore.setState({
       rawTimeline: [],
       systemReminders: [],

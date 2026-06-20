@@ -94,8 +94,6 @@ export class GoalCodec {
       progress: rust.progress,
       nextTodo: rust.nextTodo || '',
       taskCount: rust.taskCount,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     }
   }
 

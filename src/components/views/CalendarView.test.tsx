@@ -20,6 +20,15 @@ vi.mock('../../store/eventkitStore', () => ({
   useEventkitStore: vi.fn()
 }))
 
+vi.mock('../../hooks/useWorkspaceDerived', () => ({
+  useWorkspaceDerived: vi.fn(() => ({
+    today: { timeline: [], focusTasks: [], attentionGroups: { overdue: [], dueToday: [], ongoing: [] }, relevantGoals: [] },
+    goals: [],
+    inbox: { activeTasks: [], pausedTasks: [], completed: { totalCount: 0, visibleTasks: [], isCollapsedByDefault: true } },
+    meta: { computedAt: new Date(), activeArea: 'ALL', taskCount: 0, goalCount: 0 },
+  })),
+}))
+
 // Mock framer-motion
 vi.mock('framer-motion', () => ({
   motion: {

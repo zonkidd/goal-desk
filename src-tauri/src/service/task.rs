@@ -133,6 +133,28 @@ impl TaskService {
         Ok(task)
     }
 
+    pub fn update_task_status_with_sync(
+        &self,
+        task_id: &str,
+        status: TaskStatus,
+        note: Option<String>,
+        sync_callback: Option<Box<dyn FnOnce(&str, bool) -> Result<(), String>>>,
+    ) -> Result<DeskTask, String> {
+        let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
+
+        let task = TaskRepository::find(&self.repo, task_uuid)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Task not found: {task_id}"))?;
+
+        if let Some(callback) = sync_callback {
+            if let Some(ref reminder_id) = task.system_reminder_id {
+                callback(reminder_id, matches!(status, TaskStatus::Done))?;
+            }
+        }
+
+        self.update_task_status(task_id, status, note)
+    }
+
     pub fn add_task_note(
         &self,
         task_id: &str,

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createWorkspaceMutationAdapter } from '../lib/workspaceMutations'
+import { executeMutation } from './mutationHelper'
 import type { GoalCard, GoalStatus } from '../types/app'
 
 export interface GoalStoreState {
@@ -34,31 +35,23 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
 
   createGoal: async (input, options) => {
     const adapter = createWorkspaceMutationAdapter()
-
-    try {
-      const { goal: nextGoal, openGoalWorkspace } = await adapter.createGoal(input, options)
-      if (!nextGoal) return { goal: undefined, openGoalWorkspace: false }
-
-      get().replaceGoal(nextGoal)
-
-      return { goal: nextGoal, openGoalWorkspace: openGoalWorkspace || false }
-    } catch (error) {
-      return { goal: undefined, openGoalWorkspace: false }
-    }
+    const result = await executeMutation(
+      (a) => a.createGoal(input, options),
+      adapter,
+    )
+    if (!result?.goal) return { goal: undefined, openGoalWorkspace: false }
+    get().replaceGoal(result.goal)
+    return { goal: result.goal, openGoalWorkspace: result.openGoalWorkspace || false }
   },
 
   updateGoalFields: async (goalId, input) => {
     const adapter = createWorkspaceMutationAdapter()
-
-    try {
-      const { goal: updatedGoal } = await adapter.updateGoalFields(goalId, input)
-      if (!updatedGoal) return null
-
-      get().replaceGoal(updatedGoal)
-      return updatedGoal
-    } catch (error) {
-      return null
-    }
+    const result = await executeMutation(
+      (a) => a.updateGoalFields(goalId, input),
+      adapter,
+      { onSuccess: ({ goal }) => { if (goal) get().replaceGoal(goal) } },
+    )
+    return result?.goal ?? null
   },
 
   updateGoalStatus: async (goalId, status) => {
@@ -67,16 +60,12 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
     }
 
     const adapter = createWorkspaceMutationAdapter()
-
-    try {
-      const { goal: updatedGoal } = await adapter.updateGoalStatus(goalId, status)
-      if (!updatedGoal) return null
-
-      get().replaceGoal(updatedGoal)
-      return updatedGoal
-    } catch (error) {
-      return null
-    }
+    const result = await executeMutation(
+      (a) => a.updateGoalStatus(goalId, status),
+      adapter,
+      { onSuccess: ({ goal }) => { if (goal) get().replaceGoal(goal) } },
+    )
+    return result?.goal ?? null
   },
 }))
 

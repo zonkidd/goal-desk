@@ -10,10 +10,6 @@ describe('taskStore independence from uiStore', () => {
   beforeEach(() => {
     useTaskStore.setState({
       tasks: [],
-      todayFocusTasks: [],
-      todayAttentionGroups: { overdue: [], dueToday: [], ongoing: [] },
-      todayTimeline: [],
-      inbox: { activeTasks: [], pausedTasks: [], completed: { totalCount: 0, visibleTasks: [], isCollapsedByDefault: true } },
     })
     useUiStore.setState({
       isTaskDrawerOpen: false,

@@ -3,10 +3,11 @@ import { motion } from 'framer-motion'
 import { GlassPanel } from '../common/GlassPanel'
 import { useUiStore } from '../../store/uiStore'
 import { useTaskStore } from '../../store/taskStore'
+import { useWorkspaceDerived } from '../../hooks/useWorkspaceDerived'
 import { getTaskContentBadgeLabel } from '../../lib/taskPresentation'
 
 export function InboxView() {
-  const groupedTasks = useTaskStore((state) => state.inbox)
+  const { inbox: groupedTasks } = useWorkspaceDerived()
   const showCompleted = useUiStore((state) => state.showCompletedTodos)
   const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
   const addTask = useTaskStore((state) => state.addTask)

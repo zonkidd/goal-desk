@@ -12,26 +12,30 @@ import { PermissionManager, type PermissionType } from '../lib/PermissionManager
 import type { IntegrationStatus, ReminderItem, RawAgendaItem } from '../types/app'
 
 export interface EventkitStoreState {
-  // 原始 EventKit 数据（日历事件 + 系统提醒，只读）
   rawTimeline: RawAgendaItem[]
+  rawEventKit: {
+    calendarEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
+    reminders: Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
+  }
   systemReminders: ReminderItem[]
   integrationStatus: IntegrationStatus
 
-  // 权限状态
   eventkitPermissions: {
     calendar: AuthorizationStatus
     reminders: AuthorizationStatus
   }
 
-  // 数据统计
   eventkitData: {
     calendarEventCount: number
     reminderCount: number
   }
 
-  // Actions
   hydrateEventkitData: (data: {
-    timeline: RawAgendaItem[]
+    timeline?: RawAgendaItem[]
+    rawEventKit?: {
+      calendarEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
+      reminders: Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
+    }
     systemReminders: ReminderItem[]
     integrationStatus: IntegrationStatus
   }) => void
@@ -58,8 +62,8 @@ const permissionManager = new PermissionManager(async (type: PermissionType) => 
 })
 
 export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
-  // 初始状态
   rawTimeline: [],
+  rawEventKit: { calendarEvents: [], reminders: [] },
   systemReminders: [],
   integrationStatus: {
     calendar: 'not_determined',
@@ -74,13 +78,12 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
     reminderCount: 0,
   },
 
-  // Hydrate
   hydrateEventkitData: (data) => {
-    // 同步权限状态到 PermissionManager
     permissionManager.updateState(data.integrationStatus)
 
     set({
-      rawTimeline: data.timeline,
+      rawTimeline: data.timeline || [],
+      rawEventKit: data.rawEventKit || { calendarEvents: [], reminders: [] },
       systemReminders: data.systemReminders,
       integrationStatus: data.integrationStatus,
       eventkitPermissions: permissionManager.getState(),

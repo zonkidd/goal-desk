@@ -418,3 +418,104 @@ fn goal_summaries_next_todo_picks_first_incomplete() {
     let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
     assert_eq!(s.next_todo, "Second");
 }
+
+#[test]
+fn task_service_update_status_with_sync_calls_callback() {
+    let repo = temp_repo("task_status_sync");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task").unwrap();
+
+    // Set a system_reminder_id so the sync callback gets called
+    let task_with_reminder = service
+        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-1".to_string()))
+        .unwrap();
+    assert_eq!(task_with_reminder.system_reminder_id.as_deref(), Some("reminder-1"));
+
+    // Track sync callback invocations
+    let sync_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let sync_flag = sync_called.clone();
+
+    let updated = service
+        .update_task_status_with_sync(
+            &task.id.to_string(),
+            TaskStatus::InProgress,
+            None,
+            Some(Box::new(move |reminder_id: &str, done: bool| {
+                sync_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                assert_eq!(reminder_id, "reminder-1");
+                assert!(!done);
+                Ok(())
+            })),
+        )
+        .unwrap();
+
+    assert_eq!(updated.status, TaskStatus::InProgress);
+    assert!(sync_called.load(std::sync::atomic::Ordering::SeqCst));
+}
+
+#[test]
+fn task_service_update_status_with_sync_skips_when_no_reminder() {
+    let repo = temp_repo("task_status_no_sync");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task").unwrap();
+
+    let sync_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let sync_flag = sync_called.clone();
+
+    let updated = service
+        .update_task_status_with_sync(
+            &task.id.to_string(),
+            TaskStatus::InProgress,
+            None,
+            Some(Box::new(move |_reminder_id: &str, _done: bool| {
+                sync_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            })),
+        )
+        .unwrap();
+
+    assert_eq!(updated.status, TaskStatus::InProgress);
+    assert!(!sync_called.load(std::sync::atomic::Ordering::SeqCst));
+}
+
+#[test]
+fn task_service_find_task_returns_existing_task() {
+    let repo = temp_repo("task_find_existing");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Findable Task").unwrap();
+    let found = service.find_task(&task.id.to_string()).unwrap();
+    assert!(found.is_some());
+    assert_eq!(found.unwrap().title, "Findable Task");
+}
+
+#[test]
+fn task_service_find_task_returns_none_for_missing() {
+    let repo = temp_repo("task_find_missing");
+    let service = TaskService::new(repo);
+    let fake_id = Uuid::new_v4().to_string();
+    let found = service.find_task(&fake_id).unwrap();
+    assert!(found.is_none());
+}
+
+#[test]
+fn task_service_update_status_with_sync_none_callback() {
+    let repo = temp_repo("task_status_no_callback");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task").unwrap();
+
+    let _task_with_reminder = service
+        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-1".to_string()))
+        .unwrap();
+
+    // No callback provided - should not panic
+    let updated = service
+        .update_task_status_with_sync(
+            &task.id.to_string(),
+            TaskStatus::InProgress,
+            None,
+            None,
+        )
+        .unwrap();
+
+    assert_eq!(updated.status, TaskStatus::InProgress);
+}

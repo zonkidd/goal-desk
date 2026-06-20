@@ -131,3 +131,124 @@ fn sqlite_repository_saves_and_loads_desk_tasks() {
 
     let _ = std::fs::remove_file(path);
 }
+
+#[test]
+fn task_repository_loads_task_with_empty_activity_logs() {
+    let file_name = format!("goal-desk-empty-logs-test-{}.sqlite", Uuid::new_v4());
+    let path = std::env::temp_dir().join(file_name);
+    let repository = SqliteRepository::new(path.clone());
+    repository.initialize().unwrap();
+
+    use goal_desk_tauri::repository::TaskRepository;
+
+    let task = DeskTask {
+        id: Uuid::new_v4(),
+        title: "No Logs Task".to_string(),
+        content: String::new(),
+        status: TaskStatus::Todo,
+        planned_start_at: None,
+        due_at: None,
+        linked_goal_id: None,
+        linked_goal_label: None,
+        bear_note_id: None,
+        system_reminder_id: None,
+        show_in_timeline: false,
+        activity_logs: vec![],
+    };
+
+    TaskRepository::create(&repository, &task).unwrap();
+    let loaded = TaskRepository::find(&repository, task.id).unwrap().unwrap();
+
+    assert_eq!(loaded.title, "No Logs Task");
+    assert!(loaded.activity_logs.is_empty(), "Task with no logs should load with empty activity_logs");
+
+    let all_tasks = TaskRepository::list(&repository).unwrap();
+    assert_eq!(all_tasks.len(), 1);
+    assert!(all_tasks[0].activity_logs.is_empty());
+
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn task_repository_filters_by_goal_and_status() {
+    let file_name = format!("goal-desk-filter-test-{}.sqlite", Uuid::new_v4());
+    let path = std::env::temp_dir().join(file_name);
+    let repository = SqliteRepository::new(path.clone());
+    repository.initialize().unwrap();
+
+    use goal_desk_tauri::repository::TaskRepository;
+
+    let goal_a = Uuid::new_v4();
+    let goal_b = Uuid::new_v4();
+
+    let tasks = vec![
+        DeskTask {
+            id: Uuid::new_v4(),
+            title: "Task A1".to_string(),
+            content: String::new(),
+            status: TaskStatus::InProgress,
+            planned_start_at: None,
+            due_at: None,
+            linked_goal_id: Some(goal_a),
+            linked_goal_label: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![TaskActivityLog {
+                id: Uuid::new_v4(),
+                action: TaskActivityAction::Created,
+                note: None,
+                timestamp: Local::now(),
+            }],
+        },
+        DeskTask {
+            id: Uuid::new_v4(),
+            title: "Task A2".to_string(),
+            content: String::new(),
+            status: TaskStatus::Done,
+            planned_start_at: None,
+            due_at: None,
+            linked_goal_id: Some(goal_a),
+            linked_goal_label: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![],
+        },
+        DeskTask {
+            id: Uuid::new_v4(),
+            title: "Task B1".to_string(),
+            content: String::new(),
+            status: TaskStatus::InProgress,
+            planned_start_at: None,
+            due_at: None,
+            linked_goal_id: Some(goal_b),
+            linked_goal_label: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![],
+        },
+    ];
+
+    for task in &tasks {
+        TaskRepository::create(&repository, task).unwrap();
+    }
+
+    let by_goal_a = TaskRepository::list_by_goal(&repository, goal_a).unwrap();
+    assert_eq!(by_goal_a.len(), 2, "Goal A should have 2 tasks");
+    assert!(by_goal_a.iter().all(|t| t.linked_goal_id == Some(goal_a)));
+
+    let by_goal_b = TaskRepository::list_by_goal(&repository, goal_b).unwrap();
+    assert_eq!(by_goal_b.len(), 1, "Goal B should have 1 task");
+
+    let in_progress = TaskRepository::list_by_status(&repository, TaskStatus::InProgress).unwrap();
+    assert_eq!(in_progress.len(), 2, "Should have 2 InProgress tasks");
+    assert!(in_progress.iter().all(|t| t.status == TaskStatus::InProgress));
+
+    let done_tasks = TaskRepository::list_by_status(&repository, TaskStatus::Done).unwrap();
+    assert_eq!(done_tasks.len(), 1);
+    assert_eq!(done_tasks[0].title, "Task A2");
+
+    let _ = std::fs::remove_file(path);
+}

@@ -3,7 +3,6 @@ import { useTaskStore } from './taskStore'
 import { useGoalStore } from './goalStore'
 import { useUiStore } from './uiStore'
 import { useAreaStore } from './areaStore'
-import { useDerivedStore } from './derivedStore'
 
 describe('direct store access (no proxy)', () => {
   beforeEach(() => {
@@ -11,22 +10,10 @@ describe('direct store access (no proxy)', () => {
     useGoalStore.setState({ baseGoals: [] })
     useUiStore.setState({ currentView: 'inbox', activeArea: 'ALL', isLoading: true })
     useAreaStore.setState({ allAreas: [] })
-    useDerivedStore.setState({
-      todayFocusTasks: [],
-      todayAttentionGroups: { overdue: [], dueToday: [], ongoing: [] },
-      todayTimeline: [],
-      inbox: {
-        activeTasks: [],
-        pausedTasks: [],
-        completed: { totalCount: 0, visibleTasks: [], isCollapsedByDefault: true },
-      },
-      todayRelevantGoals: [],
-    })
   })
 
   it('taskStore returns initial empty state', () => {
     expect(useTaskStore.getState().tasks).toEqual([])
-    expect(useDerivedStore.getState().inbox.activeTasks).toEqual([])
   })
 
   it('goalStore returns initial empty state', () => {

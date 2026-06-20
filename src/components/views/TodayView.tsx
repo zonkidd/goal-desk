@@ -4,11 +4,9 @@ import { useState } from 'react'
 import { GlassCard } from '../common/GlassCard'
 import { GlassPanel } from '../common/GlassPanel'
 import { useUiStore } from '../../store/uiStore'
-import { useTaskStore } from '../../store/taskStore'
-import { useGoalStore } from '../../store/goalStore'
 import { useEventkitStore } from '../../store/eventkitStore'
+import { useWorkspaceDerived } from '../../hooks/useWorkspaceDerived'
 import { getTaskTimeInfo, getUrgencyColor, getUrgencyIcon } from '../../lib/taskPresentation'
-import type { Task } from '../../types/task'
 
 // Timeline 来源视觉配置辅助函数
 // PRD 颜色规范: Calendar=绿色, Reminder=靛蓝, Todo=琥珀色
@@ -34,12 +32,12 @@ function getTimelineStyles(source: 'todo' | 'reminder' | 'calendar') {
 }
 
 export function TodayView() {
-  const todayAttentionGroups = useTaskStore((state) => state.todayAttentionGroups)
-  const todayRelevantGoals = useGoalStore((state) => state.todayRelevantGoals)
+  const { today } = useWorkspaceDerived()
   const showCompletedTodos = useUiStore((state) => state.showCompletedTodos)
-  const rawTimeline = useTaskStore((state) => state.todayTimeline)
+  const rawTimeline = today.timeline
   const timeline = showCompletedTodos ? rawTimeline : rawTimeline.filter(item => !item.done)
-  const ongoingTasks = todayAttentionGroups.ongoing
+  const ongoingTasks = today.attentionGroups.ongoing
+  const todayRelevantGoals = today.relevantGoals
   const openReminderDrawer = useUiStore((state) => state.openReminderDrawer)
   const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
   const openGoalDrawer = useUiStore((state) => state.openGoalDrawer)

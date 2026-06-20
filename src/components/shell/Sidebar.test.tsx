@@ -4,21 +4,27 @@ import userEvent from '@testing-library/user-event'
 import { Sidebar } from './Sidebar'
 import { useUiStore } from '../../store/uiStore'
 import { useGoalStore } from '../../store/goalStore'
-import { useTaskStore } from '../../store/taskStore'
-import { useEventkitStore } from '../../store/eventkitStore'
+import { useAreaStore } from '../../store/areaStore'
 
-// Mock Zustand stores
 vi.mock('../../store/uiStore', () => ({
   useUiStore: vi.fn(),
 }))
 vi.mock('../../store/goalStore', () => ({
   useGoalStore: vi.fn(),
 }))
-vi.mock('../../store/taskStore', () => ({
-  useTaskStore: vi.fn(),
+vi.mock('../../store/areaStore', () => ({
+  useAreaStore: vi.fn(),
 }))
-vi.mock('../../store/eventkitStore', () => ({
-  useEventkitStore: vi.fn(),
+vi.mock('../../hooks/useWorkspaceDerived', () => ({
+  useWorkspaceDerived: vi.fn(() => ({
+    inbox: { activeTasks: [], pausedTasks: [], completed: { totalCount: 0, visibleTasks: [], isCollapsedByDefault: true } },
+    today: { focusTasks: [], timeline: [], attentionGroups: { overdue: [], dueToday: [], ongoing: [] }, relevantGoals: [] },
+    goals: [],
+    meta: { computedAt: new Date(), activeArea: 'ALL', taskCount: 0, goalCount: 0 },
+  })),
+}))
+vi.mock('./EventKitStatusCard', () => ({
+  EventKitStatusCard: () => <div data-testid="eventkit-status" />,
 }))
 
 describe('Sidebar', () => {
@@ -26,12 +32,10 @@ describe('Sidebar', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    // 设置默认的 store 状态
     vi.mocked(useUiStore).mockImplementation((selector: any) => {
       const state = {
         currentView: 'inbox',
         activeArea: 'ALL',
-        allAreas: [],
         setView: mockSetView,
         setActiveArea: vi.fn(),
         openQuickCapture: vi.fn(),
@@ -42,17 +46,8 @@ describe('Sidebar', () => {
       const state = { baseGoals: [] }
       return selector(state)
     })
-    vi.mocked(useTaskStore).mockImplementation((selector: any) => {
-      const state = { tasks: [] }
-      return selector(state)
-    })
-    vi.mocked(useEventkitStore).mockImplementation((selector: any) => {
-      const state = {
-        eventkitPermissions: { calendar: 'not_determined', reminders: 'not_determined' },
-        eventkitData: { calendarEventCount: 0, reminderCount: 0 },
-        requestCalendarAccess: vi.fn(),
-        requestRemindersAccess: vi.fn(),
-      }
+    vi.mocked(useAreaStore).mockImplementation((selector: any) => {
+      const state = { allAreas: [] }
       return selector(state)
     })
   })

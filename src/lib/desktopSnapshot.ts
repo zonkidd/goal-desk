@@ -1,27 +1,30 @@
-import type { GoalCard, IntegrationStatus, ReminderItem, TimelineItem } from '../types/app'
+import type { GoalCard, IntegrationStatus, ReminderItem } from '../types/app'
 import type { Task } from '../types/task'
 import * as tauriCommands from './tauriCommands'
 import * as eventkitIntegration from './eventkitIntegration'
 
-export async function loadDesktopSnapshot(): Promise<{
-  timeline: TimelineItem[]
-  goals: GoalCard[]
-  tasks: Task[]
+export interface RawEventKitData {
+  calendarEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
+  reminders: Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
   systemReminders: ReminderItem[]
   integrationStatus: IntegrationStatus
+}
+
+export async function loadDesktopSnapshot(): Promise<{
+  rawEventKit: RawEventKitData
+  goals: GoalCard[]
+  tasks: Task[]
 }> {
   const [tasks, goals] = await Promise.all([
     tauriCommands.loadTaskList(),
     tauriCommands.loadGoalList(),
   ])
 
-  const eventkitData = await eventkitIntegration.loadEventKitSnapshot(tasks)
+  const eventkitData = await eventkitIntegration.loadRawEventKitData()
 
   return {
-    timeline: eventkitData.timeline,
+    rawEventKit: eventkitData,
     goals,
     tasks,
-    systemReminders: eventkitData.systemReminders,
-    integrationStatus: eventkitData.integrationStatus,
   }
 }

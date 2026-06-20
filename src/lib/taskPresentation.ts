@@ -1,4 +1,5 @@
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
+import { startOfDay } from './dateUtils'
 
 export function getRuntimeModeStatusMessage(isTauri: boolean) {
   return isTauri ? 'Rust + Tauri data' : 'Browser preview only · no SQLite or Tauri IPC'
@@ -43,10 +44,6 @@ export function logActionForTransition(fromStatus: TaskStatus, toStatus: TaskSta
 
 export function getTaskContentBadgeLabel(content: string) {
   return content.trim() ? '包含 Markdown 笔记' : '暂无笔记'
-}
-
-function startOfDay(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate())
 }
 
 export type TaskUrgency = 'critical' | 'warning' | 'normal' | 'none'

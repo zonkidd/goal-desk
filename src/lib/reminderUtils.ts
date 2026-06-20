@@ -1,4 +1,5 @@
 import type { ReminderItem } from '../types/app'
+import { startOfDay } from './dateUtils'
 
 /**
  * 时间分组结果类型
@@ -9,13 +10,6 @@ export interface TimeGroupedReminders {
   next7days: ReminderItem[]     // 未来7天
   later: ReminderItem[]         // 更晚
   nodate: ReminderItem[]        // 无日期
-}
-
-/**
- * 获取日期的开始时间（00:00:00）
- */
-function startOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
 /**

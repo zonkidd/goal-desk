@@ -340,52 +340,7 @@ impl SqliteRepository {
     pub fn load_desk_tasks(&self) -> Result<Vec<DeskTask>, RepositoryError> {
         self.initialize()?;
         let connection = Connection::open(&self.path)?;
-
-        let mut logs_by_task_id: HashMap<String, Vec<TaskActivityLog>> = HashMap::new();
-        {
-            let mut statement = connection.prepare(
-                "SELECT id, task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC",
-            )?;
-            let mut rows = statement.query([])?;
-
-            while let Some(row) = rows.next()? {
-                let log_id: String = row.get(0)?;
-                let task_id: String = row.get(1)?;
-                let log = TaskActivityLog {
-                    id: parse_uuid(log_id)?,
-                    action: parse_task_activity_action(row.get::<_, String>(2)?)?,
-                    note: row.get(3)?,
-                    timestamp: parse_datetime(row.get::<_, String>(4)?)?,
-                };
-                logs_by_task_id.entry(task_id).or_default().push(log);
-            }
-        }
-
-        let mut statement = connection.prepare(
-            "SELECT id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline FROM desk_tasks ORDER BY title",
-        )?;
-        let mut rows = statement.query([])?;
-        let mut tasks = Vec::new();
-
-        while let Some(row) = rows.next()? {
-            let id = row.get::<_, String>(0)?;
-            tasks.push(DeskTask {
-                id: parse_uuid(id.clone())?,
-                title: row.get(1)?,
-                content: row.get(2)?,
-                status: parse_task_status(row.get::<_, String>(3)?)?,
-                planned_start_at: parse_optional_datetime(row.get::<_, Option<String>>(4)?)?,
-                due_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
-                linked_goal_id: parse_optional_uuid(row.get::<_, Option<String>>(6)?)?,
-                linked_goal_label: row.get(7)?,
-                bear_note_id: row.get(8)?,
-                system_reminder_id: row.get(9)?,
-                show_in_timeline: row.get::<_, i64>(10)? != 0,
-                activity_logs: logs_by_task_id.remove(&id).unwrap_or_default(),
-            });
-        }
-
-        Ok(tasks)
+        load_tasks_with_filter(&connection, "", &[])
     }
 
     fn ensure_column_exists(
@@ -656,58 +611,12 @@ pub trait TaskRepository {
 impl TaskRepository for SqliteRepository {
     fn find(&self, id: Uuid) -> Result<Option<DeskTask>, RepositoryError> {
         let connection = Connection::open(&self.path)?;
-
-        // 先查询 activity logs
-        let mut logs = Vec::new();
-        {
-            let mut statement = connection.prepare(
-                "SELECT id, action, note, timestamp FROM desk_task_activity_logs WHERE task_id = ?1 ORDER BY timestamp DESC"
-            )?;
-            let mut rows = statement.query(params![id.to_string()])?;
-
-            while let Some(row) = rows.next()? {
-                logs.push(TaskActivityLog {
-                    id: parse_uuid(row.get::<_, String>(0)?)?,
-                    action: parse_task_activity_action(row.get::<_, String>(1)?)?,
-                    note: row.get(2)?,
-                    timestamp: parse_datetime(row.get::<_, String>(3)?)?,
-                });
-            }
-        }
-
-        // 查询任务
-        let result = connection.query_row(
-            "SELECT id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline FROM desk_tasks WHERE id = ?1",
-            params![id.to_string()],
-            |row| {
-                Ok(DeskTask {
-                    id: row.get::<_, String>(0).and_then(|s| Uuid::parse_str(&s).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))))?,
-                    title: row.get(1)?,
-                    content: row.get(2)?,
-                    status: row.get::<_, String>(3).and_then(|s| match s.as_str() {
-                        "TODO" => Ok(TaskStatus::Todo),
-                        "IN_PROGRESS" => Ok(TaskStatus::InProgress),
-                        "PAUSED" => Ok(TaskStatus::Paused),
-                        "DONE" => Ok(TaskStatus::Done),
-                        _ => Err(rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid task status")))),
-                    })?,
-                    planned_start_at: row.get::<_, Option<String>>(4)?.and_then(|s| DateTime::parse_from_rfc3339(&s).ok().map(|dt| dt.with_timezone(&Local))),
-                    due_at: row.get::<_, Option<String>>(5)?.and_then(|s| DateTime::parse_from_rfc3339(&s).ok().map(|dt| dt.with_timezone(&Local))),
-                    linked_goal_id: row.get::<_, Option<String>>(6)?.and_then(|s| Uuid::parse_str(&s).ok()),
-                    linked_goal_label: row.get(7)?,
-                    bear_note_id: row.get(8)?,
-                    system_reminder_id: row.get(9)?,
-                    show_in_timeline: row.get::<_, i64>(10)? != 0,
-                    activity_logs: logs.clone(),
-                })
-            },
-        );
-
-        match result {
-            Ok(task) => Ok(Some(task)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
+        let mut tasks = load_tasks_with_filter(
+            &connection,
+            "WHERE id = ?1",
+            &[&id.to_string() as &dyn rusqlite::types::ToSql],
+        )?;
+        Ok(tasks.pop())
     }
 
     fn list(&self) -> Result<Vec<DeskTask>, RepositoryError> {
@@ -716,106 +625,20 @@ impl TaskRepository for SqliteRepository {
 
     fn list_by_goal(&self, goal_id: Uuid) -> Result<Vec<DeskTask>, RepositoryError> {
         let connection = Connection::open(&self.path)?;
-
-        // 先加载所有 logs
-        let mut logs_by_task_id: HashMap<String, Vec<TaskActivityLog>> = HashMap::new();
-        {
-            let mut statement = connection.prepare(
-                "SELECT id, task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC"
-            )?;
-            let mut rows = statement.query([])?;
-
-            while let Some(row) = rows.next()? {
-                let log_id: String = row.get(0)?;
-                let task_id: String = row.get(1)?;
-                let log = TaskActivityLog {
-                    id: parse_uuid(log_id)?,
-                    action: parse_task_activity_action(row.get::<_, String>(2)?)?,
-                    note: row.get(3)?,
-                    timestamp: parse_datetime(row.get::<_, String>(4)?)?,
-                };
-                logs_by_task_id.entry(task_id).or_default().push(log);
-            }
-        }
-
-        // 查询该 goal 的任务
-        let mut statement = connection.prepare(
-            "SELECT id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline FROM desk_tasks WHERE linked_goal_id = ?1 ORDER BY title"
-        )?;
-        let mut rows = statement.query(params![goal_id.to_string()])?;
-        let mut tasks = Vec::new();
-
-        while let Some(row) = rows.next()? {
-            let id = row.get::<_, String>(0)?;
-            tasks.push(DeskTask {
-                id: parse_uuid(id.clone())?,
-                title: row.get(1)?,
-                content: row.get(2)?,
-                status: parse_task_status(row.get::<_, String>(3)?)?,
-                planned_start_at: parse_optional_datetime(row.get::<_, Option<String>>(4)?)?,
-                due_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
-                linked_goal_id: parse_optional_uuid(row.get::<_, Option<String>>(6)?)?,
-                linked_goal_label: row.get(7)?,
-                bear_note_id: row.get(8)?,
-                system_reminder_id: row.get(9)?,
-                show_in_timeline: row.get::<_, i64>(10)? != 0,
-                activity_logs: logs_by_task_id.remove(&id).unwrap_or_default(),
-            });
-        }
-
-        Ok(tasks)
+        load_tasks_with_filter(
+            &connection,
+            "WHERE linked_goal_id = ?1",
+            &[&goal_id.to_string() as &dyn rusqlite::types::ToSql],
+        )
     }
 
     fn list_by_status(&self, status: TaskStatus) -> Result<Vec<DeskTask>, RepositoryError> {
         let connection = Connection::open(&self.path)?;
-
-        // 先加载所有 logs
-        let mut logs_by_task_id: HashMap<String, Vec<TaskActivityLog>> = HashMap::new();
-        {
-            let mut statement = connection.prepare(
-                "SELECT id, task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC"
-            )?;
-            let mut rows = statement.query([])?;
-
-            while let Some(row) = rows.next()? {
-                let log_id: String = row.get(0)?;
-                let task_id: String = row.get(1)?;
-                let log = TaskActivityLog {
-                    id: parse_uuid(log_id)?,
-                    action: parse_task_activity_action(row.get::<_, String>(2)?)?,
-                    note: row.get(3)?,
-                    timestamp: parse_datetime(row.get::<_, String>(4)?)?,
-                };
-                logs_by_task_id.entry(task_id).or_default().push(log);
-            }
-        }
-
-        // 查询指定状态的任务
-        let mut statement = connection.prepare(
-            "SELECT id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline FROM desk_tasks WHERE status = ?1 ORDER BY title"
-        )?;
-        let mut rows = statement.query(params![task_status_as_str(status)])?;
-        let mut tasks = Vec::new();
-
-        while let Some(row) = rows.next()? {
-            let id = row.get::<_, String>(0)?;
-            tasks.push(DeskTask {
-                id: parse_uuid(id.clone())?,
-                title: row.get(1)?,
-                content: row.get(2)?,
-                status: parse_task_status(row.get::<_, String>(3)?)?,
-                planned_start_at: parse_optional_datetime(row.get::<_, Option<String>>(4)?)?,
-                due_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
-                linked_goal_id: parse_optional_uuid(row.get::<_, Option<String>>(6)?)?,
-                linked_goal_label: row.get(7)?,
-                bear_note_id: row.get(8)?,
-                system_reminder_id: row.get(9)?,
-                show_in_timeline: row.get::<_, i64>(10)? != 0,
-                activity_logs: logs_by_task_id.remove(&id).unwrap_or_default(),
-            });
-        }
-
-        Ok(tasks)
+        load_tasks_with_filter(
+            &connection,
+            "WHERE status = ?1",
+            &[&task_status_as_str(status) as &dyn rusqlite::types::ToSql],
+        )
     }
 
     fn create(&self, task: &DeskTask) -> Result<(), RepositoryError> {
@@ -1006,6 +829,79 @@ impl AreaRepository for SqliteRepository {
         )?;
         Ok(())
     }
+}
+
+// ============================================================================
+// Task loading helpers — eliminates duplication across list/find/filter methods
+// ============================================================================
+
+fn load_all_activity_logs(connection: &Connection) -> Result<HashMap<String, Vec<TaskActivityLog>>, RepositoryError> {
+    let mut logs_by_task_id: HashMap<String, Vec<TaskActivityLog>> = HashMap::new();
+    let mut statement = connection.prepare(
+        "SELECT id, task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC",
+    )?;
+    let mut rows = statement.query([])?;
+
+    while let Some(row) = rows.next()? {
+        let log_id: String = row.get(0)?;
+        let task_id: String = row.get(1)?;
+        let log = TaskActivityLog {
+            id: parse_uuid(log_id)?,
+            action: parse_task_activity_action(row.get::<_, String>(2)?)?,
+            note: row.get(3)?,
+            timestamp: parse_datetime(row.get::<_, String>(4)?)?,
+        };
+        logs_by_task_id.entry(task_id).or_default().push(log);
+    }
+
+    Ok(logs_by_task_id)
+}
+
+fn row_to_task(
+    row: &rusqlite::Row,
+    logs_by_task_id: &mut HashMap<String, Vec<TaskActivityLog>>,
+) -> Result<DeskTask, RepositoryError> {
+    let id = row.get::<_, String>(0)?;
+    Ok(DeskTask {
+        id: parse_uuid(id.clone())?,
+        title: row.get(1)?,
+        content: row.get(2)?,
+        status: parse_task_status(row.get::<_, String>(3)?)?,
+        planned_start_at: parse_optional_datetime(row.get::<_, Option<String>>(4)?)?,
+        due_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
+        linked_goal_id: parse_optional_uuid(row.get::<_, Option<String>>(6)?)?,
+        linked_goal_label: row.get(7)?,
+        bear_note_id: row.get(8)?,
+        system_reminder_id: row.get(9)?,
+        show_in_timeline: row.get::<_, i64>(10)? != 0,
+        activity_logs: logs_by_task_id.remove(&id).unwrap_or_default(),
+    })
+}
+
+const TASK_COLUMNS: &str = "id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline";
+
+fn load_tasks_with_filter(
+    connection: &Connection,
+    where_clause: &str,
+    params: &[&dyn rusqlite::types::ToSql],
+) -> Result<Vec<DeskTask>, RepositoryError> {
+    let mut logs_by_task_id = load_all_activity_logs(connection)?;
+
+    let sql = if where_clause.is_empty() {
+        format!("SELECT {TASK_COLUMNS} FROM desk_tasks ORDER BY title")
+    } else {
+        format!("SELECT {TASK_COLUMNS} FROM desk_tasks {where_clause}")
+    };
+
+    let mut statement = connection.prepare(&sql)?;
+    let mut rows = statement.query(params)?;
+    let mut tasks = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        tasks.push(row_to_task(row, &mut logs_by_task_id)?);
+    }
+
+    Ok(tasks)
 }
 
 #[cfg(test)]

@@ -54,8 +54,8 @@ export interface GoalCard {
   progress: number
   nextTodo: string
   taskCount: number
-  createdAt: Date
-  updatedAt: Date
+  createdAt?: Date
+  updatedAt?: Date
 }
 
 export interface AreaOption {

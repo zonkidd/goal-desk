@@ -188,11 +188,7 @@ mod commands {
 
     fn goal_summary_by_id(app: &AppHandle, goal_id: &str) -> Result<GoalSummary, String> {
         let service = goal_service(app)?;
-        service
-            .goal_summaries()?
-            .into_iter()
-            .find(|g| g.id == goal_id)
-            .ok_or_else(|| format!("Goal not found: {goal_id}"))
+        service.get_goal_summary_by_id(goal_id)
     }
 
     #[tauri::command]
@@ -358,24 +354,16 @@ mod commands {
         note: Option<String>,
     ) -> Result<DeskTask, String> {
         let service = task_service(&app)?;
+        let app_handle = app.clone();
 
-        // EventKit sync must happen before status update (needs old task state)
-        use crate::repository::TaskRepository;
-        let repository = workspace_repository(&app)?;
-        let task_uuid = Uuid::parse_str(&task_id).map_err(|e| e.to_string())?;
-        if let Some(task) = TaskRepository::find(&repository, task_uuid)
-            .map_err(|e| e.to_string())?
-        {
-            if let Some(reminder_id) = task.system_reminder_id.as_deref() {
-                eventkit::set_system_reminder_completed(
-                    &app,
-                    reminder_id,
-                    matches!(status, TaskStatus::Done),
-                )?;
-            }
-        }
-
-        service.update_task_status(&task_id, status, note)
+        service.update_task_status_with_sync(
+            &task_id,
+            status,
+            note,
+            Some(Box::new(move |reminder_id: &str, done: bool| {
+                eventkit::set_system_reminder_completed(&app_handle, reminder_id, done).map(|_| ())
+            })),
+        )
     }
 
     #[tauri::command]
@@ -390,10 +378,9 @@ mod commands {
 
     #[tauri::command]
     pub fn open_task_in_bear(app: AppHandle, task_id: String) -> Result<(), String> {
-        let tasks = load_or_seed_desk_tasks(&app)?;
-        let task = tasks
-            .iter()
-            .find(|task| task.id.to_string() == task_id)
+        let service = task_service(&app)?;
+        let task = service
+            .find_task(&task_id)?
             .ok_or_else(|| format!("Task not found: {task_id}"))?;
         let note_id = task
             .bear_note_id

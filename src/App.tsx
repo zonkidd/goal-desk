@@ -5,56 +5,14 @@ import { AppShell } from './components/shell/AppShell'
 import { QuickCaptureWindow } from './components/modal/QuickCaptureWindow'
 import { getCurrentWindowLabel, isTauriRuntime } from './lib/runtime'
 import { loadDesktopSnapshot } from './lib/desktopSnapshot'
+import { loadBrowserData } from './lib/browserCodec'
 import { getRuntimeModeStatusMessage } from './lib/taskPresentation'
 import { useUiStore } from './store/uiStore'
 import { useAreaStore } from './store/areaStore'
-import { useDerivedStateSync, useAppHydration, useReceiveExternalTask } from './hooks/useStoreComposition'
+import { useAppHydration, useReceiveExternalTask } from './hooks/useStoreComposition'
 import type { Task } from './types/task'
-import type { GoalCard } from './types/app'
-import type { AreaWithStats } from './types/app'
-
-// Browser mode localStorage keys
-const BROWSER_STORAGE_TASKS = 'goal-desk-browser-tasks'
-const BROWSER_STORAGE_GOALS = 'goal-desk-browser-goals'
-
-function loadBrowserData() {
-  try {
-    const tasksData = localStorage.getItem(BROWSER_STORAGE_TASKS)
-    const goalsData = localStorage.getItem(BROWSER_STORAGE_GOALS)
-
-    const tasks: Task[] = tasksData ? JSON.parse(tasksData) : []
-    const goals: GoalCard[] = goalsData ? JSON.parse(goalsData) : []
-
-    // Convert timestamp strings back to Date objects
-    tasks.forEach(task => {
-      if (task.activityLogs) {
-        task.activityLogs = task.activityLogs.map(log => ({
-          ...log,
-          timestamp: new Date(log.timestamp)
-        }))
-      }
-      if (task.plannedStartAt) task.plannedStartAt = new Date(task.plannedStartAt)
-      if (task.dueDate) task.dueDate = new Date(task.dueDate)
-      if (task.createdAt) task.createdAt = new Date(task.createdAt)
-      if (task.updatedAt) task.updatedAt = new Date(task.updatedAt)
-    })
-
-    goals.forEach(goal => {
-      if (goal.createdAt) goal.createdAt = new Date(goal.createdAt)
-      if (goal.updatedAt) goal.updatedAt = new Date(goal.updatedAt)
-    })
-
-    return { tasks, goals }
-  } catch {
-    return { tasks: [], goals: [] }
-  }
-}
 
 function MainApp() {
-  // 初始化多 store 架构的同步
-  useDerivedStateSync()
-
-  // 使用新架构的 hooks
   const hydrateApp = useAppHydration()
   const receiveExternalTask = useReceiveExternalTask()
   const setLoading = useUiStore((state) => state.setLoading)
@@ -158,13 +116,13 @@ function MainApp() {
     }
 
     void loadDesktopSnapshot()
-      .then(({ tasks, timeline, goals, systemReminders, integrationStatus }) => {
+      .then(({ tasks, rawEventKit, goals }) => {
         hydrateApp({
           tasks,
-          timeline,
+          rawEventKit,
           goals,
-          systemReminders,
-          integrationStatus,
+          systemReminders: rawEventKit.systemReminders,
+          integrationStatus: rawEventKit.integrationStatus,
           statusMessage: getRuntimeModeStatusMessage(true),
         })
 
