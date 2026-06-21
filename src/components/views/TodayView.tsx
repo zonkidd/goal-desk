@@ -7,6 +7,7 @@ import { useUiStore } from '../../store/uiStore'
 import { useEventkitStore } from '../../store/eventkitStore'
 import { useWorkspaceDerived } from '../../hooks/useWorkspaceDerived'
 import { getTaskTimeInfo, getUrgencyColor, getUrgencyIcon } from '../../lib/taskPresentation'
+import { startOfDay } from '../../lib/dateUtils'
 
 // Timeline 来源视觉配置辅助函数
 // PRD 颜色规范: Calendar=绿色, Reminder=靛蓝, Todo=琥珀色
@@ -35,7 +36,13 @@ export function TodayView() {
   const { today } = useWorkspaceDerived()
   const showCompletedTodos = useUiStore((state) => state.showCompletedTodos)
   const rawTimeline = today.timeline
-  const timeline = showCompletedTodos ? rawTimeline : rawTimeline.filter(item => !item.done)
+  const todayStart = startOfDay(new Date())
+  const timeline = rawTimeline
+    .filter(item => {
+      if (!item.occurrenceDate) return true
+      return startOfDay(item.occurrenceDate).getTime() === todayStart.getTime()
+    })
+    .filter(item => showCompletedTodos || !item.done)
   const ongoingTasks = today.attentionGroups.ongoing
   const todayRelevantGoals = today.relevantGoals
   const openDrawer = useUiStore((state) => state.openDrawer)

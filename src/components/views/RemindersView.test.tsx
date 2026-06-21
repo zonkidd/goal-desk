@@ -492,7 +492,7 @@ describe('RemindersView', () => {
       expect(screen.getByText('个人事项2')).toBeInTheDocument()
     })
 
-    it('should group reminders by time using groupRemindersByTime', async () => {
+    it('should group reminders by time using groupRemindersByTime', { timeout: 15000 }, async () => {
       // Mock systemReminders 包含已过期、今天、未来7天的提醒
       const now = new Date()
       const mockReminders = [
@@ -516,17 +516,22 @@ describe('RemindersView', () => {
       await userEvent.click(timeTab)
 
       // 验证"已过期"、"今天"、"未来7天"分组都显示对应提醒
-      // 这些分组默认展开
-      expect(await screen.findByText('已过期提醒')).toBeInTheDocument()
+      // 先等第一个时间分组标题出现（无动画延迟）
+      await screen.findByText('已过期', {}, { timeout: 5000 })
+      expect(screen.getByText('已过期提醒')).toBeInTheDocument()
       expect(screen.getByText('今天提醒1')).toBeInTheDocument()
       expect(screen.getByText('今天提醒2')).toBeInTheDocument()
 
       // "未来7天"分组默认折叠,需要展开才能看到提醒
-      const next7daysButton = screen.getAllByRole('button').find(btn =>
+      const allButtons = screen.getAllByRole('button')
+      const next7daysButton = allButtons.find(btn =>
         btn.textContent?.includes('未来7天')
       )
       await userEvent.click(next7daysButton!)
-      expect(await screen.findByText('未来7天提醒')).toBeInTheDocument()
+      // 等待 AnimatePresence 动画完成，用 waitFor 确保内容渲染
+      await waitFor(() => {
+        expect(screen.getByText('未来7天提醒')).toBeInTheDocument()
+      }, { timeout: 10000 })
     })
 
     it('should call toggleSystemReminderDone when checking a reminder', async () => {
