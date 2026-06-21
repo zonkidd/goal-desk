@@ -92,13 +92,7 @@ vi.mock('./tauriCommands', () => ({
   renameArea: vi.fn().mockResolvedValue({ id: 'area-1', title: 'Renamed' }),
   deleteArea: vi.fn().mockResolvedValue({ success: true, message: 'Deleted' }),
   createSystemReminder: vi.fn().mockResolvedValue('reminder-1'),
-}))
-
-// Mock validation
-vi.mock('./validation', () => ({
-  validateTaskTitle: vi.fn((title: string) => title.trim() || null),
-  validateGoalInput: vi.fn((input: { title: string }) => input.title.trim() ? input : null),
-  validateAreaTitle: vi.fn((title: string) => title.trim() || null),
+  loadGoalList: vi.fn().mockResolvedValue([]),
 }))
 
 describe('TauriAdapter', () => {
@@ -116,11 +110,6 @@ describe('TauriAdapter', () => {
       expect(result.task?.title).toBe('Test Task')
       expect(result.statusMessage).toBe('Saved to local database')
     })
-
-    it('returns empty result for empty title', async () => {
-      const result = await adapter.createTask('   ')
-      expect(result.task).toBeUndefined()
-    })
   })
 
   describe('createTaskForGoal', () => {
@@ -134,15 +123,10 @@ describe('TauriAdapter', () => {
 
   describe('createGoal', () => {
     it('creates goal with valid input', async () => {
-      const result = await adapter.createGoal({ title: 'New Goal', area: 'Work' })
+      const result = await adapter.createGoal({ title: 'New Goal', area: 'Work', description: '' })
       expect(result.goal).toBeDefined()
       expect(result.goal?.title).toBe('Test Goal')
       expect(result.openGoalWorkspace).toBe(true)
-    })
-
-    it('returns empty result for invalid input', async () => {
-      const result = await adapter.createGoal({ title: '   ' })
-      expect(result.goal).toBeUndefined()
     })
   })
 
@@ -167,11 +151,6 @@ describe('TauriAdapter', () => {
       const result = await adapter.addTaskNote('task-1', 'Test note')
       expect(result.task).toBeDefined()
       expect(result.task?.activityLogs).toHaveLength(1)
-    })
-
-    it('returns empty result for empty note', async () => {
-      const result = await adapter.addTaskNote('task-1', '   ')
-      expect(result.task).toBeUndefined()
     })
   })
 
@@ -201,11 +180,6 @@ describe('TauriAdapter', () => {
       expect(result.task).toBeDefined()
       expect(result.task?.title).toBe('Updated Task')
     })
-
-    it('returns empty result for invalid title', async () => {
-      const result = await adapter.updateTaskFields('task-1', { title: '   ' })
-      expect(result.task).toBeUndefined()
-    })
   })
 
   describe('listAreas', () => {
@@ -221,11 +195,6 @@ describe('TauriAdapter', () => {
       const result = await adapter.createArea('New Area')
       expect(result.area).toBeDefined()
       expect(result.area?.title).toBe('Personal')
-    })
-
-    it('returns empty result for empty title', async () => {
-      const result = await adapter.createArea('   ')
-      expect(result.area).toBeUndefined()
     })
   })
 
@@ -248,6 +217,13 @@ describe('TauriAdapter', () => {
     it('creates system reminder', async () => {
       const result = await adapter.createSystemReminder('Reminder', new Date())
       expect(result).toBe('reminder-1')
+    })
+  })
+
+  describe('loadGoals', () => {
+    it('loads goals', async () => {
+      const goals = await adapter.loadGoals()
+      expect(Array.isArray(goals)).toBe(true)
     })
   })
 })

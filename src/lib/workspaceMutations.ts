@@ -8,6 +8,7 @@
 import { getRuntimeAdapter } from './runtimeAdapter'
 import { TauriAdapter } from './tauriAdapter'
 import { BrowserAdapter, BROWSER_PREVIEW_STATUS } from './browserAdapter'
+import { ValidatingMutationAdapter } from './validatingAdapter'
 import { TauriEventKitAdapter, BrowserEventKitAdapter } from './eventkitAdapter'
 import type { MutationAdapter } from './mutationAdapter'
 import type { EventKitAdapter } from './eventkitAdapter'
@@ -21,7 +22,8 @@ let eventkitAdapterInstance: EventKitAdapter | null = null
 
 export function getWorkspaceMutationAdapter(): MutationAdapter {
   if (!adapterInstance) {
-    adapterInstance = getRuntimeAdapter().isTauri() ? new TauriAdapter() : new BrowserAdapter()
+    const inner = getRuntimeAdapter().isTauri() ? new TauriAdapter() : new BrowserAdapter()
+    adapterInstance = new ValidatingMutationAdapter(inner)
   }
   return adapterInstance
 }

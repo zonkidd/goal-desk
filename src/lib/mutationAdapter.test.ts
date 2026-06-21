@@ -44,6 +44,7 @@ describe('MutationAdapter interface', () => {
       renameArea: vi.fn().mockResolvedValue({ area: { id: 'a1', title: 'Renamed', goalCount: 0, activeGoalCount: 0, isSystem: false } as AreaWithStats, statusMessage: 'ok' }),
       deleteArea: vi.fn().mockResolvedValue({ success: true, message: 'deleted', statusMessage: 'ok' }),
       createSystemReminder: vi.fn().mockResolvedValue('reminder-id'),
+      loadGoals: vi.fn().mockResolvedValue([mockGoal]),
     } as MutationAdapter
   })
 
@@ -110,5 +111,12 @@ describe('MutationAdapter interface', () => {
     expect(adapter.updateTaskFields).toHaveBeenCalledWith('task-1', expect.objectContaining({
       linkedGoalLabel: 'My Goal',
     }))
+  })
+
+  it('loadGoals returns goals array', async () => {
+    const goals = await adapter.loadGoals()
+    expect(Array.isArray(goals)).toBe(true)
+    expect(goals.length).toBe(1)
+    expect(goals[0].id).toBe('goal-1')
   })
 })

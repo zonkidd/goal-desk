@@ -60,4 +60,8 @@ export interface AreaMutation {
   deleteArea(areaId: string, force?: boolean): Promise<DeleteAreaResult>
 }
 
-export type MutationAdapter = TaskMutation & GoalMutation & AreaMutation
+export interface QueryAdapter {
+  loadGoals(): Promise<GoalCard[]>
+}
+
+export type MutationAdapter = TaskMutation & GoalMutation & AreaMutation & QueryAdapter
