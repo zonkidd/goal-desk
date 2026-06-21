@@ -36,9 +36,6 @@ export function loadBrowserGoals(): GoalCard[] {
     const data = localStorage.getItem(BROWSER_STORAGE_GOALS)
     if (!data) return []
     const goals: GoalCard[] = JSON.parse(data)
-    for (const goal of goals) {
-      deserializeDates(goal as any, ['createdAt', 'updatedAt'])
-    }
     return goals
   } catch {
     return []

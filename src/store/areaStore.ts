@@ -35,7 +35,7 @@ export const useAreaStore = create<AreaStoreState>((set, get) => ({
     )
     if (result?.area) {
       set((state) => {
-        const withoutDuplicate = state.allAreas.filter((a) => a.id !== result.area!.id && a.title !== result.area!.title)
+        const withoutDuplicate = state.allAreas.filter((a) => a.id !== result.area!.id)
         return {
           allAreas: [...withoutDuplicate, result.area!].sort((a, b) => a.title.localeCompare(b.title)),
         }
