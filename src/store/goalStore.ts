@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { getWorkspaceMutationAdapter } from '../lib/workspaceMutations'
 import { executeMutation } from './mutationHelper'
 import { upsertById } from './upsertById'
+import { loadGoalList } from '../lib/tauriCommands'
+import { getRuntimeAdapter } from '../lib/runtimeAdapter'
 import type { GoalCard, GoalStatus } from '../types/app'
 
 export interface GoalStoreState {
@@ -9,6 +11,7 @@ export interface GoalStoreState {
 
   hydrateGoals: (goals: GoalCard[]) => void
   replaceGoal: (goal: GoalCard) => GoalCard[]
+  refreshGoals: () => Promise<void>
   createGoal: (
     input: { title: string; area?: string; description?: string },
     options?: { openGoalWorkspace?: boolean },
@@ -26,6 +29,16 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
     const nextGoals = upsertById(get().baseGoals, goal)
     set({ baseGoals: nextGoals })
     return nextGoals
+  },
+
+  refreshGoals: async () => {
+    if (!getRuntimeAdapter().isTauri()) return
+    try {
+      const goals = await loadGoalList()
+      set({ baseGoals: goals })
+    } catch (error) {
+      console.error('Failed to refresh goals:', error)
+    }
   },
 
   createGoal: async (input, options) => {

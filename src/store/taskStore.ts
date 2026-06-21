@@ -3,6 +3,7 @@ import { getRuntimeAdapter } from '../lib/runtimeAdapter'
 import { getWorkspaceMutationAdapter } from '../lib/workspaceMutations'
 import { executeMutation } from './mutationHelper'
 import { upsertById } from './upsertById'
+import { useGoalStore } from './goalStore'
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 import type { GoalCard } from '../types/app'
 
@@ -108,7 +109,15 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
     await executeMutation(
       (a) => a.updateTaskStatus(taskId, status, note),
       adapter,
-      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
+      { onSuccess: ({ task }) => { 
+        if (task) {
+          get().replaceTask(task)
+          // Refresh Goal progress after Task completion
+          if (status === 'DONE') {
+            useGoalStore.getState().refreshGoals()
+          }
+        }
+      } },
     )
   },
 

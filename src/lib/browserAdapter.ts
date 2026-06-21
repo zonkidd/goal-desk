@@ -149,8 +149,11 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation 
 
     const updatedTask: Task = { ...tasks[idx], status }
     if (note?.trim()) {
+      const action: TaskActivityAction = status === 'DONE' ? 'COMPLETED' : 
+                                         status === 'PAUSED' ? 'PAUSED' :
+                                         status === 'IN_PROGRESS' ? 'RESUMED' : 'STARTED'
       updatedTask.activityLogs = [
-        { action: 'STATUS_CHANGED' as TaskActivityAction, note: note.trim(), timestamp: new Date() },
+        { action, note: note.trim(), timestamp: new Date() },
         ...tasks[idx].activityLogs,
       ]
     }
