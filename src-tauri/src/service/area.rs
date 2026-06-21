@@ -1,4 +1,4 @@
-use crate::domain::{Area, DeleteAreaResult, UNCATEGORIZED_AREA_ID};
+use crate::domain::{Area, DeleteAreaResult, GoalStatus, UNCATEGORIZED_AREA_ID};
 use crate::repository::{AreaRepository, GoalRepository, SqliteRepository};
 use uuid::Uuid;
 
@@ -112,6 +112,37 @@ impl AreaService {
                 None
             },
         })
+    }
+
+    pub fn list_areas_with_stats(&self) -> Result<Vec<crate::domain::AreaWithStats>, String> {
+        self.repo.initialize().map_err(|e| e.to_string())?;
+        let areas = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;
+        let goals = GoalRepository::list(&self.repo).map_err(|e| e.to_string())?;
+
+        let mut result: Vec<crate::domain::AreaWithStats> = areas
+            .iter()
+            .map(|area| {
+                let goals_in_area: Vec<&crate::domain::Goal> = goals
+                    .iter()
+                    .filter(|g| g.area_id == Some(area.id))
+                    .collect();
+                let goal_count = goals_in_area.len();
+                let active_goal_count = goals_in_area
+                    .iter()
+                    .filter(|g| g.status == GoalStatus::Active)
+                    .count();
+                crate::domain::AreaWithStats {
+                    id: area.id,
+                    title: area.title.clone(),
+                    goal_count,
+                    active_goal_count,
+                    is_system: area.is_system,
+                }
+            })
+            .collect();
+
+        result.sort_by(|a, b| a.title.cmp(&b.title));
+        Ok(result)
     }
 }
 

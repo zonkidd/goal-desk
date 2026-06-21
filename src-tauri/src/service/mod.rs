@@ -1,6 +1,6 @@
 mod app;
 mod area;
-mod goal;
+pub mod goal;
 mod task;
 
 pub use app::AppService;

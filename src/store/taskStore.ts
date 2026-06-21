@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { isTauriRuntime } from '../lib/runtime'
-import { createWorkspaceMutationAdapter } from '../lib/workspaceMutations'
+import { getWorkspaceMutationAdapter } from '../lib/workspaceMutations'
 import { executeMutation } from './mutationHelper'
+import { upsertById } from './upsertById'
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 import type { GoalCard } from '../types/app'
 
@@ -34,12 +35,6 @@ export interface TaskStoreState {
   createAndLinkReminder: (taskId: string, title: string, dueAt?: Date) => Promise<string>
 }
 
-function replaceTaskInArray(tasks: Task[], nextTask: Task) {
-  const index = tasks.findIndex((task) => task.id === nextTask.id)
-  if (index === -1) return [nextTask, ...tasks]
-  return tasks.map((task) => (task.id === nextTask.id ? nextTask : task))
-}
-
 function syncTasksForReminderInArray(tasks: Task[], reminderId: string, done: boolean): Task[] {
   return tasks.map((task) =>
     task.systemReminderId === reminderId
@@ -68,7 +63,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   hydrateTasks: (tasks) => set({ tasks }),
 
   replaceTask: (task) => {
-    const nextTasks = replaceTaskInArray(get().tasks, task)
+    const nextTasks = upsertById(get().tasks, task)
     set({ tasks: nextTasks })
     return nextTasks
   },
@@ -80,7 +75,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   },
 
   addTask: async (title) => {
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
     const result = await executeMutation(
       (a) => a.createTask(title),
       adapter,
@@ -90,7 +85,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   },
 
   createTaskForGoal: async (goal, title) => {
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
     const result = await executeMutation(
       (a) => a.createTaskForGoal(goal, title),
       adapter,
@@ -100,7 +95,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   },
 
   addTaskNote: async (taskId, note) => {
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
     await executeMutation(
       (a) => a.addTaskNote(taskId, note),
       adapter,
@@ -109,7 +104,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   },
 
   updateTaskStatus: async (taskId, status, note) => {
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
     await executeMutation(
       (a) => a.updateTaskStatus(taskId, status, note),
       adapter,
@@ -118,7 +113,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   },
 
   updateTaskContent: async (taskId, content) => {
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
     await executeMutation(
       (a) => a.updateTaskContent(taskId, content),
       adapter,
@@ -127,14 +122,19 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   },
 
   updateTaskFields: async (taskId, input, availableGoals) => {
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
+    const linkedGoalLabel = input.linkedGoalLabel ?? (
+      input.linkedGoalId && availableGoals
+        ? availableGoals.find((g) => g.id === input.linkedGoalId)?.title
+        : undefined
+    )
     await executeMutation(
       (a) => a.updateTaskFields(taskId, {
         title: input.title,
         plannedStartAt: input.plannedStartAt,
         dueDate: input.dueDate,
         linkedGoalId: input.linkedGoalId,
-        availableGoals,
+        linkedGoalLabel,
         showInTimeline: input.showInTimeline,
         systemReminderId: input.systemReminderId,
       }),
@@ -144,7 +144,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   },
 
   linkTaskToReminder: async (taskId: string, reminderId: string) => {
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
     const task = get().tasks.find((t) => t.id === taskId)
     if (!task) return
     try {
@@ -161,7 +161,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   },
 
   unlinkTaskFromReminder: async (taskId: string) => {
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
     const task = get().tasks.find((t) => t.id === taskId)
     if (!task) return
     try {
@@ -178,7 +178,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   },
 
   createAndLinkReminder: async (taskId: string, title: string, dueAt?: Date) => {
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
     try {
       if (isTauriRuntime()) {
         const reminderId = await adapter.createSystemReminder(title, dueAt)

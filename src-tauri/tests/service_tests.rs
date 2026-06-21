@@ -104,14 +104,15 @@ fn goal_service_update_nonexistent_goal() {
 }
 
 #[test]
-fn goal_service_list_areas_with_stats() {
+fn area_service_list_areas_with_stats() {
     let repo = temp_repo("goal_areas_stats");
-    let service = GoalService::new(repo);
-    service.create_goal("G1", "Work", "").unwrap();
-    service.create_goal("G2", "Work", "").unwrap();
-    service.create_goal("G3", "Personal", "").unwrap();
+    let goal_service = GoalService::new(repo.clone());
+    goal_service.create_goal("G1", "Work", "").unwrap();
+    goal_service.create_goal("G2", "Work", "").unwrap();
+    goal_service.create_goal("G3", "Personal", "").unwrap();
 
-    let areas = service.list_areas_with_stats().unwrap();
+    let area_service = AreaService::new(repo);
+    let areas = area_service.list_areas_with_stats().unwrap();
     assert!(areas.len() >= 2);
     let work = areas.iter().find(|a| a.title == "Work").unwrap();
     assert_eq!(work.goal_count, 2);
@@ -495,6 +496,83 @@ fn task_service_find_task_returns_none_for_missing() {
     let fake_id = Uuid::new_v4().to_string();
     let found = service.find_task(&fake_id).unwrap();
     assert!(found.is_none());
+}
+
+// ============================================================================
+// build_goal_summary Helper Tests
+// ============================================================================
+
+#[test]
+fn build_goal_summary_zero_tasks() {
+    use goal_desk_tauri::service::goal::build_goal_summary;
+    use goal_desk_tauri::domain::{Goal, GoalStatus};
+
+    let goal = Goal {
+        id: Uuid::new_v4(),
+        area_id: None,
+        title: "Empty Goal".to_string(),
+        description: "desc".to_string(),
+        status: GoalStatus::Active,
+    };
+    let goal_tasks: Vec<&goal_desk_tauri::domain::DeskTask> = vec![];
+
+    let summary = build_goal_summary(&goal, "Unsorted", &goal_tasks);
+    assert_eq!(summary.progress, 0);
+    assert_eq!(summary.task_count, 0);
+    assert_eq!(summary.next_todo, "");
+    assert_eq!(summary.title, "Empty Goal");
+    assert_eq!(summary.area, "Unsorted");
+}
+
+#[test]
+fn build_goal_summary_half_done() {
+    use goal_desk_tauri::service::goal::build_goal_summary;
+    use goal_desk_tauri::domain::{Goal, GoalStatus, DeskTask, TaskStatus};
+
+    let goal = Goal {
+        id: Uuid::new_v4(),
+        area_id: None,
+        title: "Half Goal".to_string(),
+        description: "".to_string(),
+        status: GoalStatus::Active,
+    };
+
+    let mut t1 = DeskTask::new_todo("Task 1".to_string());
+    t1.status = TaskStatus::Done;
+    let t2 = DeskTask::new_todo("Task 2".to_string());
+
+    let goal_tasks: Vec<&DeskTask> = vec![&t1, &t2];
+    let summary = build_goal_summary(&goal, "Work", &goal_tasks);
+
+    assert_eq!(summary.progress, 50);
+    assert_eq!(summary.task_count, 2);
+    assert_eq!(summary.next_todo, "Task 2");
+}
+
+#[test]
+fn build_goal_summary_all_done() {
+    use goal_desk_tauri::service::goal::build_goal_summary;
+    use goal_desk_tauri::domain::{Goal, GoalStatus, DeskTask, TaskStatus};
+
+    let goal = Goal {
+        id: Uuid::new_v4(),
+        area_id: None,
+        title: "Done Goal".to_string(),
+        description: "".to_string(),
+        status: GoalStatus::Completed,
+    };
+
+    let mut t1 = DeskTask::new_todo("Task 1".to_string());
+    t1.status = TaskStatus::Done;
+    let mut t2 = DeskTask::new_todo("Task 2".to_string());
+    t2.status = TaskStatus::Done;
+
+    let goal_tasks: Vec<&DeskTask> = vec![&t1, &t2];
+    let summary = build_goal_summary(&goal, "Personal", &goal_tasks);
+
+    assert_eq!(summary.progress, 100);
+    assert_eq!(summary.task_count, 2);
+    assert_eq!(summary.next_todo, "");
 }
 
 #[test]

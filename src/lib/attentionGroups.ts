@@ -1,6 +1,6 @@
 import type { GoalCard } from '../types/app'
 import type { Task } from '../types/task'
-import { startOfDay, isSameDay } from './dateUtils'
+import { startOfDay, isSameDay, isTaskInActiveDateRange } from './dateUtils'
 
 export interface TodayAttentionGroups {
   overdue: Task[]
@@ -34,12 +34,7 @@ export function deriveTodayAttentionGroups(tasks: Task[], now = new Date()): Tod
     .filter((task) => {
       if (task.status !== 'IN_PROGRESS') return false
       if (overdue.includes(task) || dueToday.includes(task)) return false
-
-      const startBoundary = task.plannedStartAt || task.createdAt
-      if (!startBoundary) return false
-      const startDay = startOfDay(startBoundary)
-      const endDay = task.dueDate ? startOfDay(task.dueDate) : undefined
-      return startDay.getTime() <= today.getTime() && (!endDay || today.getTime() <= endDay.getTime())
+      return isTaskInActiveDateRange(task, now)
     })
     .sort((a, b) => {
       const aEndDay = a.dueDate ? startOfDay(a.dueDate) : undefined

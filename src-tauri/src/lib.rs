@@ -12,6 +12,7 @@ use domain::{
 };
 use eventkit::{SystemAgendaSnapshot, SystemReminder};
 use repository::SqliteRepository;
+use service::AppService;
 use tauri::{AppHandle, Manager, TitleBarStyle, WebviewUrl, WebviewWindowBuilder};
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
@@ -145,27 +146,14 @@ fn show_quick_capture_window_internal<R: tauri::Runtime>(app: &AppHandle<R>) -> 
 
 mod commands {
     use super::{
-        bear_note_url, eventkit, load_or_seed_desk_tasks,
-        load_or_seed_workspace, show_quick_capture_window_internal,
+        bear_note_url, eventkit, load_or_seed_workspace,
+        show_quick_capture_window_internal,
         timeline_from_workspace, workspace_repository, DeskTask, GoalStatus,
         GoalSummary, SystemAgendaSnapshot, SystemReminder, TaskStatus, TimelineItem,
     };
-    use crate::service::{AreaService, GoalService, TaskService};
+    use crate::service::AppService;
     use chrono::{Datelike, Duration, Local, TimeZone};
-    use tauri::{AppHandle, Emitter};
-    use uuid::Uuid;
-
-    fn goal_service(app: &AppHandle) -> Result<GoalService, String> {
-        Ok(GoalService::new(workspace_repository(app)?))
-    }
-
-    fn task_service(app: &AppHandle) -> Result<TaskService, String> {
-        Ok(TaskService::new(workspace_repository(app)?))
-    }
-
-    fn area_service(app: &AppHandle) -> Result<AreaService, String> {
-        Ok(AreaService::new(workspace_repository(app)?))
-    }
+    use tauri::{AppHandle, Emitter, State};
 
     fn maybe_create_task_system_reminder(
         app: &AppHandle,
@@ -177,20 +165,6 @@ mod commands {
             .map(|reminder| reminder.id)
     }
 
-    fn sync_linked_tasks_for_system_reminder(
-        app: &AppHandle,
-        reminder_id: &str,
-        done: bool,
-    ) -> Result<(), String> {
-        let service = task_service(app)?;
-        service.sync_linked_tasks_for_system_reminder(reminder_id, done)
-    }
-
-    fn goal_summary_by_id(app: &AppHandle, goal_id: &str) -> Result<GoalSummary, String> {
-        let service = goal_service(app)?;
-        service.get_goal_summary_by_id(goal_id)
-    }
-
     #[tauri::command]
     pub fn today_snapshot(app: AppHandle) -> Result<Vec<TimelineItem>, String> {
         let snapshot = load_or_seed_workspace(&app)?;
@@ -198,78 +172,70 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn goal_snapshot(app: AppHandle) -> Result<Vec<GoalSummary>, String> {
-        let service = goal_service(&app)?;
-        service.goal_summaries()
+    pub fn goal_snapshot(svc: State<'_, AppService>) -> Result<Vec<GoalSummary>, String> {
+        svc.goal.goal_summaries()
     }
 
     #[tauri::command]
     pub fn create_goal(
-        app: AppHandle,
+        svc: State<'_, AppService>,
         title: String,
         area: String,
         description: String,
         _status: GoalStatus,
     ) -> Result<GoalSummary, String> {
-        let service = goal_service(&app)?;
-        let goal = service.create_goal(&title, &area, &description)?;
-        goal_summary_by_id(&app, &goal.id.to_string())
+        let goal = svc.goal.create_goal(&title, &area, &description)?;
+        svc.goal.get_goal_summary_by_id(&goal.id.to_string())
     }
 
     #[tauri::command]
     pub fn update_goal_fields(
-        app: AppHandle,
+        svc: State<'_, AppService>,
         goal_id: String,
         title: String,
         area: String,
         description: String,
     ) -> Result<GoalSummary, String> {
-        let service = goal_service(&app)?;
-        service.update_goal_fields(&goal_id, &title, &area, &description)?;
-        goal_summary_by_id(&app, &goal_id)
+        svc.goal.update_goal_fields(&goal_id, &title, &area, &description)?;
+        svc.goal.get_goal_summary_by_id(&goal_id)
     }
 
     #[tauri::command]
     pub fn update_goal_status(
-        app: AppHandle,
+        svc: State<'_, AppService>,
         goal_id: String,
         status: GoalStatus,
     ) -> Result<GoalSummary, String> {
-        let service = goal_service(&app)?;
-        service.update_goal_status(&goal_id, status)?;
-        goal_summary_by_id(&app, &goal_id)
+        svc.goal.update_goal_status(&goal_id, status)?;
+        svc.goal.get_goal_summary_by_id(&goal_id)
     }
 
     #[tauri::command]
-    pub fn list_areas(app: AppHandle) -> Result<Vec<super::domain::AreaWithStats>, String> {
-        let service = goal_service(&app)?;
-        service.list_areas_with_stats()
+    pub fn list_areas(svc: State<'_, AppService>) -> Result<Vec<super::domain::AreaWithStats>, String> {
+        svc.area.list_areas_with_stats()
     }
 
     #[tauri::command]
-    pub fn create_area(app: AppHandle, title: String) -> Result<super::domain::Area, String> {
-        let service = area_service(&app)?;
-        service.create_area(&title)
+    pub fn create_area(svc: State<'_, AppService>, title: String) -> Result<super::domain::Area, String> {
+        svc.area.create_area(&title)
     }
 
     #[tauri::command]
     pub fn rename_area(
-        app: AppHandle,
+        svc: State<'_, AppService>,
         area_id: String,
         new_title: String,
     ) -> Result<super::domain::Area, String> {
-        let service = area_service(&app)?;
-        service.rename_area(&area_id, &new_title)
+        svc.area.rename_area(&area_id, &new_title)
     }
 
     #[tauri::command]
     pub fn delete_area(
-        app: AppHandle,
+        svc: State<'_, AppService>,
         area_id: String,
         force: bool,
     ) -> Result<super::domain::DeleteAreaResult, String> {
-        let service = area_service(&app)?;
-        service.delete_area(&area_id, force)
+        svc.area.delete_area(&area_id, force)
     }
 
     #[tauri::command]
@@ -279,20 +245,18 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn desk_task_list(app: AppHandle) -> Result<Vec<DeskTask>, String> {
-        let service = task_service(&app)?;
-        service.list_tasks()
+    pub fn desk_task_list(svc: State<'_, AppService>) -> Result<Vec<DeskTask>, String> {
+        svc.task.list_tasks()
     }
 
     #[tauri::command]
-    pub fn capture_task(app: AppHandle, input: String) -> Result<DeskTask, String> {
-        let service = task_service(&app)?;
-        let task = service.capture_task(&input)?;
+    pub fn capture_task(app: AppHandle, svc: State<'_, AppService>, input: String) -> Result<DeskTask, String> {
+        let task = svc.task.capture_task(&input)?;
 
         // EventKit: create system reminder if time was parsed
         let reminder_time = task.planned_start_at.or(task.due_at);
         if let Some(reminder_id) = maybe_create_task_system_reminder(&app, &task.title, reminder_time) {
-            let updated = service.update_task_system_reminder_id(&task.id.to_string(), Some(reminder_id))?;
+            let updated = svc.task.update_task_system_reminder_id(&task.id.to_string(), Some(reminder_id))?;
             let _ = app.emit("desk-task-created", &updated);
             return Ok(updated);
         }
@@ -304,28 +268,27 @@ mod commands {
     #[tauri::command]
     pub fn create_task_for_goal(
         app: AppHandle,
+        svc: State<'_, AppService>,
         goal_id: String,
         title: String,
     ) -> Result<DeskTask, String> {
-        let service = task_service(&app)?;
-        let task = service.create_task_for_goal(&goal_id, &title)?;
+        let task = svc.task.create_task_for_goal(&goal_id, &title)?;
         let _ = app.emit("desk-task-created", &task);
         Ok(task)
     }
 
     #[tauri::command]
     pub fn update_task_content(
-        app: AppHandle,
+        svc: State<'_, AppService>,
         task_id: String,
         content: String,
     ) -> Result<DeskTask, String> {
-        let service = task_service(&app)?;
-        service.update_task_content(&task_id, &content)
+        svc.task.update_task_content(&task_id, &content)
     }
 
     #[tauri::command]
     pub fn update_task_fields(
-        app: AppHandle,
+        svc: State<'_, AppService>,
         task_id: String,
         title: String,
         planned_start_at: Option<String>,
@@ -334,8 +297,7 @@ mod commands {
         linked_goal_label: Option<String>,
         show_in_timeline: Option<bool>,
     ) -> Result<DeskTask, String> {
-        let service = task_service(&app)?;
-        service.update_task_fields(
+        svc.task.update_task_fields(
             &task_id,
             &title,
             planned_start_at,
@@ -349,14 +311,14 @@ mod commands {
     #[tauri::command]
     pub fn update_task_status(
         app: AppHandle,
+        svc: State<'_, AppService>,
         task_id: String,
         status: TaskStatus,
         note: Option<String>,
     ) -> Result<DeskTask, String> {
-        let service = task_service(&app)?;
         let app_handle = app.clone();
 
-        service.update_task_status_with_sync(
+        svc.task.update_task_status_with_sync(
             &task_id,
             status,
             note,
@@ -368,18 +330,16 @@ mod commands {
 
     #[tauri::command]
     pub fn add_task_note(
-        app: AppHandle,
+        svc: State<'_, AppService>,
         task_id: String,
         note: String,
     ) -> Result<DeskTask, String> {
-        let service = task_service(&app)?;
-        service.add_task_note(&task_id, &note)
+        svc.task.add_task_note(&task_id, &note)
     }
 
     #[tauri::command]
-    pub fn open_task_in_bear(app: AppHandle, task_id: String) -> Result<(), String> {
-        let service = task_service(&app)?;
-        let task = service
+    pub fn open_task_in_bear(svc: State<'_, AppService>, task_id: String) -> Result<(), String> {
+        let task = svc.task
             .find_task(&task_id)?
             .ok_or_else(|| format!("Task not found: {task_id}"))?;
         let note_id = task
@@ -457,11 +417,12 @@ mod commands {
     #[tauri::command]
     pub fn set_system_reminder_completed(
         app: AppHandle,
+        svc: State<'_, AppService>,
         reminder_id: String,
         done: bool,
     ) -> Result<SystemReminder, String> {
         let reminder = eventkit::set_system_reminder_completed(&app, &reminder_id, done)?;
-        sync_linked_tasks_for_system_reminder(&app, &reminder_id, done)?;
+        svc.task.sync_linked_tasks_for_system_reminder(&reminder_id, done)?;
         Ok(reminder)
     }
 
@@ -487,6 +448,17 @@ mod commands {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            let path = app
+                .handle()
+                .path()
+                .app_local_data_dir()
+                .map_err(|error| error.to_string())?
+                .join("goal-desk.sqlite");
+            let repo = SqliteRepository::new(path);
+            let app_service = AppService::new(repo);
+            app_service.initialize().map_err(|e| e.to_string())?;
+            app.handle().manage(app_service);
+
             #[cfg(desktop)]
             {
                 let handle = app.handle().clone();

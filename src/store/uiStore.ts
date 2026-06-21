@@ -6,6 +6,13 @@ import {
 import { showQuickCaptureWindow as openNativeQuickCaptureWindow } from '../lib/tauriCommands'
 import type { AreaFilter, ViewKey } from '../types/app'
 
+export type DrawerType = 'task' | 'goal' | 'reminder' | 'calendarEvent'
+
+export interface DrawerState {
+  type: DrawerType
+  id?: string
+}
+
 export interface UiStoreState {
   // 视图和筛选
   currentView: ViewKey
@@ -16,15 +23,8 @@ export interface UiStoreState {
   isLoading: boolean
   statusMessage: string
 
-  // 抽屉状态
-  isTaskDrawerOpen: boolean
-  selectedTaskId?: string
-  isGoalDrawerOpen: boolean
-  selectedGoalId?: string
-  isReminderDrawerOpen: boolean
-  selectedReminderId?: string
-  isCalendarEventDrawerOpen: boolean
-  selectedCalendarEventId?: string
+  // 抽屉状态（泛型化）
+  activeDrawer: DrawerState | null
 
   // 快速捕获
   isQuickCaptureOpen: boolean
@@ -38,7 +38,21 @@ export interface UiStoreState {
   setLoading: (value: boolean) => void
   setStatusMessage: (value: string) => void
 
-  // Actions - 抽屉
+  // Actions - 抽屉（泛型化）
+  openDrawer: (type: DrawerType, id?: string) => void
+  closeDrawer: () => void
+
+  // 向后兼容 selectors
+  isTaskDrawerOpen: boolean
+  selectedTaskId?: string
+  isGoalDrawerOpen: boolean
+  selectedGoalId?: string
+  isReminderDrawerOpen: boolean
+  selectedReminderId?: string
+  isCalendarEventDrawerOpen: boolean
+  selectedCalendarEventId?: string
+
+  // 向后兼容 actions
   openTaskDrawer: (taskId: string) => void
   closeTaskDrawer: () => void
   openGoalDrawer: (goalId: string) => void
@@ -48,23 +62,40 @@ export interface UiStoreState {
   openCalendarEventDrawer: (eventId: string) => void
   closeCalendarEventDrawer: () => void
 
+  // 通用 drawer 查询
+  isDrawerOpen: (type: DrawerType) => boolean
+  selectedDrawerId: (type: DrawerType) => string | undefined
+
   // Actions - 快速捕获
   openQuickCapture: () => void
   closeQuickCapture: () => void
 }
 
-export const useUiStore = create<UiStoreState>((set) => ({
+function deriveDrawerFlags(activeDrawer: DrawerState | null) {
+  return {
+    isTaskDrawerOpen: activeDrawer?.type === 'task',
+    selectedTaskId: activeDrawer?.type === 'task' ? activeDrawer.id : undefined,
+    isGoalDrawerOpen: activeDrawer?.type === 'goal',
+    selectedGoalId: activeDrawer?.type === 'goal' ? activeDrawer.id : undefined,
+    isReminderDrawerOpen: activeDrawer?.type === 'reminder',
+    selectedReminderId: activeDrawer?.type === 'reminder' ? activeDrawer.id : undefined,
+    isCalendarEventDrawerOpen: activeDrawer?.type === 'calendarEvent',
+    selectedCalendarEventId: activeDrawer?.type === 'calendarEvent' ? activeDrawer.id : undefined,
+  }
+}
+
+export const useUiStore = create<UiStoreState>((set, get) => ({
   // 初始状态
   currentView: 'inbox',
   activeArea: 'ALL',
   showCompletedTodos: false,
   isLoading: true,
   statusMessage: '',
-  isTaskDrawerOpen: false,
-  isGoalDrawerOpen: false,
-  isReminderDrawerOpen: false,
-  isCalendarEventDrawerOpen: false,
+  activeDrawer: null,
   isQuickCaptureOpen: false,
+
+  // 向后兼容初始值
+  ...deriveDrawerFlags(null),
 
   // 视图操作
   setView: (view) => set({ currentView: view }),
@@ -75,15 +106,32 @@ export const useUiStore = create<UiStoreState>((set) => ({
   setLoading: (value) => set({ isLoading: value }),
   setStatusMessage: (value) => set({ statusMessage: value }),
 
-  // 抽屉操作
-  openTaskDrawer: (taskId) => set({ selectedTaskId: taskId, isTaskDrawerOpen: true }),
-  closeTaskDrawer: () => set({ isTaskDrawerOpen: false }),
-  openGoalDrawer: (goalId) => set({ selectedGoalId: goalId, isGoalDrawerOpen: true }),
-  closeGoalDrawer: () => set({ isGoalDrawerOpen: false }),
-  openReminderDrawer: (reminderId) => set({ selectedReminderId: reminderId, isReminderDrawerOpen: true }),
-  closeReminderDrawer: () => set({ isReminderDrawerOpen: false, selectedReminderId: undefined }),
-  openCalendarEventDrawer: (eventId) => set({ selectedCalendarEventId: eventId, isCalendarEventDrawerOpen: true }),
-  closeCalendarEventDrawer: () => set({ isCalendarEventDrawerOpen: false }),
+  // 泛型化抽屉操作
+  openDrawer: (type, id) => set((state) => {
+    const activeDrawer: DrawerState = { type, id }
+    return { activeDrawer, ...deriveDrawerFlags(activeDrawer) }
+  }),
+  closeDrawer: () => set((state) => {
+    const activeDrawer = null
+    return { activeDrawer, ...deriveDrawerFlags(activeDrawer) }
+  }),
+
+  // 向后兼容 actions
+  openTaskDrawer: (taskId) => get().openDrawer('task', taskId),
+  closeTaskDrawer: () => get().closeDrawer(),
+  openGoalDrawer: (goalId) => get().openDrawer('goal', goalId),
+  closeGoalDrawer: () => get().closeDrawer(),
+  openReminderDrawer: (reminderId) => get().openDrawer('reminder', reminderId),
+  closeReminderDrawer: () => get().closeDrawer(),
+  openCalendarEventDrawer: (eventId) => get().openDrawer('calendarEvent', eventId),
+  closeCalendarEventDrawer: () => get().closeDrawer(),
+
+  // 通用查询
+  isDrawerOpen: (type) => get().activeDrawer?.type === type,
+  selectedDrawerId: (type) => {
+    const drawer = get().activeDrawer
+    return drawer?.type === type ? drawer.id : undefined
+  },
 
   // 快速捕获操作
   openQuickCapture: () => {

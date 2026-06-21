@@ -103,23 +103,20 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation {
       plannedStartAt?: Date
       dueDate?: Date
       linkedGoalId?: string
-      availableGoals?: GoalCard[]
+      linkedGoalLabel?: string
       showInTimeline?: boolean
       systemReminderId?: string
     },
   ): Promise<TaskResult> {
     const validatedTitle = validateTaskTitle(input.title)
     if (!validatedTitle) return {}
-    const linkedGoalLabel = input.linkedGoalId
-      ? input.availableGoals?.find((goal) => goal.id === input.linkedGoalId)?.title
-      : undefined
     return {
       task: await persistTaskFields(taskId, {
         title: validatedTitle,
         plannedStartAt: input.plannedStartAt,
         dueAt: input.dueDate,
         linkedGoalId: input.linkedGoalId,
-        linkedGoalLabel,
+        linkedGoalLabel: input.linkedGoalLabel,
         showInTimeline: input.showInTimeline,
         systemReminderId: input.systemReminderId,
       }),

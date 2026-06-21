@@ -12,7 +12,7 @@ function resetAllStores() {
   useTaskStore.setState({ tasks: [] })
   useGoalStore.setState({ baseGoals: [] })
   useUiStore.setState({ activeArea: 'ALL', showCompletedTodos: false })
-  useEventkitStore.setState({ rawTimeline: [] })
+  useEventkitStore.setState({ rawEventKit: { calendarEvents: [], reminders: [] } })
 }
 
 const mockTask: Task = {

@@ -7,6 +7,7 @@ import { AreaSelectWithCreate } from '../shared/AreaSelectWithCreate'
 import { useAreaStore } from '../../store/areaStore'
 import { useUiStore } from '../../store/uiStore'
 import { useGoalStore } from '../../store/goalStore'
+import { filterGoalsByArea } from '../../lib/areaFilter'
 import type { GoalCard, GoalStatus } from '../../types/app'
 
 const goalStatuses: GoalStatus[] = ['ACTIVE', 'PAUSED', 'READY_TO_COMPLETE', 'COMPLETED', 'ARCHIVED']
@@ -20,7 +21,7 @@ const statusColumns: Array<{ title: string; statuses: GoalStatus[]; bg: string; 
 export function GoalsView() {
   const baseGoals = useGoalStore((state) => state.baseGoals)
   const activeArea = useUiStore((state) => state.activeArea)
-  const goals = activeArea === 'ALL' ? baseGoals : baseGoals.filter(goal => goal.area === activeArea)
+  const goals = filterGoalsByArea(baseGoals, activeArea)
   const allAreas = useAreaStore((state) => state.allAreas)
   const setActiveArea = useUiStore((state) => state.setActiveArea)
   const createGoal = useGoalStore((state) => state.createGoal)

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useAreaStore } from './areaStore'
 
 vi.mock('../lib/workspaceMutations', () => ({
-  createWorkspaceMutationAdapter: vi.fn(),
+  getWorkspaceMutationAdapter: vi.fn(),
 }))
 
 vi.mock('../lib/runtime', () => ({
@@ -10,21 +10,14 @@ vi.mock('../lib/runtime', () => ({
   getCurrentWindowLabel: vi.fn(() => 'main'),
 }))
 
-vi.mock('./uiStore', () => ({
-  useUiStore: {
-    setState: vi.fn(),
-  },
-}))
-
 describe('areaStore', () => {
   beforeEach(() => {
-    useAreaStore.setState({ allAreas: [], statusMessage: '' })
+    useAreaStore.setState({ allAreas: [] })
   })
 
   it('should have empty initial state', () => {
     const state = useAreaStore.getState()
     expect(state.allAreas).toEqual([])
-    expect(state.statusMessage).toBe('')
   })
 
   it('should load areas from adapter', async () => {
@@ -32,37 +25,35 @@ describe('areaStore', () => {
       { id: '1', title: 'Work', goalCount: 2, activeGoalCount: 1, isSystem: false },
       { id: '2', title: 'Personal', goalCount: 0, activeGoalCount: 0, isSystem: false },
     ]
-    const { createWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
-    ;(createWorkspaceMutationAdapter as any).mockReturnValue({
-      listAreas: vi.fn().mockResolvedValue({ areas: mockAreas, statusMessage: 'ok' }),
+    const { getWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
+    ;(getWorkspaceMutationAdapter as any).mockReturnValue({
+      listAreas: vi.fn().mockResolvedValue({ areas: mockAreas }),
     })
 
     await useAreaStore.getState().loadAreas()
 
     const state = useAreaStore.getState()
     expect(state.allAreas).toEqual(mockAreas)
-    expect(state.statusMessage).toBe('ok')
   })
 
   it('should create area and add to list', async () => {
     const newArea = { id: '3', title: 'New', goalCount: 0, activeGoalCount: 0, isSystem: false }
-    const { createWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
-    ;(createWorkspaceMutationAdapter as any).mockReturnValue({
-      createArea: vi.fn().mockResolvedValue({ area: newArea, statusMessage: 'created' }),
+    const { getWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
+    ;(getWorkspaceMutationAdapter as any).mockReturnValue({
+      createArea: vi.fn().mockResolvedValue({ area: newArea }),
     })
 
     await useAreaStore.getState().createArea('New')
 
     const state = useAreaStore.getState()
     expect(state.allAreas).toContainEqual(newArea)
-    expect(state.statusMessage).toBe('created')
   })
 
   it('should rename area in list', async () => {
     useAreaStore.setState({ allAreas: [{ id: '1', title: 'Old', goalCount: 0, activeGoalCount: 0, isSystem: false }] })
-    const { createWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
-    ;(createWorkspaceMutationAdapter as any).mockReturnValue({
-      renameArea: vi.fn().mockResolvedValue({ area: { id: '1', title: 'Renamed' }, statusMessage: 'renamed' }),
+    const { getWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
+    ;(getWorkspaceMutationAdapter as any).mockReturnValue({
+      renameArea: vi.fn().mockResolvedValue({ area: { id: '1', title: 'Renamed' } }),
     })
 
     await useAreaStore.getState().renameArea('1', 'Renamed')
@@ -73,9 +64,9 @@ describe('areaStore', () => {
 
   it('should delete area from list', async () => {
     useAreaStore.setState({ allAreas: [{ id: '1', title: 'To Delete', goalCount: 0, activeGoalCount: 0, isSystem: false }] })
-    const { createWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
-    ;(createWorkspaceMutationAdapter as any).mockReturnValue({
-      deleteArea: vi.fn().mockResolvedValue({ success: true, message: '', statusMessage: 'deleted' }),
+    const { getWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
+    ;(getWorkspaceMutationAdapter as any).mockReturnValue({
+      deleteArea: vi.fn().mockResolvedValue({ success: true, message: '' }),
     })
 
     await useAreaStore.getState().deleteArea('1')
@@ -84,15 +75,17 @@ describe('areaStore', () => {
     expect(state.allAreas).toHaveLength(0)
   })
 
-  it('should handle loadAreas error', async () => {
-    const { createWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
-    ;(createWorkspaceMutationAdapter as any).mockReturnValue({
+  it('should handle loadAreas error gracefully', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { getWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
+    ;(getWorkspaceMutationAdapter as any).mockReturnValue({
       listAreas: vi.fn().mockRejectedValue(new Error('network')),
     })
 
     await useAreaStore.getState().loadAreas()
 
     const state = useAreaStore.getState()
-    expect(state.statusMessage).toContain('Unable to load areas')
+    expect(state.allAreas).toEqual([])
+    errorSpy.mockRestore()
   })
 })

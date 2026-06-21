@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { executeMutation, executeMutationWithResult } from './mutationHelper'
+import { describe, it, expect, vi } from 'vitest'
+import { executeMutation } from './mutationHelper'
 import type { MutationAdapter } from '../lib/mutationAdapter'
 
 function createMockAdapter(overrides: Partial<MutationAdapter> = {}): MutationAdapter {
@@ -55,33 +55,6 @@ describe('mutationHelper', () => {
       expect(result).toBeNull()
       expect(onSuccess).not.toHaveBeenCalled()
       errorSpy.mockRestore()
-    })
-  })
-
-  describe('executeMutationWithResult', () => {
-    it('extracts entity from result and calls on success', async () => {
-      const adapter = createMockAdapter()
-      const fn = vi.fn().mockResolvedValue({ task: { id: 't1', title: 'Test' } })
-      const onSuccess = vi.fn()
-
-      const result = await executeMutationWithResult(fn, adapter, {
-        extractEntity: (r) => r.task,
-        onSuccess,
-      })
-
-      expect(result).toEqual({ id: 't1', title: 'Test' })
-      expect(onSuccess).toHaveBeenCalledWith({ id: 't1', title: 'Test' })
-    })
-
-    it('returns null when extractEntity returns undefined', async () => {
-      const adapter = createMockAdapter()
-      const fn = vi.fn().mockResolvedValue({})
-
-      const result = await executeMutationWithResult(fn, adapter, {
-        extractEntity: (r: any) => r.task,
-      })
-
-      expect(result).toBeNull()
     })
   })
 })

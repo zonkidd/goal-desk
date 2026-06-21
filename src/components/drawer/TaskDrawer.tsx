@@ -20,26 +20,46 @@ import { useUiStore } from '../../store/uiStore'
 import type { TaskStatus } from '../../types/task'
 import type { GoalCard } from '../../types/app'
 
+function useTaskDrawerData() {
+  const task = useSelectedTask()
+  const isOpen = useUiStore((s) => s.isTaskDrawerOpen)
+  const closeTaskDrawer = useUiStore((s) => s.closeTaskDrawer)
+  const activeArea = useUiStore((s) => s.activeArea)
+  const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus)
+  const updateTaskContent = useTaskStore((s) => s.updateTaskContent)
+  const rawUpdateTaskFields = useTaskStore((s) => s.updateTaskFields)
+  const addTaskNote = useTaskStore((s) => s.addTaskNote)
+  const createAndLinkReminder = useTaskStore((s) => s.createAndLinkReminder)
+  const unlinkTaskFromReminder = useTaskStore((s) => s.unlinkTaskFromReminder)
+  const createGoal = useGoalStore((s) => s.createGoal)
+  const goals = useGoalStore(selectFilteredGoals as (state: any) => GoalCard[])
+  const allAreas = useAreaStore((s) => s.allAreas)
+  const createArea = useAreaStore((s) => s.createArea)
+  const systemReminders = useEventkitStore((s) => s.systemReminders)
+
+  const updateTaskFields = useMemo(
+    () => (taskId: string, input: Parameters<typeof rawUpdateTaskFields>[1]) =>
+      rawUpdateTaskFields(taskId, input, goals),
+    [rawUpdateTaskFields, goals],
+  )
+
+  return {
+    task, isOpen, closeTaskDrawer, activeArea,
+    updateTaskStatus, updateTaskContent, updateTaskFields, addTaskNote,
+    createAndLinkReminder, unlinkTaskFromReminder,
+    createGoal, goals, allAreas, createArea, systemReminders,
+  }
+}
+
 const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
 
 export function TaskDrawer() {
-  const task = useSelectedTask()
-  const isOpen = useUiStore((state) => state.isTaskDrawerOpen)
-  const closeTaskDrawer = useUiStore((state) => state.closeTaskDrawer)
-  const updateTaskStatus = useTaskStore((state) => state.updateTaskStatus)
-  const updateTaskContent = useTaskStore((state) => state.updateTaskContent)
-  const _updateTaskFields = useTaskStore((state) => state.updateTaskFields)
-  const addTaskNote = useTaskStore((state) => state.addTaskNote)
-  const createGoal = useGoalStore((state) => state.createGoal)
-  const activeArea = useUiStore((state) => state.activeArea)
-  const allAreas = useAreaStore((state) => state.allAreas)
-  const createArea = useAreaStore((state) => state.createArea)
-  const goals = useGoalStore(selectFilteredGoals as (state: any) => GoalCard[])
-  const systemReminders = useEventkitStore((state) => state.systemReminders)
-  const createAndLinkReminder = useTaskStore((state) => state.createAndLinkReminder)
-  const unlinkTaskFromReminder = useTaskStore((state) => state.unlinkTaskFromReminder)
-  const updateTaskFields = (taskId: string, input: Parameters<typeof _updateTaskFields>[1]) =>
-    _updateTaskFields(taskId, input, goals)
+  const {
+    task, isOpen, closeTaskDrawer, activeArea,
+    updateTaskStatus, updateTaskContent, updateTaskFields, addTaskNote,
+    createAndLinkReminder, unlinkTaskFromReminder,
+    createGoal, goals, allAreas, createArea, systemReminders,
+  } = useTaskDrawerData()
   const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null)
   const [statusNote, setStatusNote] = useState('')
   const [logNote, setLogNote] = useState('')

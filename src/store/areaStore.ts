@@ -1,11 +1,11 @@
 import { create } from 'zustand'
-import { createWorkspaceMutationAdapter } from '../lib/workspaceMutations'
-import { useUiStore } from './uiStore'
+import { getWorkspaceMutationAdapter } from '../lib/workspaceMutations'
+import { executeMutation } from './mutationHelper'
+import { upsertById } from './upsertById'
 import type { AreaWithStats } from '../types/app'
 
 export interface AreaStoreState {
   allAreas: AreaWithStats[]
-  statusMessage: string
 
   loadAreas: () => Promise<void>
   createArea: (title: string) => Promise<void>
@@ -13,72 +13,59 @@ export interface AreaStoreState {
   deleteArea: (areaId: string, force?: boolean) => Promise<void>
 }
 
-export const useAreaStore = create<AreaStoreState>((set) => ({
+export const useAreaStore = create<AreaStoreState>((set, get) => ({
   allAreas: [],
-  statusMessage: '',
 
   loadAreas: async () => {
-    const adapter = createWorkspaceMutationAdapter()
-    try {
-      const { areas, statusMessage } = await adapter.listAreas()
-      set({
-        allAreas: areas || [],
-        statusMessage: statusMessage || '',
-      })
-    } catch (error) {
-      set({
-        statusMessage: `Unable to load areas · ${error instanceof Error ? error.message : String(error)}`,
-      })
+    const adapter = getWorkspaceMutationAdapter()
+    const result = await executeMutation(
+      (a) => a.listAreas(),
+      adapter,
+    )
+    if (result?.areas) {
+      set({ allAreas: result.areas })
     }
   },
 
   createArea: async (title) => {
-    const adapter = createWorkspaceMutationAdapter()
-    try {
-      const { area, statusMessage } = await adapter.createArea(title)
-      if (area) {
-        set((state) => {
-          const withoutDuplicate = state.allAreas.filter((a) => a.id !== area.id && a.title !== area.title)
-          return {
-            allAreas: [...withoutDuplicate, area].sort((a, b) => a.title.localeCompare(b.title)),
-            statusMessage: statusMessage || '',
-          }
-        })
-      }
-    } catch (error) {
-      set({ statusMessage: `Unable to create area · ${error instanceof Error ? error.message : String(error)}` })
+    const adapter = getWorkspaceMutationAdapter()
+    const result = await executeMutation(
+      (a) => a.createArea(title),
+      adapter,
+    )
+    if (result?.area) {
+      set((state) => {
+        const withoutDuplicate = state.allAreas.filter((a) => a.id !== result.area!.id && a.title !== result.area!.title)
+        return {
+          allAreas: [...withoutDuplicate, result.area!].sort((a, b) => a.title.localeCompare(b.title)),
+        }
+      })
     }
   },
 
   renameArea: async (areaId, newTitle) => {
-    const adapter = createWorkspaceMutationAdapter()
-    try {
-      const { area, statusMessage } = await adapter.renameArea(areaId, newTitle)
-      if (area) {
-        set((state) => ({
-          allAreas: state.allAreas.map((a) => (a.id === areaId ? { ...a, title: area.title } : a)).sort((a, b) => a.title.localeCompare(b.title)),
-          statusMessage: statusMessage || '',
-        }))
-      }
-    } catch (error) {
-      set({ statusMessage: `Unable to rename area · ${error instanceof Error ? error.message : String(error)}` })
+    const adapter = getWorkspaceMutationAdapter()
+    const result = await executeMutation(
+      (a) => a.renameArea(areaId, newTitle),
+      adapter,
+    )
+    if (result?.area) {
+      set((state) => ({
+        allAreas: state.allAreas.map((a) => (a.id === areaId ? { ...a, title: result.area!.title } : a)).sort((a, b) => a.title.localeCompare(b.title)),
+      }))
     }
   },
 
   deleteArea: async (areaId, force = false) => {
-    const adapter = createWorkspaceMutationAdapter()
-    try {
-      const { success, message, statusMessage } = await adapter.deleteArea(areaId, force)
-      if (success) {
-        set((state) => ({
-          allAreas: state.allAreas.filter((a) => a.id !== areaId),
-          statusMessage: statusMessage || '',
-        }))
-      } else {
-        set({ statusMessage: message })
-      }
-    } catch (error) {
-      set({ statusMessage: `Unable to delete area · ${error instanceof Error ? error.message : String(error)}` })
+    const adapter = getWorkspaceMutationAdapter()
+    const result = await executeMutation(
+      (a) => a.deleteArea(areaId, force),
+      adapter,
+    )
+    if (result?.success) {
+      set((state) => ({
+        allAreas: state.allAreas.filter((a) => a.id !== areaId),
+      }))
     }
   },
 }))

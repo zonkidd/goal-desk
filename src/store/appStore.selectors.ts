@@ -1,5 +1,6 @@
 import type { GoalCard, RawAgendaItem, TodayAgenda } from '../types/app'
 import type { Task } from '../types/task'
+import { filterGoalsByArea } from '../lib/areaFilter'
 
 interface TimelineSelectorState {
   todayTimeline: RawAgendaItem[]
@@ -19,8 +20,5 @@ export const selectFilteredTimeline = (state: TimelineSelectorState): TodayAgend
 }
 
 export const selectFilteredGoals = (state: GoalSelectorState): GoalCard[] => {
-  if (state.activeArea === 'ALL') {
-    return state.baseGoals
-  }
-  return state.baseGoals.filter(goal => goal.area === state.activeArea)
+  return filterGoalsByArea(state.baseGoals, state.activeArea)
 }

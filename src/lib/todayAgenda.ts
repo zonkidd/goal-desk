@@ -1,6 +1,6 @@
 import type { GoalCard, RawAgendaItem, TodayAgenda } from '../types/app'
 import type { Task } from '../types/task'
-import { startOfDay, formatTimeLabel, timeLabelSortValue } from './dateUtils'
+import { startOfDay, formatTimeLabel, timeLabelSortValue, isTaskInActiveDateRange } from './dateUtils'
 
 export function deriveTodayAgenda(baseTimeline: RawAgendaItem[], tasks: Task[], now = new Date()): TodayAgenda {
   const today = startOfDay(now)
@@ -9,12 +9,10 @@ export function deriveTodayAgenda(baseTimeline: RawAgendaItem[], tasks: Task[], 
   for (const task of tasks) {
     if (task.status !== 'IN_PROGRESS') continue
     if (!task.plannedStartAt) continue
+    if (!isTaskInActiveDateRange(task, now)) continue
 
     const startDay = startOfDay(task.plannedStartAt)
     const endDay = task.dueDate ? startOfDay(task.dueDate) : undefined
-
-    const isInTimeRange = startDay.getTime() <= today.getTime() && (!endDay || today.getTime() <= endDay.getTime())
-    if (!isInTimeRange) continue
 
     const isStartingToday = startDay.getTime() === today.getTime()
     if (!isStartingToday && task.showInTimeline !== true) continue

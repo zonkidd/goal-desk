@@ -37,14 +37,11 @@ function recompute() {
     const activeArea = useUiStore.getState().activeArea
     const showCompletedTodos = useUiStore.getState().showCompletedTodos
 
-    let baseTimeline = eventkitState.rawTimeline
-    if (eventkitState.rawEventKit.calendarEvents.length > 0 || eventkitState.rawEventKit.reminders.length > 0) {
-      baseTimeline = convertEventKitToRawItems(
-        eventkitState.rawEventKit.calendarEvents,
-        eventkitState.rawEventKit.reminders,
-        tasks,
-      )
-    }
+    const baseTimeline = convertEventKitToRawItems(
+      eventkitState.rawEventKit.calendarEvents,
+      eventkitState.rawEventKit.reminders,
+      tasks,
+    )
 
     snapshot = computeSnapshot({ tasks, baseGoals, baseTimeline, activeArea, showCompletedTodos })
     version++
@@ -76,7 +73,7 @@ function ensureSubscriptions() {
     if (s.showCompletedTodos !== p.showCompletedTodos) recompute()
   })
   unsubscribeEventkit = useEventkitStore.subscribe((s, p) => {
-    if (s.rawEventKit !== p.rawEventKit || s.rawTimeline !== p.rawTimeline) recompute()
+    if (s.rawEventKit !== p.rawEventKit || s.systemReminders !== p.systemReminders) recompute()
   })
 }
 

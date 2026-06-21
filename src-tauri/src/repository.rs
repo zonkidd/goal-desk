@@ -7,6 +7,7 @@ use rusqlite::{params, Connection};
 use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -59,15 +60,38 @@ impl From<chrono::ParseError> for RepositoryError {
 #[derive(Debug, Clone)]
 pub struct SqliteRepository {
     path: PathBuf,
+    conn: Arc<Mutex<Option<Connection>>>,
 }
 
 impl SqliteRepository {
     pub fn new(path: PathBuf) -> Self {
-        Self { path }
+        Self {
+            path,
+            conn: Arc::new(Mutex::new(None)),
+        }
     }
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    fn conn(&self) -> Result<MutexGuard<'_, Option<Connection>>, RepositoryError> {
+        self.conn.lock().map_err(|e| RepositoryError::Data(e.to_string()))
+    }
+
+    fn get_connection(&self) -> Result<std::sync::MutexGuard<'_, Option<Connection>>, RepositoryError> {
+        let mut guard = self.conn()?;
+        if guard.is_none() {
+            let connection = Connection::open(&self.path)?;
+            *guard = Some(connection);
+        }
+        Ok(guard)
+    }
+
+    /// Returns a reference to the cached connection, opening it if needed.
+    /// Prefer this over Connection::open() in new code.
+    pub fn cached_connection(&self) -> Result<std::sync::MutexGuard<'_, Option<Connection>>, RepositoryError> {
+        self.get_connection()
     }
 
     pub fn initialize(&self) -> Result<(), RepositoryError> {
@@ -75,8 +99,9 @@ impl SqliteRepository {
             std::fs::create_dir_all(parent)?;
         }
 
-        let connection = Connection::open(&self.path)?;
-        connection.execute_batch(
+        let connection = self.get_connection()?;
+        let conn = connection.as_ref().unwrap();
+        conn.execute_batch(
             "
             CREATE TABLE IF NOT EXISTS areas (
                 id TEXT PRIMARY KEY,
@@ -130,21 +155,21 @@ impl SqliteRepository {
             ",
         )?;
 
-        Self::ensure_column_exists(&connection, "goals", "description", "TEXT NOT NULL DEFAULT ''")?;
-        Self::ensure_column_exists(&connection, "goals", "status", "TEXT NOT NULL DEFAULT 'ACTIVE'")?;
-        Self::ensure_column_exists(&connection, "desk_tasks", "bear_note_id", "TEXT NULL")?;
-        Self::ensure_column_exists(&connection, "desk_tasks", "system_reminder_id", "TEXT NULL")?;
-        Self::ensure_column_exists(&connection, "desk_tasks", "show_in_timeline", "INTEGER NOT NULL DEFAULT 0")?;
-        Self::ensure_column_exists(&connection, "desk_tasks", "planned_start_at", "TEXT NULL")?;
+        Self::ensure_column_exists(conn, "goals", "description", "TEXT NOT NULL DEFAULT ''")?;
+        Self::ensure_column_exists(conn, "goals", "status", "TEXT NOT NULL DEFAULT 'ACTIVE'")?;
+        Self::ensure_column_exists(conn, "desk_tasks", "bear_note_id", "TEXT NULL")?;
+        Self::ensure_column_exists(conn, "desk_tasks", "system_reminder_id", "TEXT NULL")?;
+        Self::ensure_column_exists(conn, "desk_tasks", "show_in_timeline", "INTEGER NOT NULL DEFAULT 0")?;
+        Self::ensure_column_exists(conn, "desk_tasks", "planned_start_at", "TEXT NULL")?;
 
         // 确保"未分类"系统 area 存在
-        connection.execute(
+        conn.execute(
             "INSERT OR IGNORE INTO areas (id, title) VALUES (?1, ?2)",
             params![UNCATEGORIZED_AREA_ID, "未分类"],
         )?;
 
         // 清理孤儿 goals：将 area_id IS NULL 或指向不存在的 area 的 goals 移动到"未分类"
-        connection.execute(
+        conn.execute(
             "UPDATE goals SET area_id = ?1 WHERE area_id IS NULL OR area_id NOT IN (SELECT id FROM areas)",
             params![UNCATEGORIZED_AREA_ID],
         )?;
@@ -154,7 +179,8 @@ impl SqliteRepository {
 
     pub fn save_workspace(&self, snapshot: &WorkspaceSnapshot) -> Result<(), RepositoryError> {
         self.initialize()?;
-        let mut connection = Connection::open(&self.path)?;
+        let mut guard = self.get_connection()?;
+        let connection = guard.as_mut().unwrap();
         let transaction = connection.transaction()?;
 
         transaction.execute_batch(
@@ -217,7 +243,8 @@ impl SqliteRepository {
 
     pub fn load_workspace(&self) -> Result<WorkspaceSnapshot, RepositoryError> {
         self.initialize()?;
-        let connection = Connection::open(&self.path)?;
+        let guard = self.get_connection()?;
+        let connection = guard.as_ref().unwrap();
 
         let areas = {
             let mut statement = connection.prepare("SELECT id, title FROM areas ORDER BY title")?;
@@ -291,7 +318,8 @@ impl SqliteRepository {
 
     pub fn save_desk_tasks(&self, tasks: &[DeskTask]) -> Result<(), RepositoryError> {
         self.initialize()?;
-        let mut connection = Connection::open(&self.path)?;
+        let mut guard = self.get_connection()?;
+        let connection = guard.as_mut().unwrap();
         let transaction = connection.transaction()?;
 
         transaction.execute_batch(
@@ -339,8 +367,9 @@ impl SqliteRepository {
 
     pub fn load_desk_tasks(&self) -> Result<Vec<DeskTask>, RepositoryError> {
         self.initialize()?;
-        let connection = Connection::open(&self.path)?;
-        load_tasks_with_filter(&connection, "", &[])
+        let guard = self.get_connection()?;
+        let connection = guard.as_ref().unwrap();
+        load_tasks_with_filter(connection, "", &[])
     }
 
     fn ensure_column_exists(

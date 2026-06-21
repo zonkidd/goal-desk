@@ -6,13 +6,11 @@ import {
   requestRemindersAccess as apiRequestRemindersAccess,
   fetchCalendarEvents,
   fetchReminders,
-  type AuthorizationStatus,
 } from '../lib/eventkitIntegration'
-import { PermissionManager, type PermissionType } from '../lib/PermissionManager'
-import type { IntegrationStatus, ReminderItem, RawAgendaItem } from '../types/app'
+import type { AuthorizationStatus } from '../lib/PermissionManager'
+import type { IntegrationStatus, ReminderItem } from '../types/app'
 
 export interface EventkitStoreState {
-  rawTimeline: RawAgendaItem[]
   rawEventKit: {
     calendarEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
     reminders: Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
@@ -25,13 +23,7 @@ export interface EventkitStoreState {
     reminders: AuthorizationStatus
   }
 
-  eventkitData: {
-    calendarEventCount: number
-    reminderCount: number
-  }
-
   hydrateEventkitData: (data: {
-    timeline?: RawAgendaItem[]
     rawEventKit?: {
       calendarEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
       reminders: Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
@@ -52,17 +44,11 @@ function createDateRange() {
   return { startOfDay, endOfDay }
 }
 
-// 创建权限管理器实例
-const permissionManager = new PermissionManager(async (type: PermissionType) => {
-  if (type === 'calendar') {
-    return await apiRequestCalendarAccess()
-  } else {
-    return await apiRequestRemindersAccess()
-  }
-})
+type PendingMap = Map<'calendar' | 'reminders', Promise<AuthorizationStatus>>
+
+const pendingRequests: PendingMap = new Map()
 
 export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
-  rawTimeline: [],
   rawEventKit: { calendarEvents: [], reminders: [] },
   systemReminders: [],
   integrationStatus: {
@@ -73,37 +59,29 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
     calendar: 'not_determined',
     reminders: 'not_determined',
   },
-  eventkitData: {
-    calendarEventCount: 0,
-    reminderCount: 0,
-  },
 
   hydrateEventkitData: (data) => {
-    permissionManager.updateState(data.integrationStatus)
-
+    const integrationStatus = data.integrationStatus
     set({
-      rawTimeline: data.timeline || [],
       rawEventKit: data.rawEventKit || { calendarEvents: [], reminders: [] },
       systemReminders: data.systemReminders,
-      integrationStatus: data.integrationStatus,
-      eventkitPermissions: permissionManager.getState(),
+      integrationStatus,
+      eventkitPermissions: {
+        calendar: integrationStatus.calendar,
+        reminders: integrationStatus.reminders,
+      },
     })
   },
 
-  // 切换系统提醒完成状态
   toggleSystemReminderDone: async (reminderId, done) => {
     try {
       if (!isTauriRuntime()) {
         set((state) => ({
           systemReminders: state.systemReminders.map((reminder) =>
             reminder.id === reminderId
-              ? {
-                  ...reminder,
-                  done,
-                }
+              ? { ...reminder, done }
               : reminder,
           ),
-          rawTimeline: state.rawTimeline.map((item) => (item.id === reminderId ? { ...item, done } : item)),
         }))
         return null
       }
@@ -113,14 +91,6 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
         systemReminders: state.systemReminders.map((reminder) =>
           reminder.id === reminderId ? updatedReminder : reminder,
         ),
-        rawTimeline: state.rawTimeline.map((item) =>
-          item.id === reminderId
-            ? {
-                ...item,
-                done: updatedReminder.done,
-              }
-            : item,
-        ),
       }))
       return updatedReminder
     } catch (error) {
@@ -128,72 +98,74 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
     }
   },
 
-  // 请求日历访问权限
   requestCalendarAccess: async () => {
-    try {
-      const status = await permissionManager.request('calendar')
-      set({
-        eventkitPermissions: permissionManager.getState(),
+    if (pendingRequests.has('calendar')) return
+
+    const promise = apiRequestCalendarAccess()
+      .then((status) => {
+        set((s) => ({
+          eventkitPermissions: { ...s.eventkitPermissions, calendar: status },
+        }))
+        return status
       })
-    } catch (error) {
-      permissionManager.updateState({
-        ...permissionManager.getState(),
-        calendar: 'error',
+      .catch(() => {
+        set((s) => ({
+          eventkitPermissions: { ...s.eventkitPermissions, calendar: 'error' as AuthorizationStatus },
+        }))
+        return 'error' as AuthorizationStatus
       })
-      set({
-        eventkitPermissions: permissionManager.getState(),
+      .finally(() => {
+        pendingRequests.delete('calendar')
       })
-    }
+
+    pendingRequests.set('calendar', promise)
+    await promise
   },
 
-  // 请求提醒事项访问权限
   requestRemindersAccess: async () => {
-    try {
-      const status = await permissionManager.request('reminders')
-      set({
-        eventkitPermissions: permissionManager.getState(),
+    if (pendingRequests.has('reminders')) return
+
+    const promise = apiRequestRemindersAccess()
+      .then((status) => {
+        set((s) => ({
+          eventkitPermissions: { ...s.eventkitPermissions, reminders: status },
+        }))
+        return status
       })
-    } catch (error) {
-      permissionManager.updateState({
-        ...permissionManager.getState(),
-        reminders: 'error',
+      .catch(() => {
+        set((s) => ({
+          eventkitPermissions: { ...s.eventkitPermissions, reminders: 'error' as AuthorizationStatus },
+        }))
+        return 'error' as AuthorizationStatus
       })
-      set({
-        eventkitPermissions: permissionManager.getState(),
+      .finally(() => {
+        pendingRequests.delete('reminders')
       })
-    }
+
+    pendingRequests.set('reminders', promise)
+    await promise
   },
 
-  // 刷新 EventKit 数据
   refreshEventkitData: async () => {
     const state = get()
 
-    // 只有在权限授权后才获取数据
     if (state.eventkitPermissions.calendar !== 'granted' && state.eventkitPermissions.reminders !== 'granted') {
       return
     }
 
     try {
-      let calendarEventCount = 0
-      let reminderCount = 0
+      const newRawEventKit = { ...state.rawEventKit }
 
       if (state.eventkitPermissions.calendar === 'granted') {
         const { startOfDay, endOfDay } = createDateRange()
-        const events = await fetchCalendarEvents(startOfDay, endOfDay)
-        calendarEventCount = events.length
+        newRawEventKit.calendarEvents = await fetchCalendarEvents(startOfDay, endOfDay)
       }
 
       if (state.eventkitPermissions.reminders === 'granted') {
-        const reminders = await fetchReminders()
-        reminderCount = reminders.length
+        newRawEventKit.reminders = await fetchReminders()
       }
 
-      set({
-        eventkitData: {
-          calendarEventCount,
-          reminderCount,
-        },
-      })
+      set({ rawEventKit: newRawEventKit })
     } catch (error) {
       // error handled by caller
     }

@@ -10,7 +10,7 @@ vi.mock('../lib/runtime', () => ({
 }))
 
 vi.mock('../lib/workspaceMutations', () => ({
-  createWorkspaceMutationAdapter: vi.fn(() => ({
+  getWorkspaceMutationAdapter: vi.fn(() => ({
     createTask: vi.fn().mockResolvedValue({}),
     createTaskForGoal: vi.fn().mockResolvedValue({}),
     createGoal: vi.fn().mockResolvedValue({}),
@@ -35,11 +35,10 @@ describe('Store action results', () => {
     })
     useGoalStore.setState({ baseGoals: [] })
     useEventkitStore.setState({
-      rawTimeline: [],
       systemReminders: [],
       integrationStatus: { calendar: 'not_determined', reminders: 'not_determined' },
       eventkitPermissions: { calendar: 'not_determined', reminders: 'not_determined' },
-      eventkitData: { calendarEventCount: 0, reminderCount: 0 },
+      rawEventKit: { calendarEvents: [], reminders: [] },
     })
     useUiStore.setState({
       statusMessage: '',

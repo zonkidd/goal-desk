@@ -85,8 +85,6 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation 
       progress: 0,
       nextTodo: '',
       taskCount: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     }
 
     const goals = loadFromLocalStorage<GoalCard>(BROWSER_STORAGE_GOALS)
@@ -181,7 +179,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation 
       plannedStartAt?: Date
       dueDate?: Date
       linkedGoalId?: string
-      availableGoals?: GoalCard[]
+      linkedGoalLabel?: string
       showInTimeline?: boolean
     },
   ): Promise<TaskResult> {
@@ -193,9 +191,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation 
     if (idx === -1) return {}
 
     const existingTask = tasks[idx]
-    const linkedGoalLabel = input.linkedGoalId && input.availableGoals
-      ? input.availableGoals.find(g => g.id === input.linkedGoalId)?.title
-      : existingTask.linkedGoalLabel
+    const linkedGoalLabel = input.linkedGoalLabel ?? existingTask.linkedGoalLabel
 
     const updatedTask: Task = {
       ...existingTask,

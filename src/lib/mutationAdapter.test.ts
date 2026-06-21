@@ -99,4 +99,16 @@ describe('MutationAdapter interface', () => {
     const id = await adapter.createSystemReminder('Reminder')
     expect(typeof id).toBe('string')
   })
+
+  it('updateTaskFields accepts linkedGoalLabel directly', async () => {
+    const result = await adapter.updateTaskFields('task-1', {
+      title: 'Updated Task',
+      linkedGoalId: 'goal-1',
+      linkedGoalLabel: 'My Goal',
+    })
+    expect(result.task).toBeDefined()
+    expect(adapter.updateTaskFields).toHaveBeenCalledWith('task-1', expect.objectContaining({
+      linkedGoalLabel: 'My Goal',
+    }))
+  })
 })

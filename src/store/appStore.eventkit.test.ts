@@ -23,10 +23,7 @@ describe('EventKit Permission Management', () => {
         calendar: 'not_determined',
         reminders: 'not_determined',
       },
-      eventkitData: {
-        calendarEventCount: 0,
-        reminderCount: 0,
-      },
+      rawEventKit: { calendarEvents: [], reminders: [] },
     })
     vi.clearAllMocks()
   })
@@ -38,10 +35,10 @@ describe('EventKit Permission Management', () => {
       expect(state.eventkitPermissions.reminders).toBe('not_determined')
     })
 
-    it('data counts should be 0', () => {
+    it('data counts should be derived from rawEventKit', () => {
       const state = useEventkitStore.getState()
-      expect(state.eventkitData.calendarEventCount).toBe(0)
-      expect(state.eventkitData.reminderCount).toBe(0)
+      expect(state.rawEventKit.calendarEvents.length).toBe(0)
+      expect(state.rawEventKit.reminders.length).toBe(0)
     })
   })
 
@@ -115,7 +112,7 @@ describe('EventKit Permission Management', () => {
       })
     })
 
-    it('should update calendar event count', async () => {
+    it('should update rawEventKit with calendar events', async () => {
       const mockEvents = [
         { id: '1', title: 'Meeting 1', startsAt: '2026-06-14T10:00:00Z', endsAt: '2026-06-14T11:00:00Z' },
         { id: '2', title: 'Meeting 2', startsAt: '2026-06-14T14:00:00Z', endsAt: '2026-06-14T15:00:00Z' },
@@ -126,10 +123,10 @@ describe('EventKit Permission Management', () => {
       await useEventkitStore.getState().refreshEventkitData()
 
       const state = useEventkitStore.getState()
-      expect(state.eventkitData.calendarEventCount).toBe(2)
+      expect(state.rawEventKit.calendarEvents.length).toBe(2)
     })
 
-    it('should update reminder count', async () => {
+    it('should update rawEventKit with reminders', async () => {
       const mockReminders = [
         { id: '1', title: 'Reminder 1', done: false },
         { id: '2', title: 'Reminder 2', done: false },
@@ -141,10 +138,10 @@ describe('EventKit Permission Management', () => {
       await useEventkitStore.getState().refreshEventkitData()
 
       const state = useEventkitStore.getState()
-      expect(state.eventkitData.reminderCount).toBe(3)
+      expect(state.rawEventKit.reminders.length).toBe(3)
     })
 
-    it('should update both counts simultaneously', async () => {
+    it('should update both simultaneously', async () => {
       const mockEvents = [
         { id: '1', title: 'Event', startsAt: '2026-06-14T10:00:00Z', endsAt: '2026-06-14T11:00:00Z' },
       ]
@@ -158,8 +155,8 @@ describe('EventKit Permission Management', () => {
       await useEventkitStore.getState().refreshEventkitData()
 
       const state = useEventkitStore.getState()
-      expect(state.eventkitData.calendarEventCount).toBe(1)
-      expect(state.eventkitData.reminderCount).toBe(2)
+      expect(state.rawEventKit.calendarEvents.length).toBe(1)
+      expect(state.rawEventKit.reminders.length).toBe(2)
     })
 
     it('should not call API when permissions denied', async () => {
@@ -176,15 +173,15 @@ describe('EventKit Permission Management', () => {
       expect(fetchReminders).not.toHaveBeenCalled()
     })
 
-    it('should keep counts unchanged on API failure', async () => {
+    it('should keep rawEventKit unchanged on API failure', async () => {
       vi.mocked(fetchCalendarEvents).mockRejectedValue(new Error('Fetch failed'))
       vi.mocked(fetchReminders).mockRejectedValue(new Error('Fetch failed'))
 
       await useEventkitStore.getState().refreshEventkitData()
 
       const state = useEventkitStore.getState()
-      expect(state.eventkitData.calendarEventCount).toBe(0)
-      expect(state.eventkitData.reminderCount).toBe(0)
+      expect(state.rawEventKit.calendarEvents.length).toBe(0)
+      expect(state.rawEventKit.reminders.length).toBe(0)
     })
   })
 

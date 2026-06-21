@@ -4,6 +4,7 @@ import { GlassPanel } from '../common/GlassPanel'
 import { useUiStore } from '../../store/uiStore'
 import { useTaskStore } from '../../store/taskStore'
 import { useGoalStore } from '../../store/goalStore'
+import { filterTasksByArea } from '../../lib/areaFilter'
 import type { TaskStatus } from '../../types/task'
 
 const columns: Array<{ title: string; statuses: TaskStatus[]; bg: string }> = [
@@ -17,8 +18,7 @@ export function BoardView() {
   const goals = useGoalStore((state) => state.baseGoals)
   const activeArea = useUiStore((state) => state.activeArea)
   const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
-  const visibleTasks =
-    activeArea === 'ALL' ? tasks : tasks.filter((task) => task.linkedGoalId && goals.some((goal) => goal.id === task.linkedGoalId && goal.area === activeArea))
+  const visibleTasks = filterTasksByArea(tasks, goals, activeArea)
 
   return (
     <section id="board" className="screen active">

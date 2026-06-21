@@ -4,6 +4,7 @@ import { useGoalStore } from '../store/goalStore'
 import { useEventkitStore } from '../store/eventkitStore'
 import { isTauriRuntime } from '../lib/runtime'
 import { loadDesktopSnapshot } from '../lib/desktopSnapshot'
+import type { HydratePayload } from '../store/appStore.types'
 import type { Task } from '../types/task'
 
 export function useAppHydration() {
@@ -12,22 +13,10 @@ export function useAppHydration() {
   const hydrateEventkitData = useEventkitStore((s) => s.hydrateEventkitData)
   const setStatusMessage = useUiStore((s) => s.setStatusMessage)
 
-  return (payload: {
-    tasks: Task[]
-    timeline?: any[]
-    rawEventKit?: {
-      calendarEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
-      reminders: Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
-    }
-    goals: any[]
-    systemReminders: any[]
-    integrationStatus: any
-    statusMessage: string
-  }) => {
+  return (payload: HydratePayload) => {
     hydrateTasks(payload.tasks)
     hydrateGoals(payload.goals)
     hydrateEventkitData({
-      timeline: payload.timeline,
       rawEventKit: payload.rawEventKit,
       systemReminders: payload.systemReminders,
       integrationStatus: payload.integrationStatus,

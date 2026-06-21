@@ -1,9 +1,38 @@
 use crate::domain::{
-    Goal, GoalStatus, GoalSummary, TaskStatus,
+    DeskTask, Goal, GoalStatus, GoalSummary, TaskStatus,
 };
 use crate::repository::{AreaRepository, GoalRepository, SqliteRepository, TaskRepository};
 use std::collections::HashMap;
 use uuid::Uuid;
+
+pub fn build_goal_summary(goal: &Goal, area_title: &str, goal_tasks: &[&DeskTask]) -> GoalSummary {
+    let task_count = goal_tasks.len();
+    let done_count = goal_tasks
+        .iter()
+        .filter(|t| t.status == TaskStatus::Done)
+        .count();
+    let progress = if task_count == 0 {
+        0
+    } else {
+        ((done_count as f64 / task_count as f64) * 100.0).round() as u8
+    };
+    let next_todo = goal_tasks
+        .iter()
+        .find(|t| t.status != TaskStatus::Done)
+        .map(|t| t.title.clone())
+        .unwrap_or_default();
+
+    GoalSummary {
+        id: goal.id.to_string(),
+        title: goal.title.clone(),
+        area: area_title.to_string(),
+        description: goal.description.clone(),
+        status: goal.status,
+        progress,
+        task_count,
+        next_todo,
+    }
+}
 
 pub struct GoalService {
     pub(crate) repo: SqliteRepository,
@@ -131,33 +160,7 @@ impl GoalService {
                     .unwrap_or_else(|| "Unsorted".to_string());
 
                 let goal_tasks = tasks_by_goal.get(&goal.id).map(|v| v.as_slice()).unwrap_or(&[]);
-
-                let task_count = goal_tasks.len();
-                let done_count = goal_tasks
-                    .iter()
-                    .filter(|t| t.status == TaskStatus::Done)
-                    .count();
-                let progress = if task_count == 0 {
-                    0
-                } else {
-                    ((done_count as f64 / task_count as f64) * 100.0).round() as u8
-                };
-                let next_todo = goal_tasks
-                    .iter()
-                    .find(|t| t.status != TaskStatus::Done)
-                    .map(|t| t.title.clone())
-                    .unwrap_or_default();
-
-                GoalSummary {
-                    id: goal.id.to_string(),
-                    title: goal.title.clone(),
-                    area: area_title,
-                    description: goal.description.clone(),
-                    status: goal.status,
-                    progress,
-                    task_count,
-                    next_todo,
-                }
+                build_goal_summary(goal, &area_title, &goal_tasks)
             })
             .collect())
     }
@@ -183,62 +186,6 @@ impl GoalService {
             .filter(|t| t.linked_goal_id == Some(goal_uuid))
             .collect();
 
-        let task_count = goal_tasks.len();
-        let done_count = goal_tasks
-            .iter()
-            .filter(|t| t.status == crate::domain::TaskStatus::Done)
-            .count();
-        let progress = if task_count == 0 {
-            0
-        } else {
-            ((done_count as f64 / task_count as f64) * 100.0).round() as u8
-        };
-        let next_todo = goal_tasks
-            .iter()
-            .find(|t| t.status != crate::domain::TaskStatus::Done)
-            .map(|t| t.title.clone())
-            .unwrap_or_default();
-
-        Ok(GoalSummary {
-            id: goal.id.to_string(),
-            title: goal.title,
-            area: area_title,
-            description: goal.description,
-            status: goal.status,
-            progress,
-            task_count,
-            next_todo,
-        })
-    }
-
-    pub fn list_areas_with_stats(&self) -> Result<Vec<crate::domain::AreaWithStats>, String> {
-        self.repo.initialize().map_err(|e| e.to_string())?;
-        let areas = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;
-        let goals = GoalRepository::list(&self.repo).map_err(|e| e.to_string())?;
-
-        let mut result: Vec<crate::domain::AreaWithStats> = areas
-            .iter()
-            .map(|area| {
-                let goals_in_area: Vec<&Goal> = goals
-                    .iter()
-                    .filter(|g| g.area_id == Some(area.id))
-                    .collect();
-                let goal_count = goals_in_area.len();
-                let active_goal_count = goals_in_area
-                    .iter()
-                    .filter(|g| g.status == GoalStatus::Active)
-                    .count();
-                crate::domain::AreaWithStats {
-                    id: area.id,
-                    title: area.title.clone(),
-                    goal_count,
-                    active_goal_count,
-                    is_system: area.is_system,
-                }
-            })
-            .collect();
-
-        result.sort_by(|a, b| a.title.cmp(&b.title));
-        Ok(result)
+        Ok(build_goal_summary(&goal, &area_title, &goal_tasks))
     }
 }

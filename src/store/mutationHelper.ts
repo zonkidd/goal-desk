@@ -3,7 +3,10 @@ import type { MutationAdapter } from '../lib/mutationAdapter'
 export async function executeMutation<T>(
   fn: (adapter: MutationAdapter) => Promise<T>,
   adapter: MutationAdapter,
-  options?: { onSuccess?: (result: T) => void },
+  options?: {
+    onSuccess?: (result: T) => void
+    onError?: (error: unknown) => void
+  },
 ): Promise<T | null> {
   try {
     const result = await fn(adapter)
@@ -11,26 +14,8 @@ export async function executeMutation<T>(
     return result
   } catch (error) {
     console.error('Mutation failed:', error)
+    options?.onError?.(error)
     return null
   }
 }
 
-export async function executeMutationWithResult<T, R>(
-  fn: (adapter: MutationAdapter) => Promise<T>,
-  adapter: MutationAdapter,
-  options: {
-    extractEntity: (result: T) => R | undefined | null
-    onSuccess?: (entity: R) => void
-  },
-): Promise<R | null> {
-  try {
-    const result = await fn(adapter)
-    const entity = options.extractEntity(result)
-    if (entity == null) return null
-    options.onSuccess?.(entity)
-    return entity
-  } catch (error) {
-    console.error('Mutation failed:', error)
-    return null
-  }
-}

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import { createWorkspaceMutationAdapter } from '../lib/workspaceMutations'
+import { getWorkspaceMutationAdapter } from '../lib/workspaceMutations'
 import { executeMutation } from './mutationHelper'
+import { upsertById } from './upsertById'
 import type { GoalCard, GoalStatus } from '../types/app'
 
 export interface GoalStoreState {
@@ -16,25 +17,19 @@ export interface GoalStoreState {
   updateGoalStatus: (goalId: string, status: GoalStatus) => Promise<GoalCard | null>
 }
 
-function replaceGoalInArray(goals: GoalCard[], nextGoal: GoalCard) {
-  const index = goals.findIndex((goal) => goal.id === nextGoal.id)
-  if (index === -1) return [nextGoal, ...goals]
-  return goals.map((goal) => (goal.id === nextGoal.id ? nextGoal : goal))
-}
-
 export const useGoalStore = create<GoalStoreState>((set, get) => ({
   baseGoals: [],
 
   hydrateGoals: (goals) => set({ baseGoals: goals }),
 
   replaceGoal: (goal) => {
-    const nextGoals = replaceGoalInArray(get().baseGoals, goal)
+    const nextGoals = upsertById(get().baseGoals, goal)
     set({ baseGoals: nextGoals })
     return nextGoals
   },
 
   createGoal: async (input, options) => {
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
     const result = await executeMutation(
       (a) => a.createGoal(input, options),
       adapter,
@@ -45,7 +40,7 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
   },
 
   updateGoalFields: async (goalId, input) => {
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
     const result = await executeMutation(
       (a) => a.updateGoalFields(goalId, input),
       adapter,
@@ -59,7 +54,7 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
       return null
     }
 
-    const adapter = createWorkspaceMutationAdapter()
+    const adapter = getWorkspaceMutationAdapter()
     const result = await executeMutation(
       (a) => a.updateGoalStatus(goalId, status),
       adapter,

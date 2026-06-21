@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { captureTask, createSystemReminder } from '../../lib/tauriCommands'
 import { hideCurrentWindow } from '../../lib/runtime'
+import { getWorkspaceMutationAdapter } from '../../lib/workspaceMutations'
 import { QuickCaptureForm, type CreationMode } from './QuickCaptureForm'
 
 export function QuickCaptureWindow() {
@@ -20,19 +20,18 @@ export function QuickCaptureWindow() {
     if (!trimmed) return
 
     try {
+      const adapter = getWorkspaceMutationAdapter()
+
       if (mode === 'local') {
-        // 仅创建本地任务
-        await captureTask(trimmed)
+        await adapter.createTask(trimmed)
         setStatus('已保存到本地收集箱')
       } else if (mode === 'reminder') {
-        // 仅创建系统提醒
-        await createSystemReminder(trimmed)
+        await adapter.createSystemReminder(trimmed)
         setStatus('已创建系统提醒')
       } else if (mode === 'both') {
-        // 创建本地任务并关联系统提醒
-        const task = await captureTask(trimmed)
-        if (task) {
-          await createSystemReminder(trimmed)
+        const result = await adapter.createTask(trimmed)
+        if (result.task) {
+          await adapter.createSystemReminder(trimmed)
         }
         setStatus('已保存到本地收集箱并创建系统提醒')
       }

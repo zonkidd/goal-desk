@@ -36,7 +36,7 @@ export interface TaskMutation {
       plannedStartAt?: Date
       dueDate?: Date
       linkedGoalId?: string
-      availableGoals?: GoalCard[]
+      linkedGoalLabel?: string
       showInTimeline?: boolean
       systemReminderId?: string
     },

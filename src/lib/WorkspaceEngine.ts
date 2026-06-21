@@ -46,10 +46,7 @@ export function computeSnapshot(state: AtomicState): WorkspaceSnapshot {
   const derivedGoals = deriveGoalRecords(state.baseGoals, state.tasks)
   const goals = filterGoalsByArea(derivedGoals, state.activeArea)
   const filteredTasks = filterTasksByArea(state.tasks, derivedGoals, state.activeArea)
-  const todayFocusTasks = getTodayFocusTasks(state.tasks, derivedGoals, state.activeArea, now)
-  const focusFiltered = state.activeArea === 'ALL'
-    ? todayFocusTasks
-    : filterTasksByArea(todayFocusTasks, derivedGoals, state.activeArea)
+  const focusFiltered = getTodayFocusTasks(state.tasks, derivedGoals, state.activeArea, now)
   const timeline = deriveTodayAgenda(state.baseTimeline, state.tasks, now)
   const timelineFiltered = state.activeArea === 'ALL' ? timeline : filterAgendaByArea(timeline, filteredTasks)
   const attentionGroups = deriveTodayAttentionGroups(

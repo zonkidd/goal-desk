@@ -2,6 +2,24 @@ export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
+/**
+ * Check if a task falls within the active date range:
+ * startBoundary (plannedStartAt || createdAt) <= today <= dueDate (if present).
+ */
+export function isTaskInActiveDateRange(
+  task: { plannedStartAt?: Date; dueDate?: Date; createdAt?: Date },
+  now: Date,
+): boolean {
+  const today = startOfDay(now)
+  const startBoundary = task.plannedStartAt || task.createdAt
+  if (!startBoundary) return false
+
+  const startDay = startOfDay(startBoundary)
+  const endDay = task.dueDate ? startOfDay(task.dueDate) : undefined
+
+  return startDay.getTime() <= today.getTime() && (!endDay || today.getTime() <= endDay.getTime())
+}
+
 export function isSameDay(left: Date, right: Date): boolean {
   return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate()
 }

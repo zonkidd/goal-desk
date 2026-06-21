@@ -83,7 +83,6 @@ function MainApp() {
   useEffect(() => {
     hydrateApp({
       tasks: [],
-      timeline: [],
       goals: [],
       systemReminders: [],
       integrationStatus: {
@@ -98,7 +97,6 @@ function MainApp() {
       const { tasks, goals } = loadBrowserData()
       hydrateApp({
         tasks,
-        timeline: [],
         goals,
         systemReminders: [],
         integrationStatus: {
@@ -132,7 +130,6 @@ function MainApp() {
       .catch((error) => {
         hydrateApp({
           tasks: [],
-          timeline: [],
           goals: [],
           systemReminders: [],
           integrationStatus: {

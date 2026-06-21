@@ -3,7 +3,8 @@ import { useEventkitStore } from '../../store/eventkitStore'
 
 export function EventKitStatusCard() {
   const eventkitPermissions = useEventkitStore((state) => state.eventkitPermissions)
-  const eventkitData = useEventkitStore((state) => state.eventkitData)
+  const calendarEventCount = useEventkitStore((state) => state.rawEventKit.calendarEvents.length)
+  const reminderCount = useEventkitStore((state) => state.rawEventKit.reminders.length)
   const requestCalendarAccess = useEventkitStore((state) => state.requestCalendarAccess)
   const requestRemindersAccess = useEventkitStore((state) => state.requestRemindersAccess)
 
@@ -22,7 +23,7 @@ export function EventKitStatusCard() {
         {eventkitPermissions.calendar === 'granted' ? (
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-green-600">✓ 已授权</span>
-            <span className="text-xs text-slate-400">{eventkitData.calendarEventCount} 个</span>
+            <span className="text-xs text-slate-400">{calendarEventCount} 个</span>
           </div>
         ) : eventkitPermissions.calendar === 'denied' ? (
           <span className="text-xs font-bold text-red-600">✗ 已拒绝</span>
@@ -48,7 +49,7 @@ export function EventKitStatusCard() {
         {eventkitPermissions.reminders === 'granted' ? (
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-green-600">✓ 已授权</span>
-            <span className="text-xs text-slate-400">{eventkitData.reminderCount} 个</span>
+            <span className="text-xs text-slate-400">{reminderCount} 个</span>
           </div>
         ) : eventkitPermissions.reminders === 'denied' ? (
           <span className="text-xs font-bold text-red-600">✗ 已拒绝</span>
