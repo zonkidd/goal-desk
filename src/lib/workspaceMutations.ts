@@ -1,23 +1,27 @@
 /**
  * workspaceMutations - Adapter registry
  *
- * Provides the MutationAdapter used by all stores.
+ * Provides the MutationAdapter and EventKitAdapter used by all stores.
  * In production, auto-detects Tauri vs browser runtime.
- * In tests, use setWorkspaceMutationAdapter() to inject a mock.
+ * In tests, use setWorkspaceMutationAdapter() / setEventKitAdapter() to inject mocks.
  */
-import { isTauriRuntime } from './runtime'
+import { getRuntimeAdapter } from './runtimeAdapter'
 import { TauriAdapter } from './tauriAdapter'
 import { BrowserAdapter, BROWSER_PREVIEW_STATUS } from './browserAdapter'
+import { TauriEventKitAdapter, BrowserEventKitAdapter } from './eventkitAdapter'
 import type { MutationAdapter } from './mutationAdapter'
+import type { EventKitAdapter } from './eventkitAdapter'
 
 export type { MutationAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
 export { BROWSER_PREVIEW_STATUS } from './browserAdapter'
+export type { EventKitAdapter } from './eventkitAdapter'
 
 let adapterInstance: MutationAdapter | null = null
+let eventkitAdapterInstance: EventKitAdapter | null = null
 
 export function getWorkspaceMutationAdapter(): MutationAdapter {
   if (!adapterInstance) {
-    adapterInstance = isTauriRuntime() ? new TauriAdapter() : new BrowserAdapter()
+    adapterInstance = getRuntimeAdapter().isTauri() ? new TauriAdapter() : new BrowserAdapter()
   }
   return adapterInstance
 }
@@ -28,6 +32,21 @@ export function setWorkspaceMutationAdapter(adapter: MutationAdapter): void {
 
 export function resetWorkspaceMutationAdapter(): void {
   adapterInstance = null
+}
+
+export function getEventKitAdapter(): EventKitAdapter {
+  if (!eventkitAdapterInstance) {
+    eventkitAdapterInstance = getRuntimeAdapter().isTauri() ? new TauriEventKitAdapter() : new BrowserEventKitAdapter()
+  }
+  return eventkitAdapterInstance
+}
+
+export function setEventKitAdapter(adapter: EventKitAdapter): void {
+  eventkitAdapterInstance = adapter
+}
+
+export function resetEventKitAdapter(): void {
+  eventkitAdapterInstance = null
 }
 
 export const createWorkspaceMutationAdapter = getWorkspaceMutationAdapter

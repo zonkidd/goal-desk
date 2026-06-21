@@ -253,10 +253,9 @@ mod commands {
     pub fn capture_task(app: AppHandle, svc: State<'_, AppService>, input: String) -> Result<DeskTask, String> {
         let task = svc.task.capture_task(&input)?;
 
-        // EventKit: create system reminder if time was parsed
         let reminder_time = task.planned_start_at.or(task.due_at);
         if let Some(reminder_id) = maybe_create_task_system_reminder(&app, &task.title, reminder_time) {
-            let updated = svc.task.update_task_system_reminder_id(&task.id.to_string(), Some(reminder_id))?;
+            let updated = svc.task.capture_task_with_system_reminder(&task.id.to_string(), reminder_id)?;
             let _ = app.emit("desk-task-created", &updated);
             return Ok(updated);
         }
@@ -318,7 +317,7 @@ mod commands {
     ) -> Result<DeskTask, String> {
         let app_handle = app.clone();
 
-        svc.task.update_task_status_with_sync(
+        svc.task.update_task_status_with_reminder_sync(
             &task_id,
             status,
             note,
@@ -422,7 +421,7 @@ mod commands {
         done: bool,
     ) -> Result<SystemReminder, String> {
         let reminder = eventkit::set_system_reminder_completed(&app, &reminder_id, done)?;
-        svc.task.sync_linked_tasks_for_system_reminder(&reminder_id, done)?;
+        svc.task.sync_task_system_reminder_by_reminder_id(&reminder_id, done)?;
         Ok(reminder)
     }
 

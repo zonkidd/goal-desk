@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { isTauriRuntime } from '../lib/runtime'
+import { getRuntimeAdapter } from '../lib/runtimeAdapter'
 import { getWorkspaceMutationAdapter } from '../lib/workspaceMutations'
 import { executeMutation } from './mutationHelper'
 import { upsertById } from './upsertById'
@@ -180,7 +180,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   createAndLinkReminder: async (taskId: string, title: string, dueAt?: Date) => {
     const adapter = getWorkspaceMutationAdapter()
     try {
-      if (isTauriRuntime()) {
+      if (getRuntimeAdapter().isTauri()) {
         const reminderId = await adapter.createSystemReminder(title, dueAt)
         if (reminderId) {
           await get().linkTaskToReminder(taskId, reminderId)

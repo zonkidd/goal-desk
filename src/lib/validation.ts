@@ -1,3 +1,5 @@
+import { UNCATEGORIZED_AREA_TITLE } from './constants'
+
 export function validateRequiredString(value: unknown): string | null {
   if (value == null || typeof value !== 'string') return null
   const trimmed = value.trim()
@@ -15,7 +17,7 @@ export function validateGoalInput(input: {
 }): { title: string; area: string; description: string } | null {
   const title = validateRequiredString(input.title)
   if (!title) return null
-  const area = validateRequiredString(input.area) || '未分类'
+  const area = validateRequiredString(input.area) || UNCATEGORIZED_AREA_TITLE
   const description = validateRequiredString(input.description) || ''
   return { title, area, description }
 }

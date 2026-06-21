@@ -5,6 +5,7 @@ import { useUiStore } from '../store/uiStore'
 import { useEventkitStore } from '../store/eventkitStore'
 import { computeSnapshot, type WorkspaceSnapshot } from '../lib/WorkspaceEngine'
 import { convertEventKitToRawItems } from '../lib/workspaceDerivation'
+import { createWorkspaceDeriver, type WorkspaceDeriver, type StoreGetters } from './workspaceDeriver'
 
 const emptySnapshot: WorkspaceSnapshot = {
   goals: [],
@@ -31,19 +32,16 @@ function recompute() {
   if (computing) return
   computing = true
   try {
-    const tasks = useTaskStore.getState().tasks
-    const baseGoals = useGoalStore.getState().baseGoals
-    const eventkitState = useEventkitStore.getState()
-    const activeArea = useUiStore.getState().activeArea
-    const showCompletedTodos = useUiStore.getState().showCompletedTodos
+    const deriver = createWorkspaceDeriver({
+      getTasks: () => useTaskStore.getState().tasks,
+      getBaseGoals: () => useGoalStore.getState().baseGoals,
+      getActiveArea: () => useUiStore.getState().activeArea,
+      getShowCompletedTodos: () => useUiStore.getState().showCompletedTodos,
+      getRawCalendarEvents: () => useEventkitStore.getState().rawEventKit.calendarEvents,
+      getRawReminders: () => useEventkitStore.getState().rawEventKit.reminders,
+    })
 
-    const baseTimeline = convertEventKitToRawItems(
-      eventkitState.rawEventKit.calendarEvents,
-      eventkitState.rawEventKit.reminders,
-      tasks,
-    )
-
-    snapshot = computeSnapshot({ tasks, baseGoals, baseTimeline, activeArea, showCompletedTodos })
+    snapshot = deriver.compute()
     version++
     listeners.forEach((l) => l())
   } finally {

@@ -1,8 +1,5 @@
 import { create } from 'zustand'
-import {
-  getCurrentWindowLabel,
-  isTauriRuntime,
-} from '../lib/runtime'
+import { getRuntimeAdapter } from '../lib/runtimeAdapter'
 import { showQuickCaptureWindow as openNativeQuickCaptureWindow } from '../lib/tauriCommands'
 import type { AreaFilter, ViewKey } from '../types/app'
 
@@ -83,7 +80,8 @@ export const useUiStore = create<UiStoreState>((set, get) => ({
 
   // 快速捕获操作
   openQuickCapture: () => {
-    if (isTauriRuntime() && getCurrentWindowLabel() !== 'quick-capture') {
+    const runtime = getRuntimeAdapter()
+    if (runtime.isTauri() && runtime.getWindowLabel() !== 'quick-capture') {
       void openNativeQuickCaptureWindow()
         .then(() => set({ statusMessage: 'Quick capture ready' }))
         .catch((error) =>

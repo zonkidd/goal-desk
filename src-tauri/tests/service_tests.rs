@@ -597,3 +597,88 @@ fn task_service_update_status_with_sync_none_callback() {
 
     assert_eq!(updated.status, TaskStatus::InProgress);
 }
+
+// ============================================================================
+// TaskService - EventKit encapsulation tests
+// ============================================================================
+
+#[test]
+fn task_service_capture_task_with_reminder_links_reminder_id() {
+    let repo = temp_repo("task_capture_with_reminder");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Buy milk at 3pm").unwrap();
+
+    // Simulate EventKit creating a system reminder
+    let updated = service
+        .capture_task_with_system_reminder(&task.id.to_string(), "reminder-evt-1".to_string())
+        .unwrap();
+
+    assert_eq!(updated.system_reminder_id, Some("reminder-evt-1".to_string()));
+}
+
+#[test]
+fn task_service_update_status_syncs_reminder_done() {
+    let repo = temp_repo("task_status_sync_reminder");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task with reminder").unwrap();
+    let _ = service
+        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-sync-1".to_string()))
+        .unwrap();
+
+    // New method: sync system reminder status
+    let updated = service
+        .sync_task_system_reminder(&task.id.to_string(), true)
+        .unwrap();
+
+    assert_eq!(updated.status, TaskStatus::Done);
+}
+
+#[test]
+fn task_service_update_status_syncs_reminder_undone() {
+    let repo = temp_repo("task_status_sync_reminder_undone");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task with reminder").unwrap();
+    let _ = service
+        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-sync-2".to_string()))
+        .unwrap();
+    let _ = service
+        .update_task_status(&task.id.to_string(), TaskStatus::Done, None)
+        .unwrap();
+
+    // Sync back to not done
+    let updated = service
+        .sync_task_system_reminder(&task.id.to_string(), false)
+        .unwrap();
+
+    assert_eq!(updated.status, TaskStatus::Todo);
+}
+
+#[test]
+fn task_service_update_status_with_reminder_sync_calls_callback() {
+    let repo = temp_repo("task_status_reminder_sync_callback");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task with reminder").unwrap();
+    let _ = service
+        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-cb-1".to_string()))
+        .unwrap();
+
+    let callback_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = callback_called.clone();
+
+    let updated = service
+        .update_task_status_with_reminder_sync(
+            &task.id.to_string(),
+            TaskStatus::Done,
+            None,
+            Some(Box::new(move |reminder_id, done| {
+                assert_eq!(reminder_id, "reminder-cb-1");
+                assert!(done);
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                Ok(())
+            })),
+        )
+        .unwrap();
+
+    assert!(callback_called.load(std::sync::atomic::Ordering::Relaxed));
+    assert_eq!(updated.status, TaskStatus::Done);
+}

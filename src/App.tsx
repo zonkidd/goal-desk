@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { AppShell } from './components/shell/AppShell'
 import { QuickCaptureWindow } from './components/modal/QuickCaptureWindow'
-import { getCurrentWindowLabel, isTauriRuntime } from './lib/runtime'
+import { getRuntimeAdapter } from './lib/runtimeAdapter'
 import { loadDesktopSnapshot } from './lib/desktopSnapshot'
 import { loadBrowserData } from './lib/browserCodec'
 import { getRuntimeModeStatusMessage } from './lib/taskPresentation'
@@ -19,7 +19,8 @@ function MainApp() {
   const setStatusMessage = useUiStore((state) => state.setStatusMessage)
 
   useEffect(() => {
-    if (!isTauriRuntime() || getCurrentWindowLabel() !== 'main') return
+    const runtime = getRuntimeAdapter()
+    if (!runtime.isTauri() || runtime.getWindowLabel() !== 'main') return
 
     const currentWindow = getCurrentWindow()
     const cleanup = currentWindow.onCloseRequested(async (event) => {
@@ -33,7 +34,8 @@ function MainApp() {
   }, [])
 
   useEffect(() => {
-    if (!isTauriRuntime() || getCurrentWindowLabel() !== 'main') return
+    const runtime = getRuntimeAdapter()
+    if (!runtime.isTauri() || runtime.getWindowLabel() !== 'main') return
 
     const unlisten = listen<RustTask>('desk-task-created', (event) => {
       const task = TaskCodec.fromRust(event.payload)
@@ -57,7 +59,7 @@ function MainApp() {
       statusMessage: 'Loading workspace...',
     })
 
-    if (!isTauriRuntime()) {
+    if (!getRuntimeAdapter().isTauri()) {
       // Browser mode: load from localStorage
       const { tasks, goals } = loadBrowserData()
       hydrateApp({
@@ -113,7 +115,8 @@ function MainApp() {
 }
 
 export default function App() {
-  if (isTauriRuntime() && getCurrentWindowLabel() === 'quick-capture') {
+  const runtime = getRuntimeAdapter()
+  if (runtime.isTauri() && runtime.getWindowLabel() === 'quick-capture') {
     return <QuickCaptureWindow />
   }
 

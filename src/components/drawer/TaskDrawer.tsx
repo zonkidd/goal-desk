@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlignLeft, Bell, BookOpen, Calendar, CheckCircle, Clock, Folder, Send, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { isTauriRuntime } from '../../lib/runtime'
+import { getRuntimeAdapter } from '../../lib/runtimeAdapter'
 import { openTaskInBear } from '../../lib/tauriCommands'
 import { useTodoEditingSession } from '../../lib/todoEditing'
 import { formatDateTimeLabel } from '../../lib/dateUtils'
@@ -248,7 +248,7 @@ export function TaskDrawer() {
                       <span>在时间轴显示</span>
                     </label>
                   </div>
-                  {task.bearNoteId && isTauriRuntime() && (
+                  {task.bearNoteId && getRuntimeAdapter().isTauri() && (
                     <button
                       type="button"
                       onClick={() => void openTaskInBear(task.id)}

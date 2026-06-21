@@ -1,5 +1,6 @@
 import type { ReminderItem } from '../types/app'
 import { startOfDay } from './dateUtils'
+import { UNCATEGORIZED_AREA_TITLE } from './constants'
 
 /**
  * 时间分组结果类型
@@ -23,7 +24,7 @@ export function groupRemindersByList(
   const map = new Map<string, ReminderItem[]>()
 
   for (const reminder of reminders) {
-    const listName = reminder.listTitle || '未分类'
+    const listName = reminder.listTitle || UNCATEGORIZED_AREA_TITLE
     if (!map.has(listName)) {
       map.set(listName, [])
     }

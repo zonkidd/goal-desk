@@ -1,20 +1,29 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { useEventkitStore } from './eventkitStore'
-import { requestCalendarAccess, requestRemindersAccess, fetchCalendarEvents, fetchReminders } from '../lib/eventkitIntegration'
-import { isTauriRuntime } from '../lib/runtime'
+import { setEventKitAdapter, resetEventKitAdapter } from '../lib/workspaceMutations'
+import type { EventKitAdapter } from '../lib/eventkitAdapter'
 
-vi.mock('../lib/runtime', () => ({
-  isTauriRuntime: vi.fn(() => false),
-  getCurrentWindowLabel: vi.fn(() => 'browser'),
-}))
-
-vi.mock('../lib/eventkitIntegration', () => ({
-  setSystemReminderCompleted: vi.fn(),
-  requestCalendarAccess: vi.fn(),
-  requestRemindersAccess: vi.fn(),
-  fetchCalendarEvents: vi.fn(),
-  fetchReminders: vi.fn(),
-}))
+function createMockAdapter(overrides: Partial<EventKitAdapter> = {}): EventKitAdapter {
+  return {
+    requestCalendarAccess: vi.fn().mockResolvedValue('granted'),
+    requestRemindersAccess: vi.fn().mockResolvedValue('granted'),
+    openCalendarEvent: vi.fn().mockResolvedValue(undefined),
+    openSystemReminder: vi.fn().mockResolvedValue(undefined),
+    setSystemReminderCompleted: vi.fn().mockResolvedValue({
+      id: 'r1', title: 'Updated', dueAt: undefined, done: true, listTitle: undefined,
+    }),
+    fetchCalendarEvents: vi.fn().mockResolvedValue([]),
+    fetchReminders: vi.fn().mockResolvedValue([]),
+    loadCalendarRange: vi.fn().mockResolvedValue({ events: [], reminders: [] }),
+    loadRawEventKitData: vi.fn().mockResolvedValue({
+      calendarEvents: [],
+      reminders: [],
+      systemReminders: [],
+      integrationStatus: { calendar: 'not_determined', reminders: 'not_determined' },
+    }),
+    ...overrides,
+  }
+}
 
 describe('EventKit Permission Management', () => {
   beforeEach(() => {
@@ -26,6 +35,10 @@ describe('EventKit Permission Management', () => {
       rawEventKit: { calendarEvents: [], reminders: [] },
     })
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    resetEventKitAdapter()
   })
 
   describe('initial state', () => {
@@ -44,17 +57,23 @@ describe('EventKit Permission Management', () => {
 
   describe('requestCalendarAccess', () => {
     it('should change to granted after authorization', async () => {
-      vi.mocked(requestCalendarAccess).mockResolvedValue('granted')
+      const adapter = createMockAdapter({
+        requestCalendarAccess: vi.fn().mockResolvedValue('granted'),
+      })
+      setEventKitAdapter(adapter)
 
       await useEventkitStore.getState().requestCalendarAccess()
 
       const state = useEventkitStore.getState()
       expect(state.eventkitPermissions.calendar).toBe('granted')
-      expect(requestCalendarAccess).toHaveBeenCalledOnce()
+      expect(adapter.requestCalendarAccess).toHaveBeenCalledOnce()
     })
 
     it('should change to denied when user denies', async () => {
-      vi.mocked(requestCalendarAccess).mockResolvedValue('denied')
+      const adapter = createMockAdapter({
+        requestCalendarAccess: vi.fn().mockResolvedValue('denied'),
+      })
+      setEventKitAdapter(adapter)
 
       await useEventkitStore.getState().requestCalendarAccess()
 
@@ -63,7 +82,10 @@ describe('EventKit Permission Management', () => {
     })
 
     it('should change to restricted when system restricts', async () => {
-      vi.mocked(requestCalendarAccess).mockResolvedValue('restricted')
+      const adapter = createMockAdapter({
+        requestCalendarAccess: vi.fn().mockResolvedValue('restricted'),
+      })
+      setEventKitAdapter(adapter)
 
       await useEventkitStore.getState().requestCalendarAccess()
 
@@ -72,7 +94,10 @@ describe('EventKit Permission Management', () => {
     })
 
     it('should change to error on failure', async () => {
-      vi.mocked(requestCalendarAccess).mockRejectedValue(new Error('Permission request failed'))
+      const adapter = createMockAdapter({
+        requestCalendarAccess: vi.fn().mockRejectedValue(new Error('Permission request failed')),
+      })
+      setEventKitAdapter(adapter)
 
       await useEventkitStore.getState().requestCalendarAccess()
 
@@ -83,17 +108,23 @@ describe('EventKit Permission Management', () => {
 
   describe('requestRemindersAccess', () => {
     it('should change to granted after authorization', async () => {
-      vi.mocked(requestRemindersAccess).mockResolvedValue('granted')
+      const adapter = createMockAdapter({
+        requestRemindersAccess: vi.fn().mockResolvedValue('granted'),
+      })
+      setEventKitAdapter(adapter)
 
       await useEventkitStore.getState().requestRemindersAccess()
 
       const state = useEventkitStore.getState()
       expect(state.eventkitPermissions.reminders).toBe('granted')
-      expect(requestRemindersAccess).toHaveBeenCalledOnce()
+      expect(adapter.requestRemindersAccess).toHaveBeenCalledOnce()
     })
 
     it('should change to denied when user denies', async () => {
-      vi.mocked(requestRemindersAccess).mockResolvedValue('denied')
+      const adapter = createMockAdapter({
+        requestRemindersAccess: vi.fn().mockResolvedValue('denied'),
+      })
+      setEventKitAdapter(adapter)
 
       await useEventkitStore.getState().requestRemindersAccess()
 
@@ -117,8 +148,11 @@ describe('EventKit Permission Management', () => {
         { id: '1', title: 'Meeting 1', startsAt: '2026-06-14T10:00:00Z', endsAt: '2026-06-14T11:00:00Z' },
         { id: '2', title: 'Meeting 2', startsAt: '2026-06-14T14:00:00Z', endsAt: '2026-06-14T15:00:00Z' },
       ]
-      vi.mocked(fetchCalendarEvents).mockResolvedValue(mockEvents)
-      vi.mocked(fetchReminders).mockResolvedValue([])
+      const adapter = createMockAdapter({
+        fetchCalendarEvents: vi.fn().mockResolvedValue(mockEvents),
+        fetchReminders: vi.fn().mockResolvedValue([]),
+      })
+      setEventKitAdapter(adapter)
 
       await useEventkitStore.getState().refreshEventkitData()
 
@@ -132,8 +166,11 @@ describe('EventKit Permission Management', () => {
         { id: '2', title: 'Reminder 2', done: false },
         { id: '3', title: 'Reminder 3', done: true },
       ]
-      vi.mocked(fetchCalendarEvents).mockResolvedValue([])
-      vi.mocked(fetchReminders).mockResolvedValue(mockReminders)
+      const adapter = createMockAdapter({
+        fetchCalendarEvents: vi.fn().mockResolvedValue([]),
+        fetchReminders: vi.fn().mockResolvedValue(mockReminders),
+      })
+      setEventKitAdapter(adapter)
 
       await useEventkitStore.getState().refreshEventkitData()
 
@@ -149,8 +186,11 @@ describe('EventKit Permission Management', () => {
         { id: '1', title: 'Reminder 1', done: false },
         { id: '2', title: 'Reminder 2', done: false },
       ]
-      vi.mocked(fetchCalendarEvents).mockResolvedValue(mockEvents)
-      vi.mocked(fetchReminders).mockResolvedValue(mockReminders)
+      const adapter = createMockAdapter({
+        fetchCalendarEvents: vi.fn().mockResolvedValue(mockEvents),
+        fetchReminders: vi.fn().mockResolvedValue(mockReminders),
+      })
+      setEventKitAdapter(adapter)
 
       await useEventkitStore.getState().refreshEventkitData()
 
@@ -160,6 +200,8 @@ describe('EventKit Permission Management', () => {
     })
 
     it('should not call API when permissions denied', async () => {
+      const adapter = createMockAdapter()
+      setEventKitAdapter(adapter)
       useEventkitStore.setState({
         eventkitPermissions: {
           calendar: 'denied',
@@ -169,31 +211,22 @@ describe('EventKit Permission Management', () => {
 
       await useEventkitStore.getState().refreshEventkitData()
 
-      expect(fetchCalendarEvents).not.toHaveBeenCalled()
-      expect(fetchReminders).not.toHaveBeenCalled()
+      expect(adapter.fetchCalendarEvents).not.toHaveBeenCalled()
+      expect(adapter.fetchReminders).not.toHaveBeenCalled()
     })
 
     it('should keep rawEventKit unchanged on API failure', async () => {
-      vi.mocked(fetchCalendarEvents).mockRejectedValue(new Error('Fetch failed'))
-      vi.mocked(fetchReminders).mockRejectedValue(new Error('Fetch failed'))
+      const adapter = createMockAdapter({
+        fetchCalendarEvents: vi.fn().mockRejectedValue(new Error('Fetch failed')),
+        fetchReminders: vi.fn().mockRejectedValue(new Error('Fetch failed')),
+      })
+      setEventKitAdapter(adapter)
 
       await useEventkitStore.getState().refreshEventkitData()
 
       const state = useEventkitStore.getState()
       expect(state.rawEventKit.calendarEvents.length).toBe(0)
       expect(state.rawEventKit.reminders.length).toBe(0)
-    })
-  })
-
-  describe('browser environment mock behavior', () => {
-    it('should return mock status in browser environment', async () => {
-      vi.mocked(isTauriRuntime).mockReturnValue(false)
-      vi.mocked(requestCalendarAccess).mockResolvedValue('granted')
-
-      await useEventkitStore.getState().requestCalendarAccess()
-
-      const state = useEventkitStore.getState()
-      expect(state.eventkitPermissions.calendar).toBe('granted')
     })
   })
 })

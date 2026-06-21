@@ -13,7 +13,7 @@ import { ReminderDrawer } from '../drawer/ReminderDrawer'
 import { CalendarEventDrawer } from '../drawer/CalendarEventDrawer'
 import { SystemReminderDrawer } from '../drawer/SystemReminderDrawer'
 import { QuickCaptureModal } from '../modal/QuickCaptureModal'
-import { isTauriRuntime } from '../../lib/runtime'
+import { getRuntimeAdapter } from '../../lib/runtimeAdapter'
 import { useUiStore } from '../../store/uiStore'
 
 export function AppShell() {
@@ -32,7 +32,7 @@ export function AppShell() {
             <p className="text-xs font-bold uppercase tracking-[0.24em] text-slate-400">
               {isLoading ? 'Syncing workspace' : statusMessage}
             </p>
-            {!isLoading && !isTauriRuntime() && (
+            {!isLoading && !getRuntimeAdapter().isTauri() && (
               <p className="mt-2 inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700">
                 Preview mode only. Actions update in-memory demo data.
               </p>

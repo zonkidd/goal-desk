@@ -7,6 +7,7 @@ import { useUiStore } from '../../store/uiStore'
 import { useEventkitStore } from '../../store/eventkitStore'
 import { useToggleSystemReminder } from '../../store/appStore'
 import { groupRemindersByList, groupRemindersByTime } from '../../lib/reminderUtils'
+import { UNCATEGORIZED_AREA_TITLE } from '../../lib/constants'
 import type { ReminderItem } from '../../types/app'
 
 type ViewMode = 'byList' | 'byTime'
@@ -59,9 +60,9 @@ export function RemindersView() {
       '个人': { icon: '🏠', color: 'text-blue-600' },
       '购物清单': { icon: '🛒', color: 'text-green-600' },
       '阅读清单': { icon: '📚', color: 'text-purple-600' },
-      '未分类': { icon: '📋', color: 'text-slate-600' },
+      [UNCATEGORIZED_AREA_TITLE]: { icon: '📋', color: 'text-slate-600' },
     }
-    const config = listConfig[title] || listConfig['未分类']
+    const config = listConfig[title] || listConfig[UNCATEGORIZED_AREA_TITLE]
 
     return {
       id: title.toLowerCase().replace(/\s+/g, '-'),

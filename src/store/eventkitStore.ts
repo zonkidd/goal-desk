@@ -1,12 +1,5 @@
 import { create } from 'zustand'
-import { isTauriRuntime } from '../lib/runtime'
-import {
-  setSystemReminderCompleted as persistSystemReminderCompleted,
-  requestCalendarAccess as apiRequestCalendarAccess,
-  requestRemindersAccess as apiRequestRemindersAccess,
-  fetchCalendarEvents,
-  fetchReminders,
-} from '../lib/eventkitIntegration'
+import { getEventKitAdapter } from '../lib/workspaceMutations'
 import type { AccessStatus, IntegrationStatus, ReminderItem } from '../types/app'
 
 export interface EventkitStoreState {
@@ -74,18 +67,8 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
 
   toggleSystemReminderDone: async (reminderId, done) => {
     try {
-      if (!isTauriRuntime()) {
-        set((state) => ({
-          systemReminders: state.systemReminders.map((reminder) =>
-            reminder.id === reminderId
-              ? { ...reminder, done }
-              : reminder,
-          ),
-        }))
-        return null
-      }
-
-      const updatedReminder = await persistSystemReminderCompleted(reminderId, done)
+      const adapter = getEventKitAdapter()
+      const updatedReminder = await adapter.setSystemReminderCompleted(reminderId, done)
       set((state) => ({
         systemReminders: state.systemReminders.map((reminder) =>
           reminder.id === reminderId ? updatedReminder : reminder,
@@ -100,7 +83,8 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
   requestCalendarAccess: async () => {
     if (pendingRequests.has('calendar')) return
 
-    const promise = apiRequestCalendarAccess()
+    const adapter = getEventKitAdapter()
+    const promise = adapter.requestCalendarAccess()
       .then((status) => {
         set((s) => ({
           eventkitPermissions: { ...s.eventkitPermissions, calendar: status },
@@ -124,7 +108,8 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
   requestRemindersAccess: async () => {
     if (pendingRequests.has('reminders')) return
 
-    const promise = apiRequestRemindersAccess()
+    const adapter = getEventKitAdapter()
+    const promise = adapter.requestRemindersAccess()
       .then((status) => {
         set((s) => ({
           eventkitPermissions: { ...s.eventkitPermissions, reminders: status },
@@ -153,15 +138,30 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
     }
 
     try {
+      const adapter = getEventKitAdapter()
       const newRawEventKit = { ...state.rawEventKit }
 
       if (state.eventkitPermissions.calendar === 'granted') {
         const { startOfDay, endOfDay } = createDateRange()
-        newRawEventKit.calendarEvents = await fetchCalendarEvents(startOfDay, endOfDay)
+        const events = await adapter.fetchCalendarEvents(startOfDay, endOfDay)
+        newRawEventKit.calendarEvents = events.map(e => ({
+          id: e.id,
+          title: e.title,
+          startsAt: typeof e.startsAt === 'string' ? e.startsAt : e.startsAt.toISOString(),
+          endsAt: typeof e.endsAt === 'string' ? e.endsAt : e.endsAt.toISOString(),
+          calendarTitle: e.calendarTitle,
+        }))
       }
 
       if (state.eventkitPermissions.reminders === 'granted') {
-        newRawEventKit.reminders = await fetchReminders()
+        const reminders = await adapter.fetchReminders()
+        newRawEventKit.reminders = reminders.map(r => ({
+          id: r.id,
+          title: r.title,
+          dueAt: typeof r.dueAt === 'string' ? r.dueAt : r.dueAt?.toISOString(),
+          done: r.done,
+          listTitle: r.listTitle,
+        }))
       }
 
       set({ rawEventKit: newRawEventKit })

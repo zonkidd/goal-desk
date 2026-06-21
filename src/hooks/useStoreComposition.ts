@@ -2,7 +2,7 @@ import { useUiStore } from '../store/uiStore'
 import { useTaskStore } from '../store/taskStore'
 import { useGoalStore } from '../store/goalStore'
 import { useEventkitStore } from '../store/eventkitStore'
-import { isTauriRuntime } from '../lib/runtime'
+import { getRuntimeAdapter } from '../lib/runtimeAdapter'
 import { loadDesktopSnapshot } from '../lib/desktopSnapshot'
 import type { HydratePayload } from '../store/appStore.types'
 import type { Task } from '../types/task'
@@ -41,7 +41,7 @@ export function useToggleSystemReminder() {
 
   return async (reminderId: string, done: boolean) => {
     const updatedReminder = await toggleReminder(reminderId, done)
-    if (updatedReminder && isTauriRuntime()) {
+    if (updatedReminder && getRuntimeAdapter().isTauri()) {
       syncTasks(reminderId, updatedReminder.done)
     }
   }
@@ -52,7 +52,7 @@ export function useReloadWorkspaceAfterAreaChange() {
   const setStatusMessage = useUiStore((s) => s.setStatusMessage)
 
   return async (statusMessage?: string) => {
-    if (isTauriRuntime()) {
+    if (getRuntimeAdapter().isTauri()) {
       const snapshot = await loadDesktopSnapshot()
       await hydrateApp({
         goals: snapshot.goals,

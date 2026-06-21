@@ -297,4 +297,58 @@ impl TaskService {
 
         Ok(())
     }
+
+    pub fn capture_task_with_system_reminder(
+        &self,
+        task_id: &str,
+        reminder_id: String,
+    ) -> Result<DeskTask, String> {
+        self.update_task_system_reminder_id(task_id, Some(reminder_id))
+    }
+
+    pub fn sync_task_system_reminder(
+        &self,
+        task_id: &str,
+        done: bool,
+    ) -> Result<DeskTask, String> {
+        let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
+        let task = TaskRepository::find(&self.repo, task_uuid)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Task not found: {task_id}"))?;
+
+        if let Some(ref reminder_id) = task.system_reminder_id {
+            self.sync_linked_tasks_for_system_reminder(reminder_id, done)?;
+        }
+
+        let next_status = if done { TaskStatus::Done } else { TaskStatus::Todo };
+        self.update_task_status(task_id, next_status, None)
+    }
+
+    pub fn sync_task_system_reminder_by_reminder_id(
+        &self,
+        reminder_id: &str,
+        done: bool,
+    ) -> Result<(), String> {
+        self.sync_linked_tasks_for_system_reminder(reminder_id, done)
+    }
+
+    pub fn update_task_status_with_reminder_sync(
+        &self,
+        task_id: &str,
+        status: TaskStatus,
+        note: Option<String>,
+        reminder_sync: Option<Box<dyn FnOnce(&str, bool) -> Result<(), String>>>,
+    ) -> Result<DeskTask, String> {
+        let task = self.find_task(task_id)?
+            .ok_or_else(|| format!("Task not found: {task_id}"))?;
+
+        if let Some(sync) = reminder_sync {
+            if let Some(ref reminder_id) = task.system_reminder_id {
+                let done = matches!(status, TaskStatus::Done);
+                sync(reminder_id, done)?;
+            }
+        }
+
+        self.update_task_status(task_id, status, note)
+    }
 }

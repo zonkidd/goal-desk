@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import type { AreaWithStats, GoalCard } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
 import { TaskCodec, GoalCodec, type RustTask, type RustGoalCard } from './codecs'
+import { UNCATEGORIZED_AREA_TITLE } from './constants'
 
 // ============================================================================
 // Task Commands
@@ -74,7 +75,7 @@ export async function createGoal(input: {
 }): Promise<GoalCard> {
   const goal = await invoke<RustGoalCard>('create_goal', {
     title: input.title,
-    area: input.area?.trim() || '未分类',
+    area: input.area?.trim() || UNCATEGORIZED_AREA_TITLE,
     description: input.description,
     status: input.status,
   })
@@ -92,7 +93,7 @@ export async function updateGoalFields(
   const goal = await invoke<RustGoalCard>('update_goal_fields', {
     goalId,
     title: input.title,
-    area: input.area?.trim() || '未分类',
+    area: input.area?.trim() || UNCATEGORIZED_AREA_TITLE,
     description: input.description,
   })
   return GoalCodec.fromRust(goal)
