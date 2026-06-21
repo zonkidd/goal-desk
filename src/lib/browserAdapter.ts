@@ -1,6 +1,7 @@
 import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
+import { loadBrowserTasks } from './browserCodec'
 
 export const BROWSER_PREVIEW_STATUS = 'Browser preview only · local database is unavailable'
 
@@ -26,7 +27,7 @@ function saveToLocalStorage<T>(key: string, data: T[]): void {
 
 function recalculateGoalProgress(goalId: string): void {
   const goals = loadFromLocalStorage<GoalCard>(BROWSER_STORAGE_GOALS)
-  const tasks = loadFromLocalStorage<Task>(BROWSER_STORAGE_TASKS)
+  const tasks = loadBrowserTasks()
   const idx = goals.findIndex(g => g.id === goalId)
   if (idx === -1) return
 
@@ -50,7 +51,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
       activityLogs: [{ action: 'CREATED', timestamp: new Date() }],
     }
 
-    const tasks = loadFromLocalStorage<Task>(BROWSER_STORAGE_TASKS)
+    const tasks = loadBrowserTasks()
     tasks.unshift(mockTask)
     saveToLocalStorage(BROWSER_STORAGE_TASKS, tasks)
 
@@ -69,7 +70,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
       activityLogs: [{ action: 'CREATED', timestamp: new Date() }],
     }
 
-    const tasks = loadFromLocalStorage<Task>(BROWSER_STORAGE_TASKS)
+    const tasks = loadBrowserTasks()
     tasks.unshift(mockTask)
     saveToLocalStorage(BROWSER_STORAGE_TASKS, tasks)
 
@@ -127,7 +128,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
   }
 
   async addTaskNote(taskId: string, note: string): Promise<TaskResult> {
-    const tasks = loadFromLocalStorage<Task>(BROWSER_STORAGE_TASKS)
+    const tasks = loadBrowserTasks()
     const idx = tasks.findIndex(t => t.id === taskId)
     if (idx === -1) return {}
 
@@ -145,7 +146,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
   }
 
   async updateTaskStatus(taskId: string, status: TaskStatus, note?: string): Promise<TaskResult> {
-    const tasks = loadFromLocalStorage<Task>(BROWSER_STORAGE_TASKS)
+    const tasks = loadBrowserTasks()
     const idx = tasks.findIndex(t => t.id === taskId)
     if (idx === -1) return {}
 
@@ -174,7 +175,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
   }
 
   async updateTaskContent(taskId: string, content: string): Promise<TaskResult> {
-    const tasks = loadFromLocalStorage<Task>(BROWSER_STORAGE_TASKS)
+    const tasks = loadBrowserTasks()
     const idx = tasks.findIndex(t => t.id === taskId)
     if (idx === -1) return {}
 
@@ -197,7 +198,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
       systemReminderId?: string
     },
   ): Promise<TaskResult> {
-    const tasks = loadFromLocalStorage<Task>(BROWSER_STORAGE_TASKS)
+    const tasks = loadBrowserTasks()
     const idx = tasks.findIndex(t => t.id === taskId)
     if (idx === -1) return {}
 

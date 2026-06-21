@@ -257,4 +257,39 @@ describe('BrowserAdapter', () => {
       expect(tasks[0].activityLogs[0].note).toBe('Completed quickly')
     })
   })
+
+  describe('date deserialization after mutation', () => {
+    it('should return Date objects for activityLogs.timestamp after updateTaskStatus', async () => {
+      const task: Task = {
+        id: 'task-1',
+        title: 'Test Task',
+        content: '',
+        status: 'TODO',
+        showInTimeline: false,
+        activityLogs: [
+          { action: 'CREATED', timestamp: new Date('2026-06-01T10:00:00') },
+        ],
+      }
+      backingStore[BROWSER_STORAGE_TASKS] = JSON.stringify([task])
+
+      const result = await adapter.updateTaskStatus('task-1', 'DONE')
+
+      expect(result.task).toBeDefined()
+      expect(result.task!.activityLogs[0].timestamp).toBeInstanceOf(Date)
+      expect(result.task!.activityLogs[1].timestamp).toBeInstanceOf(Date)
+    })
+
+    it('should return Date objects for activityLogs.timestamp after createTaskForGoal', async () => {
+      const goal: GoalCard = {
+        id: 'goal-1', title: 'Test', area: 'Work', description: '',
+        status: 'ACTIVE', progress: 0, nextTodo: '', taskCount: 0,
+      }
+      backingStore[BROWSER_STORAGE_GOALS] = JSON.stringify([goal])
+
+      const result = await adapter.createTaskForGoal(goal, 'New Task')
+
+      expect(result.task).toBeDefined()
+      expect(result.task!.activityLogs[0].timestamp).toBeInstanceOf(Date)
+    })
+  })
 })
