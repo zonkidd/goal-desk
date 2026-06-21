@@ -149,15 +149,19 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     const idx = tasks.findIndex(t => t.id === taskId)
     if (idx === -1) return {}
 
-    const updatedTask: Task = { ...tasks[idx], status }
-    if (note?.trim()) {
-      const action: TaskActivityAction = status === 'DONE' ? 'COMPLETED' : 
-                                         status === 'PAUSED' ? 'PAUSED' :
-                                         status === 'IN_PROGRESS' ? 'RESUMED' : 'STARTED'
-      updatedTask.activityLogs = [
-        { action, note: note.trim(), timestamp: new Date() },
+    const previousStatus = tasks[idx].status
+    const action: TaskActivityAction = status === 'DONE' ? 'COMPLETED' : 
+                                       status === 'PAUSED' ? 'PAUSED' :
+                                       status === 'IN_PROGRESS'
+                                         ? (previousStatus === 'PAUSED' ? 'RESUMED' : 'STARTED')
+                                         : 'NOTE_ADDED'
+    const updatedTask: Task = {
+      ...tasks[idx],
+      status,
+      activityLogs: [
+        { action, note: note?.trim() || undefined, timestamp: new Date() },
         ...tasks[idx].activityLogs,
-      ]
+      ],
     }
     tasks[idx] = updatedTask
     saveToLocalStorage(BROWSER_STORAGE_TASKS, tasks)

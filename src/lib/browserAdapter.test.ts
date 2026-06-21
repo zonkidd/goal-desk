@@ -152,4 +152,75 @@ describe('BrowserAdapter', () => {
       expect(goals[0].progress).toBe(50)
     })
   })
+
+  describe('updateTaskStatus with activity log', () => {
+    it('should always create activity log even without note', async () => {
+      const task: Task = {
+        id: 'task-1',
+        title: 'Test Task',
+        content: '',
+        status: 'TODO',
+        showInTimeline: false,
+        activityLogs: [],
+      }
+      backingStore[BROWSER_STORAGE_TASKS] = JSON.stringify([task])
+
+      await adapter.updateTaskStatus('task-1', 'IN_PROGRESS')
+
+      const tasks = JSON.parse(backingStore[BROWSER_STORAGE_TASKS] || '[]')
+      expect(tasks[0].activityLogs).toHaveLength(1)
+      expect(tasks[0].activityLogs[0].action).toBe('STARTED')
+      expect(tasks[0].activityLogs[0].note).toBeUndefined()
+    })
+
+    it('should create activity log with correct action for each status transition', async () => {
+      const task: Task = {
+        id: 'task-1',
+        title: 'Test Task',
+        content: '',
+        status: 'TODO',
+        showInTimeline: false,
+        activityLogs: [],
+      }
+      backingStore[BROWSER_STORAGE_TASKS] = JSON.stringify([task])
+
+      await adapter.updateTaskStatus('task-1', 'DONE')
+      let tasks = JSON.parse(backingStore[BROWSER_STORAGE_TASKS] || '[]')
+      expect(tasks[0].activityLogs[0].action).toBe('COMPLETED')
+
+      await adapter.updateTaskStatus('task-1', 'TODO')
+      tasks = JSON.parse(backingStore[BROWSER_STORAGE_TASKS] || '[]')
+      expect(tasks[0].activityLogs[0].action).toBe('NOTE_ADDED')
+
+      await adapter.updateTaskStatus('task-1', 'IN_PROGRESS')
+      tasks = JSON.parse(backingStore[BROWSER_STORAGE_TASKS] || '[]')
+      expect(tasks[0].activityLogs[0].action).toBe('STARTED')
+
+      await adapter.updateTaskStatus('task-1', 'PAUSED')
+      tasks = JSON.parse(backingStore[BROWSER_STORAGE_TASKS] || '[]')
+      expect(tasks[0].activityLogs[0].action).toBe('PAUSED')
+
+      await adapter.updateTaskStatus('task-1', 'IN_PROGRESS')
+      tasks = JSON.parse(backingStore[BROWSER_STORAGE_TASKS] || '[]')
+      expect(tasks[0].activityLogs[0].action).toBe('RESUMED')
+    })
+
+    it('should include note in activity log when provided', async () => {
+      const task: Task = {
+        id: 'task-1',
+        title: 'Test Task',
+        content: '',
+        status: 'TODO',
+        showInTimeline: false,
+        activityLogs: [],
+      }
+      backingStore[BROWSER_STORAGE_TASKS] = JSON.stringify([task])
+
+      await adapter.updateTaskStatus('task-1', 'DONE', 'Completed quickly')
+
+      const tasks = JSON.parse(backingStore[BROWSER_STORAGE_TASKS] || '[]')
+      expect(tasks[0].activityLogs[0].action).toBe('COMPLETED')
+      expect(tasks[0].activityLogs[0].note).toBe('Completed quickly')
+    })
+  })
 })
