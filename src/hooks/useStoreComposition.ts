@@ -30,8 +30,12 @@ export function useReceiveExternalTask() {
   const setStatusMessage = useUiStore((s) => s.setStatusMessage)
 
   return (task: Task) => {
-    replaceTask(task)
-    setStatusMessage('Quick capture synced')
+    const currentTasks = useTaskStore.getState().tasks
+    const alreadyExists = currentTasks.some(t => t.id === task.id)
+    if (!alreadyExists) {
+      replaceTask(task)
+      setStatusMessage('Quick capture synced')
+    }
   }
 }
 
