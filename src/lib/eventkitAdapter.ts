@@ -97,14 +97,28 @@ export class TauriEventKitAdapter implements EventKitAdapter {
   }
 
   async fetchCalendarEvents(startDate: Date, endDate: Date): Promise<CalendarEvent[]> {
-    return invoke<CalendarEvent[]>('fetch_calendar_events', {
+    const rustEvents = await invoke<RustCalendarEvent[]>('fetch_calendar_events', {
       start: startDate.toISOString(),
       end: endDate.toISOString(),
     })
+    return rustEvents.map(event => ({
+      id: event.id,
+      title: event.title,
+      startsAt: new Date(event.startsAt),
+      endsAt: new Date(event.endsAt),
+      calendarTitle: event.calendarTitle,
+    }))
   }
 
   async fetchReminders(): Promise<Reminder[]> {
-    return invoke<Reminder[]>('fetch_reminders')
+    const rustReminders = await invoke<RustReminder[]>('fetch_reminders')
+    return rustReminders.map(reminder => ({
+      id: reminder.id,
+      title: reminder.title,
+      dueAt: reminder.dueAt ? new Date(reminder.dueAt) : undefined,
+      done: reminder.done,
+      listTitle: reminder.listTitle,
+    }))
   }
 
   async loadCalendarRange(startDate: string, endDate: string) {

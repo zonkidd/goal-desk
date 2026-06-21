@@ -145,8 +145,8 @@ describe('EventKit Permission Management', () => {
 
     it('should update rawEventKit with calendar events', async () => {
       const mockEvents = [
-        { id: '1', title: 'Meeting 1', startsAt: '2026-06-14T10:00:00Z', endsAt: '2026-06-14T11:00:00Z' },
-        { id: '2', title: 'Meeting 2', startsAt: '2026-06-14T14:00:00Z', endsAt: '2026-06-14T15:00:00Z' },
+        { id: '1', title: 'Meeting 1', startsAt: new Date('2026-06-14T10:00:00Z'), endsAt: new Date('2026-06-14T11:00:00Z') },
+        { id: '2', title: 'Meeting 2', startsAt: new Date('2026-06-14T14:00:00Z'), endsAt: new Date('2026-06-14T15:00:00Z') },
       ]
       const adapter = createMockAdapter({
         fetchCalendarEvents: vi.fn().mockResolvedValue(mockEvents),
@@ -180,7 +180,7 @@ describe('EventKit Permission Management', () => {
 
     it('should update both simultaneously', async () => {
       const mockEvents = [
-        { id: '1', title: 'Event', startsAt: '2026-06-14T10:00:00Z', endsAt: '2026-06-14T11:00:00Z' },
+        { id: '1', title: 'Event', startsAt: new Date('2026-06-14T10:00:00Z'), endsAt: new Date('2026-06-14T11:00:00Z') },
       ]
       const mockReminders = [
         { id: '1', title: 'Reminder 1', done: false },

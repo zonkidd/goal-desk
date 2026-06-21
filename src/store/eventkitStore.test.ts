@@ -12,10 +12,10 @@ const mockAdapter: EventKitAdapter = {
     id: 'r1', title: 'Updated', dueAt: undefined, done: true, listTitle: undefined,
   }),
   fetchCalendarEvents: vi.fn().mockResolvedValue([
-    { id: 'evt-1', title: 'Meeting', startsAt: '2024-01-01T10:00:00', endsAt: '2024-01-01T11:00:00', calendarTitle: 'Work' },
+    { id: 'evt-1', title: 'Meeting', startsAt: new Date('2024-01-01T10:00:00'), endsAt: new Date('2024-01-01T11:00:00'), calendarTitle: 'Work' },
   ]),
   fetchReminders: vi.fn().mockResolvedValue([
-    { id: 'rem-1', title: 'Buy milk', dueAt: '2024-01-01T12:00:00', done: false, listTitle: 'Shopping' },
+    { id: 'rem-1', title: 'Buy milk', dueAt: new Date('2024-01-01T12:00:00'), done: false, listTitle: 'Shopping' },
   ]),
   loadCalendarRange: vi.fn().mockResolvedValue({ events: [], reminders: [] }),
   loadRawEventKitData: vi.fn().mockResolvedValue({

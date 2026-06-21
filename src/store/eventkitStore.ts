@@ -147,8 +147,8 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
         newRawEventKit.calendarEvents = events.map(e => ({
           id: e.id,
           title: e.title,
-          startsAt: typeof e.startsAt === 'string' ? e.startsAt : e.startsAt.toISOString(),
-          endsAt: typeof e.endsAt === 'string' ? e.endsAt : e.endsAt.toISOString(),
+          startsAt: e.startsAt.toISOString(),
+          endsAt: e.endsAt.toISOString(),
           calendarTitle: e.calendarTitle,
         }))
       }
@@ -158,7 +158,7 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
         newRawEventKit.reminders = reminders.map(r => ({
           id: r.id,
           title: r.title,
-          dueAt: typeof r.dueAt === 'string' ? r.dueAt : r.dueAt?.toISOString(),
+          dueAt: r.dueAt?.toISOString(),
           done: r.done,
           listTitle: r.listTitle,
         }))
