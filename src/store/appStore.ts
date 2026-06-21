@@ -18,8 +18,6 @@ export {
   useReloadWorkspaceAfterAreaChange,
 } from '../hooks/useStoreComposition'
 
-export { selectFilteredTimeline, selectFilteredGoals } from './appStore.selectors'
-
 export type { HydratePayload } from './appStore.types'
 
 import { useUiStore } from './uiStore'

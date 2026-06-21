@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { EventKitAdapter, BrowserEventKitAdapter } from './eventkitAdapter'
+import type { EventKitAdapter, BrowserEventKitAdapter, AuthorizationStatus, CalendarEvent, Reminder } from './eventkitAdapter'
 import { BrowserEventKitAdapter as BrowserAdapterImpl } from './eventkitAdapter'
-import type { AuthorizationStatus, CalendarEvent, Reminder } from './eventkitIntegration'
 import type { IntegrationStatus, ReminderItem } from '../types/app'
 
 describe('EventKitAdapter interface', () => {

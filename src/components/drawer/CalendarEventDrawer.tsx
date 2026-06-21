@@ -1,15 +1,13 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Calendar, Clock, MapPin, Tag, X, ExternalLink } from 'lucide-react'
-import { selectFilteredTimeline } from '../../store/appStore.selectors'
-import { useTaskStore } from '../../store/taskStore'
+import { useTodayTimeline } from '../../hooks/useWorkspaceDerived'
 import { useUiStore } from '../../store/uiStore'
-import { openCalendarEvent } from '../../lib/eventkitIntegration'
-import type { TodayAgenda } from '../../types/app'
+import { getEventKitAdapter } from '../../lib/workspaceMutations'
 
 const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
 
 export function CalendarEventDrawer() {
-  const timeline = useTaskStore(selectFilteredTimeline as (state: any) => TodayAgenda)
+  const timeline = useTodayTimeline()
   const isOpen = useUiStore((state) => state.activeDrawer?.type === 'calendarEvent')
   const eventId = useUiStore((state) => state.activeDrawer?.type === 'calendarEvent' ? state.activeDrawer.id : undefined)
   const onClose = useUiStore((state) => state.closeDrawer)
@@ -129,14 +127,14 @@ export function CalendarEventDrawer() {
               <div className="border-t border-slate-100 bg-slate-50/80 p-8">
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (!eventId) return
-                    try {
-                      await openCalendarEvent(eventId)
-                    } catch (error) {
-                      console.error('Failed to open calendar event:', error)
-                    }
-                  }}
+                   onClick={async () => {
+                     if (!eventId) return
+                     try {
+                       await getEventKitAdapter().openCalendarEvent(eventId)
+                     } catch (error) {
+                       console.error('Failed to open calendar event:', error)
+                     }
+                   }}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-purple-500/30 transition-colors hover:bg-purple-700"
                 >
                   <ExternalLink className="h-4 w-4" />

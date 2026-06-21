@@ -3,7 +3,7 @@ import { CheckSquare, X, Tag, ExternalLink } from 'lucide-react'
 import { useState } from 'react'
 import { useEventkitStore } from '../../store/eventkitStore'
 import { useUiStore } from '../../store/uiStore'
-import { openSystemReminder } from '../../lib/eventkitIntegration'
+import { getEventKitAdapter } from '../../lib/workspaceMutations'
 
 const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
 
@@ -164,14 +164,14 @@ export function SystemReminderDrawer() {
                   </button>
                   <button
                     type="button"
-                    onClick={async () => {
-                      if (!reminderId) return
-                      try {
-                        await openSystemReminder(reminderId)
-                      } catch (error) {
-                        console.error('Failed to open system reminder:', error)
-                      }
-                    }}
+                     onClick={async () => {
+                       if (!reminderId) return
+                       try {
+                         await getEventKitAdapter().openSystemReminder(reminderId)
+                       } catch (error) {
+                         console.error('Failed to open system reminder:', error)
+                       }
+                     }}
                     className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 hover:border-slate-400"
                   >
                     <ExternalLink className="h-4 w-4" />

@@ -1,4 +1,3 @@
-export { deriveGoalStatus } from './goalDerivation'
 export { getTodayFocusTasks, filterGoalsByArea, filterTasksByArea } from './areaFilter'
 export { deriveTodayAgenda, filterAgendaByArea } from './todayAgenda'
 export { deriveTodayAttentionGroups, deriveTodayRelevantGoals } from './attentionGroups'

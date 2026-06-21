@@ -1,6 +1,23 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { AuthorizationStatus, CalendarEvent, Reminder } from './eventkitIntegration'
-import type { IntegrationStatus, ReminderItem } from '../types/app'
+import type { AccessStatus, IntegrationStatus, ReminderItem } from '../types/app'
+
+export type AuthorizationStatus = AccessStatus
+
+export interface CalendarEvent {
+  id: string
+  title: string
+  startsAt: Date
+  endsAt: Date
+  calendarTitle?: string
+}
+
+export interface Reminder {
+  id: string
+  title: string
+  dueAt?: Date
+  done: boolean
+  listTitle?: string
+}
 
 export interface EventKitAdapter {
   requestCalendarAccess(): Promise<AuthorizationStatus>

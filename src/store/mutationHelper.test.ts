@@ -56,5 +56,18 @@ describe('mutationHelper', () => {
       expect(onSuccess).not.toHaveBeenCalled()
       errorSpy.mockRestore()
     })
+
+    it('calls onError callback on failure', async () => {
+      const adapter = createMockAdapter()
+      const fn = vi.fn().mockRejectedValue(new Error('fail'))
+      const onError = vi.fn()
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const result = await executeMutation(fn, adapter, { onError })
+
+      expect(result).toBeNull()
+      expect(onError).toHaveBeenCalledWith(expect.any(Error))
+      errorSpy.mockRestore()
+    })
   })
 })

@@ -12,6 +12,111 @@ fn is_deadline_expression(input: &str) -> bool {
     input.contains("前") || input.contains("之前") || input.contains("截止")
 }
 
+/// 清理标题中的时间相关关键词
+/// 移除周次、星期、时间点、时间段等关键词，返回清理后的标题
+fn clean_title(input: &str, is_deadline: bool) -> String {
+    let mut title = input.to_string();
+
+    // 先移除周次+星期的组合关键词（长的先移除，避免"下周一" → "下一"）
+    title = title.replace("下星期一", "").replace("下星期二", "").replace("下星期三", "")
+                 .replace("下星期四", "").replace("下星期五", "").replace("下星期六", "")
+                 .replace("下星期日", "").replace("下星期天", "")
+                 .replace("本星期一", "").replace("本星期二", "").replace("本星期三", "")
+                 .replace("本星期四", "").replace("本星期五", "").replace("本星期六", "")
+                 .replace("本星期日", "").replace("本星期天", "")
+                 .replace("这星期一", "").replace("这星期二", "").replace("这星期三", "")
+                 .replace("这星期四", "").replace("这星期五", "").replace("这星期六", "")
+                 .replace("这星期日", "").replace("这星期天", "")
+                 .replace("下周一", "").replace("下周二", "").replace("下周三", "")
+                 .replace("下周四", "").replace("下周五", "").replace("下周六", "")
+                 .replace("下周日", "").replace("下周天", "")
+                 .replace("本周一", "").replace("本周二", "").replace("本周三", "")
+                 .replace("本周四", "").replace("本周五", "").replace("本周六", "")
+                 .replace("本周日", "").replace("本周天", "")
+                 .replace("这周一", "").replace("这周二", "").replace("这周三", "")
+                 .replace("这周四", "").replace("这周五", "").replace("这周六", "")
+                 .replace("这周日", "").replace("这周天", "");
+
+    // 再移除单独的星期关键词
+    title = title.replace("星期一", "").replace("星期二", "").replace("星期三", "")
+                 .replace("星期四", "").replace("星期五", "").replace("星期六", "")
+                 .replace("星期日", "").replace("星期天", "")
+                 .replace("周一", "").replace("周二", "").replace("周三", "")
+                 .replace("周四", "").replace("周五", "").replace("周六", "")
+                 .replace("周日", "").replace("周天", "");
+
+    // 移除周次关键词
+    title = title.replace("下周", "").replace("本周", "").replace("这周", "")
+                 .replace("下星期", "").replace("本星期", "").replace("这星期", "");
+
+    // 移除日期关键词
+    title = title.replace("明天", "").replace("今天", "").replace("今晚", "")
+                 .replace("今早", "").replace("今日", "").replace("后天", "");
+
+    // 移除时间关键词
+    title = title.replace("下午", "").replace("上午", "").replace("早上", "").replace("晚上", "");
+
+    // 移除"N点"表达式（如"8点"、"下午3点"）
+    if let Some(dot_char_pos) = title.chars().position(|c| c == '点') {
+        let chars: Vec<char> = title.chars().collect();
+        let mut digit_start_char_pos = dot_char_pos;
+
+        // 向前查找数字或中文数字的起始位置
+        for i in (0..dot_char_pos).rev() {
+            if chars[i].is_ascii_digit() {
+                digit_start_char_pos = i;
+            } else if matches!(chars[i], '一' | '二' | '三' | '四' | '五' | '六' | '七' | '八' | '九' | '十') {
+                digit_start_char_pos = i;
+                break;
+            } else {
+                break;
+            }
+        }
+
+        // 重建字符串：保留数字之前和"点"之后的部分
+        let before: String = chars[..digit_start_char_pos].iter().collect();
+        let after: String = chars[dot_char_pos + 1..].iter().collect();
+        title = format!("{}{}", before, after);
+    }
+
+    // 移除 HH:MM 格式（如 "15:30"）
+    if let Some(colon_char_pos) = title.chars().position(|c| c == ':') {
+        let chars: Vec<char> = title.chars().collect();
+
+        // 向前找数字起始位置
+        let mut start_pos = colon_char_pos;
+        for i in (0..colon_char_pos).rev() {
+            if chars[i].is_ascii_digit() {
+                start_pos = i;
+            } else {
+                break;
+            }
+        }
+
+        // 向后找数字结束位置
+        let mut end_pos = colon_char_pos + 1;
+        for i in (colon_char_pos + 1)..chars.len() {
+            if chars[i].is_ascii_digit() {
+                end_pos = i + 1;
+            } else {
+                break;
+            }
+        }
+
+        // 重建字符串
+        let before: String = chars[..start_pos].iter().collect();
+        let after: String = chars[end_pos..].iter().collect();
+        title = format!("{}{}", before, after);
+    }
+
+    // 移除截止时间关键词（长的先移除）
+    if is_deadline {
+        title = title.replace("之前", "").replace("截止", "").replace("前", "");
+    }
+
+    title.trim().to_string()
+}
+
 /// 解析 HH:MM 格式（如 "15:30"）
 fn parse_hhmm_format(input: &str) -> Option<(u32, u32)> {
     // 查找冒号位置
@@ -169,47 +274,7 @@ fn parse_relative_week(input: &str, now: DateTime<Local>) -> Option<(DateTime<Lo
     let hour = if let Some((h, m)) = parse_hhmm_format(input) {
         let time = NaiveTime::from_hms_opt(h, m, 0).unwrap();
         let result = target_date.date_naive().and_time(time).and_local_timezone(Local).unwrap();
-
-        // 清理标题
-        let mut title = input.to_string();
-
-        // 移除周次关键词
-        title = title.replace("下周", "").replace("本周", "").replace("这周", "")
-                     .replace("下星期", "").replace("本星期", "").replace("这星期", "");
-
-        // 移除星期关键词
-        title = title.replace("周一", "").replace("周二", "").replace("周三", "")
-                     .replace("周四", "").replace("周五", "").replace("周六", "")
-                     .replace("周日", "").replace("周天", "")
-                     .replace("星期一", "").replace("星期二", "").replace("星期三", "")
-                     .replace("星期四", "").replace("星期五", "").replace("星期六", "")
-                     .replace("星期日", "").replace("星期天", "");
-
-        // 移除 HH:MM 格式
-        if let Some(colon_char_pos) = title.chars().position(|c| c == ':') {
-            let chars: Vec<char> = title.chars().collect();
-            let mut start_pos = colon_char_pos;
-            for i in (0..colon_char_pos).rev() {
-                if chars[i].is_ascii_digit() {
-                    start_pos = i;
-                } else {
-                    break;
-                }
-            }
-            let mut end_pos = colon_char_pos + 1;
-            for i in (colon_char_pos + 1)..chars.len() {
-                if chars[i].is_ascii_digit() {
-                    end_pos = i + 1;
-                } else {
-                    break;
-                }
-            }
-            let before: String = chars[..start_pos].iter().collect();
-            let after: String = chars[end_pos..].iter().collect();
-            title = format!("{}{}", before, after);
-        }
-
-        return Some((result, title.trim().to_string()));
+        return Some((result, clean_title(input, false)));
     } else if let Some(h) = parse_hour_expression(input) {
         h
     } else if let Some(h) = parse_time_of_day_keyword(input) {
@@ -221,61 +286,7 @@ fn parse_relative_week(input: &str, now: DateTime<Local>) -> Option<(DateTime<Lo
     let time = NaiveTime::from_hms_opt(hour, 0, 0).unwrap();
     let result = target_date.date_naive().and_time(time).and_local_timezone(Local).unwrap();
 
-    // 清理标题
-    let mut title = input.to_string();
-
-    // 先移除周次+星期的组合关键词（长的先移除，避免"下周一" → "下一"）
-    title = title.replace("下星期一", "").replace("下星期二", "").replace("下星期三", "")
-                 .replace("下星期四", "").replace("下星期五", "").replace("下星期六", "")
-                 .replace("下星期日", "").replace("下星期天", "")
-                 .replace("本星期一", "").replace("本星期二", "").replace("本星期三", "")
-                 .replace("本星期四", "").replace("本星期五", "").replace("本星期六", "")
-                 .replace("本星期日", "").replace("本星期天", "")
-                 .replace("这星期一", "").replace("这星期二", "").replace("这星期三", "")
-                 .replace("这星期四", "").replace("这星期五", "").replace("这星期六", "")
-                 .replace("这星期日", "").replace("这星期天", "")
-                 .replace("下周一", "").replace("下周二", "").replace("下周三", "")
-                 .replace("下周四", "").replace("下周五", "").replace("下周六", "")
-                 .replace("下周日", "").replace("下周天", "")
-                 .replace("本周一", "").replace("本周二", "").replace("本周三", "")
-                 .replace("本周四", "").replace("本周五", "").replace("本周六", "")
-                 .replace("本周日", "").replace("本周天", "")
-                 .replace("这周一", "").replace("这周二", "").replace("这周三", "")
-                 .replace("这周四", "").replace("这周五", "").replace("这周六", "")
-                 .replace("这周日", "").replace("这周天", "");
-
-    // 再移除单独的星期关键词
-    title = title.replace("星期一", "").replace("星期二", "").replace("星期三", "")
-                 .replace("星期四", "").replace("星期五", "").replace("星期六", "")
-                 .replace("星期日", "").replace("星期天", "")
-                 .replace("周一", "").replace("周二", "").replace("周三", "")
-                 .replace("周四", "").replace("周五", "").replace("周六", "")
-                 .replace("周日", "").replace("周天", "");
-
-    // 最后移除周次关键词
-    title = title.replace("下周", "").replace("本周", "").replace("这周", "")
-                 .replace("下星期", "").replace("本星期", "").replace("这星期", "");
-
-    // 移除时间关键词
-    title = title.replace("下午", "").replace("上午", "").replace("早上", "").replace("晚上", "");
-
-    // 移除"N点"表达式
-    if let Some(dot_char_pos) = title.chars().position(|c| c == '点') {
-        let chars: Vec<char> = title.chars().collect();
-        let mut digit_start_char_pos = dot_char_pos;
-        for i in (0..dot_char_pos).rev() {
-            if chars[i].is_ascii_digit() {
-                digit_start_char_pos = i;
-            } else {
-                break;
-            }
-        }
-        let before: String = chars[..digit_start_char_pos].iter().collect();
-        let after: String = chars[dot_char_pos + 1..].iter().collect();
-        title = format!("{}{}", before, after);
-    }
-
-    Some((result, title.trim().to_string()))
+    Some((result, clean_title(input, false)))
 }
 
 pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
@@ -296,12 +307,6 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
     if let Some((parsed_datetime, cleaned_title)) = parse_relative_week(trimmed, now) {
         parsed_time = Some(parsed_datetime);
         title = cleaned_title;
-
-        if is_deadline {
-            title = title.replace("前", "").replace("之前", "").replace("截止", "");
-        }
-
-        title = title.trim().to_string();
     }
     // 检测"明天"
     else if trimmed.contains("明天") {
@@ -311,95 +316,22 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
         if let Some((hour, minute)) = parse_hhmm_format(trimmed) {
             let time = NaiveTime::from_hms_opt(hour, minute, 0).unwrap();
             parsed_time = Some(tomorrow.date_naive().and_time(time).and_local_timezone(Local).unwrap());
-
-            // 清理标题：移除"明天"和 HH:MM 时间
-            title = title.replace("明天", "");
-
-            // 移除 HH:MM 格式（找到冒号，向前向后移除数字）
-            if let Some(colon_char_pos) = title.chars().position(|c| c == ':') {
-                let chars: Vec<char> = title.chars().collect();
-
-                // 向前找数字起始位置
-                let mut start_pos = colon_char_pos;
-                for i in (0..colon_char_pos).rev() {
-                    if chars[i].is_ascii_digit() {
-                        start_pos = i;
-                    } else {
-                        break;
-                    }
-                }
-
-                // 向后找数字结束位置
-                let mut end_pos = colon_char_pos + 1;
-                for i in (colon_char_pos + 1)..chars.len() {
-                    if chars[i].is_ascii_digit() {
-                        end_pos = i + 1;
-                    } else {
-                        break;
-                    }
-                }
-
-                // 重建字符串
-                let before: String = chars[..start_pos].iter().collect();
-                let after: String = chars[end_pos..].iter().collect();
-                title = format!("{}{}", before, after);
-            }
-
-            if is_deadline {
-                title = title.replace("前", "").replace("之前", "").replace("截止", "");
-            }
         }
         // 尝试解析时间点
         else if let Some(hour) = parse_hour_expression(trimmed) {
             let time = NaiveTime::from_hms_opt(hour, 0, 0).unwrap();
             parsed_time = Some(tomorrow.date_naive().and_time(time).and_local_timezone(Local).unwrap());
-
-            // 清理标题：移除"明天"、"N点"、时间段关键词、"前"等
-            title = title.replace("明天", "");
-
-            // 移除时间段关键词
-            title = title.replace("下午", "").replace("上午", "").replace("早上", "").replace("晚上", "");
-
-            // 移除时间点表达式（使用字符索引而非字节索引）
-            if let Some(dot_char_pos) = title.chars().position(|c| c == '点') {
-                let chars: Vec<char> = title.chars().collect();
-                let mut digit_start_char_pos = dot_char_pos;
-
-                // 向前查找数字或中文数字的起始位置
-                for i in (0..dot_char_pos).rev() {
-                    if chars[i].is_ascii_digit() {
-                        digit_start_char_pos = i;
-                    } else if matches!(chars[i], '一' | '二' | '三' | '四' | '五' | '六' | '七' | '八' | '九' | '十') {
-                        digit_start_char_pos = i;
-                        break;  // 中文数字通常只有一个字符，找到就停止
-                    } else {
-                        break;
-                    }
-                }
-
-                // 重建字符串：保留数字之前和"点"之后的部分
-                let before: String = chars[..digit_start_char_pos].iter().collect();
-                let after: String = chars[dot_char_pos+1..].iter().collect();
-                title = format!("{}{}", before, after);
-            }
-
-            if is_deadline {
-                title = title.replace("前", "").replace("之前", "").replace("截止", "");
-            }
         } else {
             // 默认时间 9:00
             let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
             parsed_time = Some(tomorrow.date_naive().and_time(default_time).and_local_timezone(Local).unwrap());
-            title = title.replace("明天", "");
         }
-
-        title = title.trim().to_string();
     }
 
     // 检测"今天"/"今晚"/"今早"等今日关键词
     let today_keywords = ["今天", "今晚", "今早", "今日", "今"];
     let has_today = today_keywords.iter().any(|k| trimmed.contains(k));
-    if has_today && !trimmed.contains("明天") {
+    if has_today && !trimmed.contains("明天") && parsed_time.is_none() {
         let today = now.date_naive();
 
         // 判断是否有"今晚"/"晚上"关键词
@@ -422,33 +354,6 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
             let time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
             parsed_time = Some(today.and_time(time).and_local_timezone(Local).unwrap());
         }
-
-        // 清理标题
-        title = title.replace("今晚", "").replace("今早", "").replace("今天", "").replace("今日", "");
-
-        // 移除时间点表达式（如"8点"）
-        if let Some(dot_char_pos) = title.chars().position(|c| c == '点') {
-            let chars: Vec<char> = title.chars().collect();
-            let mut digit_start_char_pos = dot_char_pos;
-
-            for i in (0..dot_char_pos).rev() {
-                if chars[i].is_ascii_digit() {
-                    digit_start_char_pos = i;
-                } else {
-                    break;
-                }
-            }
-
-            let before: String = chars[..digit_start_char_pos].iter().collect();
-            let after: String = chars[dot_char_pos + 1..].iter().collect();
-            title = format!("{}{}", before, after);
-        }
-
-        if is_deadline {
-            title = title.replace("前", "").replace("之前", "").replace("截止", "");
-        }
-
-        title = title.trim().to_string();
     }
 
     // 检测"N天后"（如"3天后"或"三天后"）
@@ -512,80 +417,24 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
         if let Some((hour, minute)) = parse_hhmm_format(trimmed) {
             let time = NaiveTime::from_hms_opt(hour, minute, 0).unwrap();
             parsed_time = Some(day_after_tomorrow.date_naive().and_time(time).and_local_timezone(Local).unwrap());
-
-            // 清理标题
-            title = title.replace("后天", "");
-
-            // 移除 HH:MM 格式
-            if let Some(colon_char_pos) = title.chars().position(|c| c == ':') {
-                let chars: Vec<char> = title.chars().collect();
-                let mut start_pos = colon_char_pos;
-                for i in (0..colon_char_pos).rev() {
-                    if chars[i].is_ascii_digit() {
-                        start_pos = i;
-                    } else {
-                        break;
-                    }
-                }
-                let mut end_pos = colon_char_pos + 1;
-                for i in (colon_char_pos + 1)..chars.len() {
-                    if chars[i].is_ascii_digit() {
-                        end_pos = i + 1;
-                    } else {
-                        break;
-                    }
-                }
-                let before: String = chars[..start_pos].iter().collect();
-                let after: String = chars[end_pos..].iter().collect();
-                title = format!("{}{}", before, after);
-            }
-
-            if is_deadline {
-                title = title.replace("前", "").replace("之前", "").replace("截止", "");
-            }
         }
         // 尝试解析时间点
         else if let Some(hour) = parse_hour_expression(trimmed) {
             let time = NaiveTime::from_hms_opt(hour, 0, 0).unwrap();
             parsed_time = Some(day_after_tomorrow.date_naive().and_time(time).and_local_timezone(Local).unwrap());
-
-            title = title.replace("后天", "");
-
-            // 移除时间点表达式
-            if let Some(dot_char_pos) = title.chars().position(|c| c == '点') {
-                let chars: Vec<char> = title.chars().collect();
-                let mut digit_start_char_pos = dot_char_pos;
-                for i in (0..dot_char_pos).rev() {
-                    if chars[i].is_ascii_digit() {
-                        digit_start_char_pos = i;
-                    } else {
-                        break;
-                    }
-                }
-                let before: String = chars[..digit_start_char_pos].iter().collect();
-                let after: String = chars[dot_char_pos+1..].iter().collect();
-                title = format!("{}{}", before, after);
-            }
-
-            if is_deadline {
-                title = title.replace("前", "").replace("之前", "").replace("截止", "");
-            }
         }
         // 尝试解析时间段关键词（下午、上午等）
         else if let Some(hour_from_keyword) = parse_time_of_day_keyword(trimmed) {
             let time = NaiveTime::from_hms_opt(hour_from_keyword, 0, 0).unwrap();
             parsed_time = Some(day_after_tomorrow.date_naive().and_time(time).and_local_timezone(Local).unwrap());
-
-            title = title.replace("后天", "");
-            title = title.replace("下午", "").replace("上午", "").replace("早上", "").replace("晚上", "");
         } else {
             // 默认时间 9:00
             let default_time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
             parsed_time = Some(day_after_tomorrow.date_naive().and_time(default_time).and_local_timezone(Local).unwrap());
-            title = title.replace("后天", "");
         }
 
-        title = title.trim().to_string();
+        // 清理标题
+        title = clean_title(trimmed, is_deadline);
     }
 
     // 如果没有解析到时间，但有"点"表达式（没有日期词），默认为今天
@@ -596,27 +445,14 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
             let time = NaiveTime::from_hms_opt(hour, 0, 0).unwrap();
             parsed_time = Some(today.and_time(time).and_local_timezone(Local).unwrap());
 
-            // 清理标题：移除时间点表达式
-            title = trimmed.to_string();
-            if let Some(dot_char_pos) = title.chars().position(|c| c == '点') {
-                let chars: Vec<char> = title.chars().collect();
-                let mut digit_start_char_pos = dot_char_pos;
-
-                for i in (0..dot_char_pos).rev() {
-                    if chars[i].is_ascii_digit() {
-                        digit_start_char_pos = i;
-                    } else {
-                        break;
-                    }
-                }
-
-                let before: String = chars[..digit_start_char_pos].iter().collect();
-                let after: String = chars[dot_char_pos + 1..].iter().collect();
-                title = format!("{}{}", before, after);
-            }
-
-            title = title.trim().to_string();
+            // 清理标题
+            title = clean_title(trimmed, is_deadline);
         }
+    }
+
+    // 如果没有解析到时间，使用 clean_title 清理标题
+    if parsed_time.is_some() && title == trimmed {
+        title = clean_title(trimmed, is_deadline);
     }
 
     // 根据是否为截止时间，分配到不同字段
@@ -796,5 +632,42 @@ mod tests {
         assert_eq!(result.title, "");
         assert_eq!(result.planned_start_at, Some(expected_start));
         assert_eq!(result.due_at, None);
+    }
+
+    #[test]
+    fn test_clean_title_removes_week_keywords() {
+        assert_eq!(clean_title("下周一开会", false), "开会");
+        assert_eq!(clean_title("本周五下午", false), "");
+        assert_eq!(clean_title("这周日休息", false), "休息");
+    }
+
+    #[test]
+    fn test_clean_title_removes_weekday_keywords() {
+        assert_eq!(clean_title("周一开会", false), "开会");
+        assert_eq!(clean_title("星期五聚餐", false), "聚餐");
+    }
+
+    #[test]
+    fn test_clean_title_removes_time_keywords() {
+        assert_eq!(clean_title("下午3点开会", false), "开会");
+        assert_eq!(clean_title("上午10点提交", false), "提交");
+    }
+
+    #[test]
+    fn test_clean_title_removes_hhmm_format() {
+        assert_eq!(clean_title("15:30开会", false), "开会");
+        assert_eq!(clean_title("明天15:30评审", false), "评审");
+    }
+
+    #[test]
+    fn test_clean_title_removes_deadline_keywords() {
+        assert_eq!(clean_title("明天3点前提交", true), "提交");
+        assert_eq!(clean_title("本周五之前完成", true), "完成");
+    }
+
+    #[test]
+    fn test_clean_title_preserves_content() {
+        assert_eq!(clean_title("写报告", false), "写报告");
+        assert_eq!(clean_title("买牛奶", false), "买牛奶");
     }
 }

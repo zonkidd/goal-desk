@@ -11,7 +11,7 @@ import { StatusMachineButtons } from './StatusMachineButtons'
 import { DateTimePickerPopover } from './DateTimePickerPopover'
 import { GoalPickerPopover } from './GoalPickerPopover'
 import { useSelectedTask } from '../../store/appStore'
-import { selectFilteredGoals } from '../../store/appStore.selectors'
+import { useDerivedGoals } from '../../hooks/useWorkspaceDerived'
 import { useEventkitStore } from '../../store/eventkitStore'
 import { useGoalStore } from '../../store/goalStore'
 import { useTaskStore } from '../../store/taskStore'
@@ -32,7 +32,7 @@ function useTaskDrawerData() {
   const createAndLinkReminder = useTaskStore((s) => s.createAndLinkReminder)
   const unlinkTaskFromReminder = useTaskStore((s) => s.unlinkTaskFromReminder)
   const createGoal = useGoalStore((s) => s.createGoal)
-  const goals = useGoalStore(selectFilteredGoals as (state: any) => GoalCard[])
+  const goals = useDerivedGoals()
   const allAreas = useAreaStore((s) => s.allAreas)
   const createArea = useAreaStore((s) => s.createArea)
   const systemReminders = useEventkitStore((s) => s.systemReminders)
