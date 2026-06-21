@@ -69,6 +69,27 @@ describe('BrowserAdapter', () => {
 
       expect(result.success).toBe(false)
     })
+
+    it('should reassign goals to uncategorized when deleting area with force', async () => {
+      const area: AreaWithStats = {
+        id: 'area-1', title: 'Work', goalCount: 2, activeGoalCount: 2, isSystem: false,
+      }
+      backingStore[BROWSER_STORAGE_AREAS] = JSON.stringify([area])
+
+      const goals: GoalCard[] = [
+        { id: 'g1', title: 'Goal 1', area: 'Work', description: '', status: 'ACTIVE', progress: 0, nextTodo: '', taskCount: 0 },
+        { id: 'g2', title: 'Goal 2', area: 'Work', description: '', status: 'ACTIVE', progress: 0, nextTodo: '', taskCount: 0 },
+        { id: 'g3', title: 'Goal 3', area: 'Personal', description: '', status: 'ACTIVE', progress: 0, nextTodo: '', taskCount: 0 },
+      ]
+      backingStore[BROWSER_STORAGE_GOALS] = JSON.stringify(goals)
+
+      await adapter.deleteArea('area-1', true)
+
+      const updatedGoals = JSON.parse(backingStore[BROWSER_STORAGE_GOALS] || '[]')
+      expect(updatedGoals[0].area).toBe('未分类')
+      expect(updatedGoals[1].area).toBe('未分类')
+      expect(updatedGoals[2].area).toBe('Personal')
+    })
   })
 
   describe('createTask with goal taskCount sync', () => {

@@ -271,8 +271,20 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     if (idx === -1) {
       return { success: false, message: 'Area not found', statusMessage: BROWSER_PREVIEW_STATUS }
     }
+    const deletedAreaTitle = areas[idx].title
     areas.splice(idx, 1)
     saveToLocalStorage(BROWSER_STORAGE_AREAS, areas)
+
+    const goals = loadFromLocalStorage<GoalCard>(BROWSER_STORAGE_GOALS)
+    let changed = false
+    for (const goal of goals) {
+      if (goal.area === deletedAreaTitle) {
+        goal.area = '未分类'
+        changed = true
+      }
+    }
+    if (changed) saveToLocalStorage(BROWSER_STORAGE_GOALS, goals)
+
     return { success: true, message: 'Area deleted', statusMessage: BROWSER_PREVIEW_STATUS }
   }
 
