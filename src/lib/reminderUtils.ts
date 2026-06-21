@@ -99,3 +99,16 @@ export function groupRemindersByTime(
 
   return result
 }
+
+export function formatDueDate(date: Date, now = new Date()): string {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfDue = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const diffMs = startOfDue.getTime() - startOfToday.getTime()
+  const days = Math.round(diffMs / (1000 * 60 * 60 * 24))
+
+  if (days < 0) return `过期 ${Math.abs(days)} 天`
+  if (days === 0) return '今天'
+  if (days === 1) return '明天'
+  if (days < 7) return `${days} 天后`
+  return date.toLocaleDateString('zh-CN')
+}

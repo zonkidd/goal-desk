@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupRemindersByList, isToday, isWithinDays, groupRemindersByTime } from './reminderUtils'
+import { groupRemindersByList, isToday, isWithinDays, groupRemindersByTime, formatDueDate } from './reminderUtils'
 import type { ReminderItem } from '../types/app'
 
 describe('reminderUtils', () => {
@@ -194,6 +194,39 @@ describe('reminderUtils', () => {
       expect(result.next7days).toEqual([reminders[3]])
       expect(result.later).toEqual([reminders[4]])
       expect(result.nodate).toEqual([reminders[5]])
+    })
+  })
+
+  describe('formatDueDate', () => {
+    const now = new Date('2026-06-14T15:00:00')
+
+    it('显示"过期 N 天" for past dates', () => {
+      const yesterday = new Date('2026-06-13T10:00:00')
+      expect(formatDueDate(yesterday, now)).toBe('过期 1 天')
+    })
+
+    it('显示"今天" for same calendar day regardless of time', () => {
+      const todayMorning = new Date('2026-06-14T08:00:00')
+      const todayEvening = new Date('2026-06-14T23:59:00')
+      expect(formatDueDate(todayMorning, now)).toBe('今天')
+      expect(formatDueDate(todayEvening, now)).toBe('今天')
+    })
+
+    it('显示"明天" for next calendar day even if <24h away', () => {
+      const tomorrow = new Date('2026-06-15T14:00:00')
+      expect(formatDueDate(tomorrow, now)).toBe('明天')
+    })
+
+    it('显示"N 天后" for 2-6 days', () => {
+      const in3days = new Date('2026-06-17T10:00:00')
+      expect(formatDueDate(in3days, now)).toBe('3 天后')
+    })
+
+    it('显示日期 for 7+ days', () => {
+      const in10days = new Date('2026-06-24T10:00:00')
+      const result = formatDueDate(in10days, now)
+      expect(result).not.toContain('天后')
+      expect(result).not.toBe('今天')
     })
   })
 })

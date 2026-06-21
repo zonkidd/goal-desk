@@ -6,7 +6,7 @@ import { GlassPanel } from '../common/GlassPanel'
 import { useUiStore } from '../../store/uiStore'
 import { useEventkitStore } from '../../store/eventkitStore'
 import { useToggleSystemReminder } from '../../store/appStore'
-import { groupRemindersByList, groupRemindersByTime } from '../../lib/reminderUtils'
+import { groupRemindersByList, groupRemindersByTime, formatDueDate } from '../../lib/reminderUtils'
 import { UNCATEGORIZED_AREA_TITLE } from '../../lib/constants'
 import type { ReminderItem } from '../../types/app'
 
@@ -471,17 +471,4 @@ function TimeGroupReminderCard({
       </GlassCard>
     </motion.div>
   )
-}
-
-// Helper function
-function formatDueDate(date: Date): string {
-  const now = new Date()
-  const diff = date.getTime() - now.getTime()
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-
-  if (days < 0) return `过期 ${Math.abs(days)} 天`
-  if (days === 0) return '今天'
-  if (days === 1) return '明天'
-  if (days < 7) return `${days} 天后`
-  return date.toLocaleDateString('zh-CN')
 }

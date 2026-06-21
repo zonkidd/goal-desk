@@ -221,7 +221,7 @@ describe('RemindersView', () => {
 
       // 等待动画完成并验证显示 5 个时间分组标题
       expect(await screen.findByText('已过期')).toBeInTheDocument()
-      expect(screen.getByText('今天')).toBeInTheDocument()
+      expect(screen.getAllByText('今天').length).toBeGreaterThanOrEqual(1)
       expect(screen.getByText('未来7天')).toBeInTheDocument()
       expect(screen.getByText('更晚')).toBeInTheDocument()
       expect(screen.getByText('无日期')).toBeInTheDocument()
@@ -253,7 +253,7 @@ describe('RemindersView', () => {
       expect(await screen.findByText('⚠️')).toBeInTheDocument()
       expect(screen.getByText('已过期')).toBeInTheDocument()
       expect(screen.getByText('⚡️')).toBeInTheDocument()
-      expect(screen.getByText('今天')).toBeInTheDocument()
+      expect(screen.getAllByText('今天').length).toBeGreaterThanOrEqual(1)
       expect(screen.getByText('📆')).toBeInTheDocument()
       expect(screen.getByText('未来7天')).toBeInTheDocument()
       expect(screen.getByText('⏳')).toBeInTheDocument()
@@ -304,7 +304,8 @@ describe('RemindersView', () => {
       expect(overdueTitle).toHaveClass('text-red-600')
 
       // 查询"今天"标题，验证橙色
-      const todayTitle = screen.getByText('今天').closest('h3')
+      const todayTitles = screen.getAllByText('今天')
+      const todayTitle = todayTitles.find(el => el.closest('h3'))?.closest('h3')
       expect(todayTitle).toHaveClass('text-orange-600')
 
       // 查询"未来7天"标题，验证靛蓝色
