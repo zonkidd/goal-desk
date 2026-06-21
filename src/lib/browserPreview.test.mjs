@@ -26,6 +26,33 @@ test('browser preview quick capture parses tomorrow afternoon three oclock', () 
   assert.equal(draft.dueDate?.toISOString(), '2026-06-11T07:00:00.000Z')
 })
 
+test('quick capture cleans 之前 deadline keyword without leaving residual characters', () => {
+  const now = new Date('2026-06-10T09:00:00+08:00')
+
+  const draft = parseBrowserQuickCapture('明天3点之前完成报告', now)
+
+  assert.equal(draft.title, '完成报告')
+  assert.ok(draft.dueDate, 'should set dueDate for deadline')
+})
+
+test('quick capture cleans 前 deadline keyword correctly', () => {
+  const now = new Date('2026-06-10T09:00:00+08:00')
+
+  const draft = parseBrowserQuickCapture('明天3点前提交代码', now)
+
+  assert.equal(draft.title, '提交代码')
+  assert.ok(draft.dueDate, 'should set dueDate for deadline')
+})
+
+test('quick capture cleans 截止 keyword correctly', () => {
+  const now = new Date('2026-06-10T09:00:00+08:00')
+
+  const draft = parseBrowserQuickCapture('明天截止写文档', now)
+
+  assert.equal(draft.title, '写文档')
+  assert.ok(draft.dueDate, 'should set dueDate for deadline')
+})
+
 test('paused tasks expose a resume label instead of todo', () => {
   assert.equal(getTaskPrimaryStatusLabel('PAUSED'), 'Resume')
 })

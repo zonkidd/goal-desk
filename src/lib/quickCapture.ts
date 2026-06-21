@@ -83,9 +83,9 @@ export function parseBrowserQuickCapture(input: string, now: Date = new Date()):
     title = title.replace(match[0], '').trim()
   }
 
-  // 移除截止时间关键词
+  // 移除截止时间关键词（长模式优先，避免 '前' 先移除导致 '之前' 无法匹配）
   if (isDeadline) {
-    title = title.replace('前', '').replace('之前', '').replace('截止', '').trim()
+    title = title.replace('之前', '').replace('前', '').replace('截止', '').trim()
   }
 
   // 根据截止时间标志分配到不同字段
