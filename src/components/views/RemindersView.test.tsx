@@ -672,8 +672,8 @@ describe('RemindersView', () => {
       const listTab = screen.getByRole('button', { name: /按清单/i })
       await userEvent.click(listTab)
 
-      // 等待清单面板出现,确保动画完成
-      const listPanelsAgain = await screen.findAllByTestId('list-panel')
+      // 等待清单面板出现（AnimatePresence mode="wait" 需要足够时间）
+      const listPanelsAgain = await screen.findAllByTestId('list-panel', { timeout: 5000 })
       expect(listPanelsAgain.length).toBeGreaterThan(0)
 
       // 验证时间分组面板不可见
@@ -881,8 +881,8 @@ describe('RemindersView', () => {
       const timeTab = screen.getByRole('button', { name: /按时间/i })
       await userEvent.click(timeTab)
 
-      // 等待"今天"分组出现
-      expect(await screen.findByText('今天')).toBeInTheDocument()
+      // 等待时间视图渲染完成（先等第一个分组出现）
+      await screen.findByText('已过期')
 
       // 展开"今天"分组
       const todayButton = screen.getAllByRole('button').find(btn =>
