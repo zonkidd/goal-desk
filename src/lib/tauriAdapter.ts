@@ -121,16 +121,20 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
 
   async createArea(title: string): Promise<AreaResult> {
     const area = await persistCreateArea(title)
+    const areas = await persistListAreas()
+    const fullArea = areas.find(a => a.id === area.id)
     return {
-      area: { id: area.id, title: area.title, goalCount: 0, activeGoalCount: 0, isSystem: false },
+      area: fullArea ?? { id: area.id, title: area.title, goalCount: 0, activeGoalCount: 0, isSystem: false },
       statusMessage: 'Area created',
     }
   }
 
   async renameArea(areaId: string, newTitle: string): Promise<AreaResult> {
     const area = await persistRenameArea(areaId, newTitle)
+    const areas = await persistListAreas()
+    const fullArea = areas.find(a => a.id === area.id)
     return {
-      area: { id: area.id, title: area.title, goalCount: 0, activeGoalCount: 0, isSystem: false },
+      area: fullArea ?? { id: area.id, title: area.title, goalCount: 0, activeGoalCount: 0, isSystem: false },
       statusMessage: 'Area renamed',
     }
   }

@@ -153,8 +153,8 @@ export function GoalDrawer() {
                     onClick={async () => {
                       const task = await createTaskForGoal(goal, taskTitle)
                       if (task) {
-                        openDrawer('task', task.id)
                         closeDrawer()
+                        openDrawer('task', task.id)
                       }
                       setTaskTitle('')
                     }}

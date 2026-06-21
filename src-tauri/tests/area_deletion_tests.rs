@@ -39,7 +39,7 @@ fn test_delete_area_without_force_fails_when_goals_exist() {
     let area_service = AreaService::new(repo);
 
     let area = area_service.create_area("工作").unwrap();
-    goal_service.create_goal("完成项目", "工作", "").unwrap();
+    goal_service.create_goal("完成项目", "工作", "", GoalStatus::Active).unwrap();
 
     let result = area_service.delete_area(&area.id.to_string(), false).unwrap();
     assert!(!result.success);
@@ -55,8 +55,8 @@ fn test_delete_area_with_force_reassigns_goals() {
     let area_service = AreaService::new(repo);
 
     let area = area_service.create_area("工作").unwrap();
-    let goal1 = goal_service.create_goal("完成项目A", "工作", "").unwrap();
-    let goal2 = goal_service.create_goal("完成项目B", "工作", "").unwrap();
+    let _goal1 = goal_service.create_goal("完成项目A", "工作", "", GoalStatus::Active).unwrap();
+    let _goal2 = goal_service.create_goal("完成项目B", "工作", "", GoalStatus::Active).unwrap();
 
     let result = area_service.delete_area(&area.id.to_string(), true).unwrap();
     assert!(result.success);

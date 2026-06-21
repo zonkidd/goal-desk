@@ -265,7 +265,7 @@ export function TodayView() {
                     onClick={() => {
                       if (item.source === 'todo') openDrawer('task',item.id)
                       if (item.source === 'reminder') openDrawer('reminder',item.id)
-                      if (item.source === 'calendar') openDrawer('reminder',item.id)
+                      if (item.source === 'calendar') openDrawer('calendarEvent',item.id)
                     }}
                     className={`flex-1 rounded-xl p-3 text-left glass-card ${styles.card} transition-transform hover:-translate-y-0.5`}
                   >

@@ -109,7 +109,7 @@ function MainApp() {
       .finally(() => {
         setLoading(false)
       })
-  }, [hydrateApp, setLoading, setStatusMessage])
+  }, [hydrateApp, setLoading])
 
   return <AppShell />
 }

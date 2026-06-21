@@ -48,6 +48,7 @@ impl GoalService {
         title: &str,
         area: &str,
         description: &str,
+        status: GoalStatus,
     ) -> Result<Goal, String> {
         let trimmed_title = title.trim();
         if trimmed_title.is_empty() {
@@ -69,7 +70,7 @@ impl GoalService {
             area_id: Some(area_id),
             title: trimmed_title.to_string(),
             description: description.to_string(),
-            status: GoalStatus::Active,
+            status,
         };
 
         GoalRepository::create(&self.repo, &goal).map_err(|e| e.to_string())?;

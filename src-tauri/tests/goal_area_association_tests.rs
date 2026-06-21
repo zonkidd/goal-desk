@@ -14,10 +14,10 @@ fn test_create_goal_with_existing_area() {
     let repo = temp_repo("goal-area-existing");
     let goal_service = GoalService::new(repo.clone());
 
-    let goal1 = goal_service.create_goal("完成项目A", "工作", "描述A").unwrap();
+    let goal1 = goal_service.create_goal("完成项目A", "工作", "描述A", GoalStatus::Active).unwrap();
     assert!(goal1.area_id.is_some());
 
-    let goal2 = goal_service.create_goal("完成项目B", "工作", "描述B").unwrap();
+    let goal2 = goal_service.create_goal("完成项目B", "工作", "描述B", GoalStatus::Active).unwrap();
     assert_eq!(goal1.area_id, goal2.area_id, "两个 goal 应该关联到同一个 area");
 
     let area_service = AreaService::new(repo);
@@ -31,7 +31,7 @@ fn test_create_goal_with_new_area_auto_creates_area() {
     let repo = temp_repo("goal-area-new");
     let goal_service = GoalService::new(repo.clone());
 
-    let goal = goal_service.create_goal("学习 Rust", "学习", "深入学习").unwrap();
+    let goal = goal_service.create_goal("学习 Rust", "学习", "深入学习", GoalStatus::Active).unwrap();
     assert!(goal.area_id.is_some());
 
     let area_service = AreaService::new(repo);
@@ -46,7 +46,7 @@ fn test_create_goal_with_empty_area_defaults_to_uncategorized() {
     let repo = temp_repo("goal-area-empty");
     let goal_service = GoalService::new(repo.clone());
 
-    let goal = goal_service.create_goal("临时任务", "", "").unwrap();
+    let goal = goal_service.create_goal("临时任务", "", "", GoalStatus::Active).unwrap();
     assert!(goal.area_id.is_some());
 
     let area_service = AreaService::new(repo);
@@ -61,7 +61,7 @@ fn test_create_goal_with_whitespace_area_defaults_to_uncategorized() {
     let repo = temp_repo("goal-area-whitespace");
     let goal_service = GoalService::new(repo.clone());
 
-    let goal = goal_service.create_goal("另一个临时任务", "   ", "").unwrap();
+    let goal = goal_service.create_goal("另一个临时任务", "   ", "", GoalStatus::Active).unwrap();
 
     let area_service = AreaService::new(repo);
     let areas = area_service.list_areas_with_stats().unwrap();
@@ -74,13 +74,13 @@ fn test_all_goals_have_non_null_area_id() {
     let repo = temp_repo("goal-areanonnull");
     let goal_service = GoalService::new(repo.clone());
 
-    goal_service.create_goal("Goal 1", "工作", "").unwrap();
-    goal_service.create_goal("Goal 2", "", "").unwrap();
-    goal_service.create_goal("Goal 3", "学习", "").unwrap();
+    goal_service.create_goal("Goal 1", "工作", "", GoalStatus::Active).unwrap();
+    goal_service.create_goal("Goal 2", "", "", GoalStatus::Active).unwrap();
+    goal_service.create_goal("Goal 3", "学习", "", GoalStatus::Active).unwrap();
 
     let summaries = goal_service.goal_summaries().unwrap();
     let area_service = AreaService::new(repo);
-    let areas = area_service.list_areas_with_stats().unwrap();
+    let _areas = area_service.list_areas_with_stats().unwrap();
 
     for summary in &summaries {
         // Each summary should have a non-empty area string

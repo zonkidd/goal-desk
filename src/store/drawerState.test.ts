@@ -37,4 +37,27 @@ describe('DrawerState generalization', () => {
     expect(useUiStore.getState().selectedDrawerId('task')).toBeUndefined()
     expect(useUiStore.getState().selectedDrawerId('calendarEvent')).toBe('ev1')
   })
+
+  it('closeDrawer then openDrawer should end with the new drawer open', () => {
+    useUiStore.getState().openDrawer('goal', 'g1')
+    useUiStore.getState().closeDrawer()
+    useUiStore.getState().openDrawer('task', 't1')
+    const s = useUiStore.getState()
+    expect(s.activeDrawer).toEqual({ type: 'task', id: 't1' })
+  })
+
+  it('openDrawer then closeDrawer should end with no drawer (regression)', () => {
+    useUiStore.getState().openDrawer('task', 't1')
+    useUiStore.getState().closeDrawer()
+    const s = useUiStore.getState()
+    expect(s.activeDrawer).toBeNull()
+  })
+
+  it('calendarEvent drawer type should be usable for calendar events', () => {
+    useUiStore.getState().openDrawer('calendarEvent', 'evt-1')
+    const s = useUiStore.getState()
+    expect(s.activeDrawer).toEqual({ type: 'calendarEvent', id: 'evt-1' })
+    expect(s.isDrawerOpen('calendarEvent')).toBe(true)
+    expect(s.isDrawerOpen('reminder')).toBe(false)
+  })
 })

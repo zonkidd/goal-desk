@@ -24,6 +24,21 @@ function saveToLocalStorage<T>(key: string, data: T[]): void {
   }
 }
 
+function recalculateGoalProgress(goalId: string): void {
+  const goals = loadFromLocalStorage<GoalCard>(BROWSER_STORAGE_GOALS)
+  const tasks = loadFromLocalStorage<Task>(BROWSER_STORAGE_TASKS)
+  const idx = goals.findIndex(g => g.id === goalId)
+  if (idx === -1) return
+
+  const linkedTasks = tasks.filter(t => t.linkedGoalId === goalId)
+  const totalCount = linkedTasks.length
+  const doneCount = linkedTasks.filter(t => t.status === 'DONE').length
+  const progress = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100)
+
+  goals[idx] = { ...goals[idx], taskCount: totalCount, progress }
+  saveToLocalStorage(BROWSER_STORAGE_GOALS, goals)
+}
+
 export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation, QueryAdapter {
   async createTask(title: string): Promise<TaskResult> {
     const mockTask: Task = {
@@ -57,6 +72,8 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     const tasks = loadFromLocalStorage<Task>(BROWSER_STORAGE_TASKS)
     tasks.unshift(mockTask)
     saveToLocalStorage(BROWSER_STORAGE_TASKS, tasks)
+
+    recalculateGoalProgress(goal.id)
 
     return { task: mockTask, statusMessage: BROWSER_PREVIEW_STATUS }
   }
@@ -145,6 +162,10 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     tasks[idx] = updatedTask
     saveToLocalStorage(BROWSER_STORAGE_TASKS, tasks)
 
+    if (updatedTask.linkedGoalId) {
+      recalculateGoalProgress(updatedTask.linkedGoalId)
+    }
+
     return { task: updatedTask, statusMessage: BROWSER_PREVIEW_STATUS }
   }
 
@@ -230,12 +251,15 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     return { area: updatedArea, statusMessage: BROWSER_PREVIEW_STATUS }
   }
 
-  async deleteArea(_areaId: string, _force = false): Promise<DeleteAreaResult> {
-    return {
-      success: false,
-      message: BROWSER_PREVIEW_STATUS,
-      statusMessage: BROWSER_PREVIEW_STATUS,
+  async deleteArea(areaId: string, _force = false): Promise<DeleteAreaResult> {
+    const areas = loadFromLocalStorage<AreaWithStats>(BROWSER_STORAGE_AREAS)
+    const idx = areas.findIndex(a => a.id === areaId)
+    if (idx === -1) {
+      return { success: false, message: 'Area not found', statusMessage: BROWSER_PREVIEW_STATUS }
     }
+    areas.splice(idx, 1)
+    saveToLocalStorage(BROWSER_STORAGE_AREAS, areas)
+    return { success: true, message: 'Area deleted', statusMessage: BROWSER_PREVIEW_STATUS }
   }
 
   async createSystemReminder(_title: string, _dueAt?: Date): Promise<string> {

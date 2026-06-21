@@ -191,20 +191,22 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
     try {
       if (getRuntimeAdapter().isTauri()) {
         const reminderId = await adapter.createSystemReminder(title, dueAt)
-        if (reminderId) {
+        if (reminderId && taskId) {
           await get().linkTaskToReminder(taskId, reminderId)
         }
         return reminderId || ''
       }
 
       const mockReminderId = `mock-reminder-${Date.now()}`
-      set((state) => ({
-        tasks: state.tasks.map((task) =>
-          task.id === taskId
-            ? { ...task, systemReminderId: mockReminderId, updatedAt: new Date() }
-            : task,
-        ),
-      }))
+      if (taskId) {
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === taskId
+              ? { ...task, systemReminderId: mockReminderId, updatedAt: new Date() }
+              : task,
+          ),
+        }))
+      }
       return mockReminderId
     } catch (error) {
       return ''

@@ -87,6 +87,7 @@ vi.mock('./tauriCommands', () => ({
   }),
   listAreas: vi.fn().mockResolvedValue([
     { id: 'area-1', title: 'Work', goalCount: 2, activeGoalCount: 1, isSystem: false },
+    { id: 'area-2', title: 'Personal', goalCount: 0, activeGoalCount: 0, isSystem: false },
   ]),
   createArea: vi.fn().mockResolvedValue({ id: 'area-2', title: 'Personal' }),
   renameArea: vi.fn().mockResolvedValue({ id: 'area-1', title: 'Renamed' }),
@@ -186,7 +187,7 @@ describe('TauriAdapter', () => {
     it('lists areas', async () => {
       const result = await adapter.listAreas()
       expect(result.areas).toBeDefined()
-      expect(result.areas).toHaveLength(1)
+      expect(result.areas).toHaveLength(2)
     })
   })
 
@@ -194,7 +195,8 @@ describe('TauriAdapter', () => {
     it('creates area with valid title', async () => {
       const result = await adapter.createArea('New Area')
       expect(result.area).toBeDefined()
-      expect(result.area?.title).toBe('Personal')
+      expect(typeof result.area?.goalCount).toBe('number')
+      expect(typeof result.area?.activeGoalCount).toBe('number')
     })
   })
 
@@ -202,7 +204,8 @@ describe('TauriAdapter', () => {
     it('renames area', async () => {
       const result = await adapter.renameArea('area-1', 'Renamed')
       expect(result.area).toBeDefined()
-      expect(result.area?.title).toBe('Renamed')
+      expect(result.area?.goalCount).toBe(2)
+      expect(result.area?.activeGoalCount).toBe(1)
     })
   })
 

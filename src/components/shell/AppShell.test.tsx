@@ -105,4 +105,19 @@ describe('AppShell', () => {
     render(<AppShell />)
     expect(screen.getByText('RemindersView')).toBeInTheDocument()
   })
+
+  it('应该渲染 SystemReminderDrawer 而不是 ReminderDrawer', () => {
+    vi.mocked(useUiStore).mockImplementation((selector: any) => {
+      const state = {
+        currentView: 'inbox',
+        statusMessage: 'Test',
+        isLoading: false,
+      }
+      return selector(state)
+    })
+
+    render(<AppShell />)
+    expect(screen.getByText('SystemReminderDrawer')).toBeInTheDocument()
+    expect(screen.queryByText('ReminderDrawer')).not.toBeInTheDocument()
+  })
 })

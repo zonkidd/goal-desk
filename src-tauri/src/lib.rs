@@ -94,17 +94,6 @@ fn load_or_seed_workspace<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Works
     }
 }
 
-fn load_or_seed_desk_tasks<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Vec<DeskTask>, String> {
-    let repository = workspace_repository(app)?;
-    let tasks = repository.load_desk_tasks().map_err(|error| error.to_string())?;
-
-    if tasks.is_empty() {
-        Ok(tasks)
-    } else {
-        Ok(tasks)
-    }
-}
-
 fn ensure_quick_capture_window<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<tauri::WebviewWindow<R>, String> {
     if let Some(window) = app.get_webview_window("quick-capture") {
         return Ok(window);
@@ -182,9 +171,9 @@ mod commands {
         title: String,
         area: String,
         description: String,
-        _status: GoalStatus,
+        status: GoalStatus,
     ) -> Result<GoalSummary, String> {
-        let goal = svc.goal.create_goal(&title, &area, &description)?;
+        let goal = svc.goal.create_goal(&title, &area, &description, status)?;
         svc.goal.get_goal_summary_by_id(&goal.id.to_string())
     }
 

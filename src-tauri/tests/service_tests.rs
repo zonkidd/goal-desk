@@ -19,7 +19,7 @@ fn temp_repo(name: &str) -> SqliteRepository {
 fn goal_service_create_validates_empty_title() {
     let repo = temp_repo("goal_empty_title");
     let service = GoalService::new(repo);
-    let result = service.create_goal("", "Work", "desc");
+    let result = service.create_goal("", "Work", "desc", GoalStatus::Active);
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("empty"));
 }
@@ -28,7 +28,7 @@ fn goal_service_create_validates_empty_title() {
 fn goal_service_create_validates_whitespace_title() {
     let repo = temp_repo("goal_whitespace_title");
     let service = GoalService::new(repo);
-    let result = service.create_goal("   ", "Work", "desc");
+    let result = service.create_goal("   ", "Work", "desc", GoalStatus::Active);
     assert!(result.is_err());
 }
 
@@ -36,7 +36,7 @@ fn goal_service_create_validates_whitespace_title() {
 fn goal_service_creates_goal_with_area() {
     let repo = temp_repo("goal_create_area");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("My Goal", "Work", "Description").unwrap();
+    let goal = service.create_goal("My Goal", "Work", "Description", GoalStatus::Active).unwrap();
     assert_eq!(goal.title, "My Goal");
     assert_eq!(goal.status, GoalStatus::Active);
     assert!(goal.area_id.is_some());
@@ -46,7 +46,7 @@ fn goal_service_creates_goal_with_area() {
 fn goal_service_creates_goal_defaults_to_uncategorized() {
     let repo = temp_repo("goal_default_area");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("My Goal", "", "").unwrap();
+    let goal = service.create_goal("My Goal", "", "", GoalStatus::Active).unwrap();
     assert!(goal.area_id.is_some());
 }
 
@@ -54,8 +54,8 @@ fn goal_service_creates_goal_defaults_to_uncategorized() {
 fn goal_service_reuses_existing_area() {
     let repo = temp_repo("goal_reuse_area");
     let service = GoalService::new(repo);
-    let g1 = service.create_goal("Goal 1", "Work", "").unwrap();
-    let g2 = service.create_goal("Goal 2", "Work", "").unwrap();
+    let g1 = service.create_goal("Goal 1", "Work", "", GoalStatus::Active).unwrap();
+    let g2 = service.create_goal("Goal 2", "Work", "", GoalStatus::Active).unwrap();
     assert_eq!(g1.area_id, g2.area_id);
 }
 
@@ -63,7 +63,7 @@ fn goal_service_reuses_existing_area() {
 fn goal_service_update_fields() {
     let repo = temp_repo("goal_update");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("Original", "Work", "desc").unwrap();
+    let goal = service.create_goal("Original", "Work", "desc", GoalStatus::Active).unwrap();
     let updated = service
         .update_goal_fields(&goal.id.to_string(), "Updated", "Personal", "new desc")
         .unwrap();
@@ -76,7 +76,7 @@ fn goal_service_update_fields() {
 fn goal_service_update_status_valid() {
     let repo = temp_repo("goal_status_valid");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("Goal", "Work", "").unwrap();
+    let goal = service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
     let updated = service
         .update_goal_status(&goal.id.to_string(), GoalStatus::Paused)
         .unwrap();
@@ -87,7 +87,7 @@ fn goal_service_update_status_valid() {
 fn goal_service_update_status_invalid_transition() {
     let repo = temp_repo("goal_status_invalid");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("Goal", "Work", "").unwrap();
+    let goal = service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
     let result = service.update_goal_status(&goal.id.to_string(), GoalStatus::ReadyToComplete);
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("Invalid"));
@@ -107,9 +107,9 @@ fn goal_service_update_nonexistent_goal() {
 fn area_service_list_areas_with_stats() {
     let repo = temp_repo("goal_areas_stats");
     let goal_service = GoalService::new(repo.clone());
-    goal_service.create_goal("G1", "Work", "").unwrap();
-    goal_service.create_goal("G2", "Work", "").unwrap();
-    goal_service.create_goal("G3", "Personal", "").unwrap();
+    goal_service.create_goal("G1", "Work", "", GoalStatus::Active).unwrap();
+    goal_service.create_goal("G2", "Work", "", GoalStatus::Active).unwrap();
+    goal_service.create_goal("G3", "Personal", "", GoalStatus::Active).unwrap();
 
     let area_service = AreaService::new(repo);
     let areas = area_service.list_areas_with_stats().unwrap();
@@ -146,7 +146,7 @@ fn task_service_create_for_goal() {
     let goal_service = GoalService::new(repo.clone());
     let task_service = TaskService::new(repo);
 
-    let goal = goal_service.create_goal("Goal", "Work", "").unwrap();
+    let goal = goal_service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
     let task = task_service
         .create_task_for_goal(&goal.id.to_string(), "Subtask")
         .unwrap();
@@ -253,7 +253,7 @@ fn area_service_delete_with_goals_force() {
     let goal_service = GoalService::new(repo.clone());
     let area_service = AreaService::new(repo);
 
-    let goal = goal_service.create_goal("G", "ToDelete", "").unwrap();
+    let goal = goal_service.create_goal("G", "ToDelete", "", GoalStatus::Active).unwrap();
     let area_id = goal.area_id.unwrap();
     let result = area_service.delete_area(&area_id.to_string(), true).unwrap();
     assert!(result.success);
@@ -266,7 +266,7 @@ fn area_service_delete_without_force_fails() {
     let goal_service = GoalService::new(repo.clone());
     let area_service = AreaService::new(repo);
 
-    let goal = goal_service.create_goal("G", "ToDelete", "").unwrap();
+    let goal = goal_service.create_goal("G", "ToDelete", "", GoalStatus::Active).unwrap();
     let area_id = goal.area_id.unwrap();
     let result = area_service.delete_area(&area_id.to_string(), false).unwrap();
     assert!(!result.success);
@@ -280,7 +280,7 @@ fn area_service_delete_without_force_fails() {
 fn goal_service_progress_zero_when_no_tasks() {
     let repo = temp_repo("progress_no_tasks");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("Goal", "Work", "").unwrap();
+    let goal = service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
     let summaries = service.goal_summaries().unwrap();
     let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
     assert_eq!(s.progress, 0);
@@ -293,9 +293,9 @@ fn goal_service_progress_50_percent() {
     let goal_service = GoalService::new(repo.clone());
     let task_service = TaskService::new(repo);
 
-    let goal = goal_service.create_goal("Goal", "Work", "").unwrap();
+    let goal = goal_service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
     let t1 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 1").unwrap();
-    let t2 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 2").unwrap();
+    let _t2 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 2").unwrap();
 
     task_service.update_task_status(&t1.id.to_string(), TaskStatus::Done, None).unwrap();
 
@@ -311,7 +311,7 @@ fn goal_service_progress_100_percent() {
     let goal_service = GoalService::new(repo.clone());
     let task_service = TaskService::new(repo);
 
-    let goal = goal_service.create_goal("Goal", "Work", "").unwrap();
+    let goal = goal_service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
     let t1 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 1").unwrap();
     let t2 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 2").unwrap();
 
@@ -349,7 +349,7 @@ fn app_service_shares_repository() {
     let app = AppService::new(repo);
     app.initialize().unwrap();
 
-    let goal = app.goal.create_goal("Shared Goal", "Work", "").unwrap();
+    let goal = app.goal.create_goal("Shared Goal", "Work", "", GoalStatus::Active).unwrap();
     let task = app.task.create_task_for_goal(&goal.id.to_string(), "Shared Task").unwrap();
 
     let summaries = app.goal.goal_summaries().unwrap();
@@ -374,8 +374,8 @@ fn goal_summaries_returns_correct_progress() {
     let goal_service = GoalService::new(repo.clone());
     let task_service = TaskService::new(repo);
 
-    let g1 = goal_service.create_goal("G1", "Work", "").unwrap();
-    let g2 = goal_service.create_goal("G2", "Work", "").unwrap();
+    let g1 = goal_service.create_goal("G1", "Work", "", GoalStatus::Active).unwrap();
+    let g2 = goal_service.create_goal("G2", "Work", "", GoalStatus::Active).unwrap();
 
     let t1 = task_service.create_task_for_goal(&g1.id.to_string(), "T1").unwrap();
     let _t2 = task_service.create_task_for_goal(&g1.id.to_string(), "T2").unwrap();
@@ -397,7 +397,7 @@ fn goal_summaries_returns_correct_progress() {
 fn goal_summaries_includes_area_title() {
     let repo = temp_repo("summaries_area");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("Goal", "Work Area", "").unwrap();
+    let goal = service.create_goal("Goal", "Work Area", "", GoalStatus::Active).unwrap();
     let summaries = service.goal_summaries().unwrap();
     let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
     assert_eq!(s.area, "Work Area");
@@ -409,7 +409,7 @@ fn goal_summaries_next_todo_picks_first_incomplete() {
     let goal_service = GoalService::new(repo.clone());
     let task_service = TaskService::new(repo);
 
-    let goal = goal_service.create_goal("Goal", "Work", "").unwrap();
+    let goal = goal_service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
     let t1 = task_service.create_task_for_goal(&goal.id.to_string(), "First").unwrap();
     let _t2 = task_service.create_task_for_goal(&goal.id.to_string(), "Second").unwrap();
 

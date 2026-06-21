@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { CheckSquare, X, Tag, ExternalLink } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useEventkitStore } from '../../store/eventkitStore'
 import { useUiStore } from '../../store/uiStore'
 import { getEventKitAdapter } from '../../lib/workspaceMutations'
@@ -18,6 +18,12 @@ export function SystemReminderDrawer() {
   const [editedTitle, setEditedTitle] = useState(reminder?.title || '')
   const [editedDueAt, setEditedDueAt] = useState(reminder?.dueAt)
   const [isDone, setIsDone] = useState(reminder?.done || false)
+
+  useEffect(() => {
+    setEditedTitle(reminder?.title || '')
+    setEditedDueAt(reminder?.dueAt)
+    setIsDone(reminder?.done || false)
+  }, [reminder?.id])
 
   if (!reminder) return null
 

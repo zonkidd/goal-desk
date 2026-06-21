@@ -30,7 +30,7 @@ fn create_goal_command_persists_goal_for_future_snapshot_loads() {
     let service = GoalService::new(repo);
 
     let _created = service
-        .create_goal("Release Beta Version", "Product", "Complete content, acceptance, and release checklist for Beta.")
+        .create_goal("Release Beta Version", "Product", "Complete content, acceptance, and release checklist for Beta.", GoalStatus::Active)
         .unwrap();
 
     let summaries = service.goal_summaries().unwrap();
@@ -43,7 +43,7 @@ fn update_goal_command_persists_edited_fields_for_future_snapshot_loads() {
     let service = GoalService::new(repo);
 
     let created = service
-        .create_goal("Release Beta Version", "Product", "Complete content, acceptance, and release checklist for Beta.")
+        .create_goal("Release Beta Version", "Product", "Complete content, acceptance, and release checklist for Beta.", GoalStatus::Active)
         .unwrap();
 
     let updated = service
@@ -68,7 +68,7 @@ fn update_goal_status_command_persists_status_for_future_snapshot_loads() {
     let service = GoalService::new(repo);
 
     let created = service
-        .create_goal("Finalize workspace", "Independent Development", "Connect state machine, goal drawer, and data persistence.")
+        .create_goal("Finalize workspace", "Independent Development", "Connect state machine, goal drawer, and data persistence.", GoalStatus::Active)
         .unwrap();
 
     let updated = service
@@ -87,7 +87,7 @@ fn create_task_for_goal_persists_goal_linkage() {
     let task_service = TaskService::new(repo.clone());
 
     let goal = goal_service
-        .create_goal("Ship goal-linked tasks", "Product", "Tasks created from a goal drawer must remain linked after persistence.")
+        .create_goal("Ship goal-linked tasks", "Product", "Tasks created from a goal drawer must remain linked after persistence.", GoalStatus::Active)
         .unwrap();
 
     let task = task_service

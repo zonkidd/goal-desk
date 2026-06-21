@@ -4,7 +4,6 @@ use goal_desk_tauri::domain::{
     TaskStatus, WorkspaceSnapshot,
 };
 use goal_desk_tauri::repository::SqliteRepository;
-use std::path::PathBuf;
 use uuid::Uuid;
 
 #[test]

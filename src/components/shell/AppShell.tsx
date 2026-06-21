@@ -9,7 +9,6 @@ import { CalendarView } from '../views/CalendarView'
 import { RemindersView } from '../views/RemindersView'
 import { TaskDrawer } from '../drawer/TaskDrawer'
 import { GoalDrawer } from '../drawer/GoalDrawer'
-import { ReminderDrawer } from '../drawer/ReminderDrawer'
 import { CalendarEventDrawer } from '../drawer/CalendarEventDrawer'
 import { SystemReminderDrawer } from '../drawer/SystemReminderDrawer'
 import { QuickCaptureModal } from '../modal/QuickCaptureModal'
@@ -51,7 +50,6 @@ export function AppShell() {
 
       <TaskDrawer />
       <GoalDrawer />
-      <ReminderDrawer />
       <CalendarEventDrawer />
       <SystemReminderDrawer />
       <QuickCaptureModal />
