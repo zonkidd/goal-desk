@@ -673,7 +673,7 @@ describe('RemindersView', () => {
       await userEvent.click(listTab)
 
       // 等待清单面板出现（AnimatePresence mode="wait" 需要足够时间）
-      const listPanelsAgain = await screen.findAllByTestId('list-panel', { timeout: 5000 })
+      const listPanelsAgain = await screen.findAllByTestId('list-panel', undefined, { timeout: 5000 })
       expect(listPanelsAgain.length).toBeGreaterThan(0)
 
       // 验证时间分组面板不可见
