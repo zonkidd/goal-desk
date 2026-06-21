@@ -1,21 +1,10 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { IntegrationStatus, ReminderItem, TimelineItem } from '../types/app'
-import type { Task } from '../types/task'
+import type { IntegrationStatus, ReminderItem } from '../types/app'
 import { isTauriRuntime } from './runtime'
 
 // ============================================================================
 // EventKit Types
 // ============================================================================
-
-interface RustTimelineItem {
-  id: string
-  title: string
-  startsAt: string
-  source: TimelineItem['source']
-  readOnly: boolean
-  completed: boolean
-  sourceLabel?: string
-}
 
 interface RustCalendarEvent {
   id: string
@@ -223,24 +212,5 @@ export async function loadRawEventKitData(): Promise<{
     reminders: systemSnapshot?.reminders || [],
     systemReminders,
     integrationStatus,
-  }
-}
-
-/**
- * @deprecated Use loadRawEventKitData() + convertEventKitToRawItems() instead
- */
-export async function loadEventKitSnapshot(tasks: Task[]): Promise<{
-  timeline: TimelineItem[]
-  systemReminders: ReminderItem[]
-  integrationStatus: IntegrationStatus
-}> {
-  const raw = await loadRawEventKitData()
-  const { convertEventKitToRawItems } = await import('./workspaceDerivation')
-  const timeline = convertEventKitToRawItems(raw.calendarEvents, raw.reminders, tasks)
-
-  return {
-    timeline,
-    systemReminders: raw.systemReminders,
-    integrationStatus: raw.integrationStatus,
   }
 }

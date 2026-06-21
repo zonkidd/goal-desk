@@ -46,7 +46,7 @@ describe('RemindersView', () => {
     ;(useUiStore as any).mockImplementation((selector: any) => {
       const mockState = {
         currentView: 'reminders',
-        openReminderDrawer: vi.fn(),
+        openDrawer: vi.fn(),
       }
       return selector(mockState)
     })
@@ -442,7 +442,7 @@ describe('RemindersView', () => {
       ]
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+        return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
@@ -469,7 +469,7 @@ describe('RemindersView', () => {
       ]
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+        return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
@@ -502,7 +502,7 @@ describe('RemindersView', () => {
       ]
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+        return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
@@ -534,7 +534,7 @@ describe('RemindersView', () => {
       ]
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+        return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
@@ -559,7 +559,7 @@ describe('RemindersView', () => {
       ]
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+        return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
@@ -587,7 +587,7 @@ describe('RemindersView', () => {
       ]
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+        return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
@@ -620,7 +620,7 @@ describe('RemindersView', () => {
       ]
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+        return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
@@ -835,7 +835,7 @@ describe('RemindersView', () => {
       const mockOpenReminderDrawer = vi.fn()
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openReminderDrawer: mockOpenReminderDrawer })
+        return selector({ currentView: 'reminders', openDrawer: mockOpenReminderDrawer })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({
@@ -855,15 +855,15 @@ describe('RemindersView', () => {
       // 点击提醒项
       await userEvent.click(reminderButton!)
 
-      // 验证 openReminderDrawer 被调用，参数为 '1'
-      expect(mockOpenReminderDrawer).toHaveBeenCalledWith('1')
+      // 验证 openDrawer 被调用，参数为 ('reminder', '1')
+      expect(mockOpenReminderDrawer).toHaveBeenCalledWith('reminder', '1')
     })
 
     it('should open drawer when clicking reminder item in time view', async () => {
       const mockOpenReminderDrawer = vi.fn()
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openReminderDrawer: mockOpenReminderDrawer })
+        return selector({ currentView: 'reminders', openDrawer: mockOpenReminderDrawer })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({
@@ -896,13 +896,13 @@ describe('RemindersView', () => {
       // 点击提醒项
       await userEvent.click(reminderButton!)
 
-      // 验证 openReminderDrawer 被调用，参数为 '2'
-      expect(mockOpenReminderDrawer).toHaveBeenCalledWith('2')
+      // 验证 openDrawer 被调用，参数为 ('reminder', '2')
+      expect(mockOpenReminderDrawer).toHaveBeenCalledWith('reminder', '2')
     })
 
     it('should make reminder title clickable', () => {
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openReminderDrawer: vi.fn() })
+        return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({
@@ -928,7 +928,7 @@ describe('RemindersView', () => {
       const mockOpenReminderDrawer = vi.fn()
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openReminderDrawer: mockOpenReminderDrawer })
+        return selector({ currentView: 'reminders', openDrawer: mockOpenReminderDrawer })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({
@@ -952,7 +952,7 @@ describe('RemindersView', () => {
       // 验证 toggleSystemReminderDone 被调用
       expect(mockToggleSystemReminder).toHaveBeenCalledWith('1', true)
 
-      // 验证 openReminderDrawer 没有被调用
+      // 验证 openDrawer 没有被调用
       expect(mockOpenReminderDrawer).not.toHaveBeenCalled()
     })
   })

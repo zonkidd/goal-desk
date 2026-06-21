@@ -26,7 +26,7 @@ export function GoalsView() {
   const setActiveArea = useUiStore((state) => state.setActiveArea)
   const createGoal = useGoalStore((state) => state.createGoal)
   const createArea = useAreaStore((state) => state.createArea)
-  const openGoalDrawer = useUiStore((state) => state.openGoalDrawer)
+  const openDrawer = useUiStore((state) => state.openDrawer)
   const [title, setTitle] = useState('')
   const [area, setArea] = useState('')
   const [description, setDescription] = useState('')
@@ -56,7 +56,7 @@ export function GoalsView() {
       setArea(activeArea === 'ALL' ? '' : activeArea)
       setDescription('')
       if (result.openGoalWorkspace) {
-        openGoalDrawer(result.goal.id)
+        openDrawer('goal',result.goal.id)
       }
       void useAreaStore.getState().loadAreas()
     })
@@ -159,11 +159,11 @@ export function GoalsView() {
           </div>
 
           {isAreaBoard ? (
-            <AreaGoalBoard goals={visibleGoals} onOpenGoal={openGoalDrawer} />
+            <AreaGoalBoard goals={visibleGoals} onOpenGoal={(id) => openDrawer('goal', id)} />
           ) : (
             <div className="grid grid-cols-2 items-start gap-4">
               {visibleGoals.map((goal) => (
-                <GoalTile key={goal.id} goal={goal} onOpenGoal={openGoalDrawer} />
+                <GoalTile key={goal.id} goal={goal} onOpenGoal={(id) => openDrawer('goal', id)} />
               ))}
             </div>
           )}

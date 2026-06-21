@@ -505,7 +505,8 @@ pub trait GoalRepository {
 
 impl GoalRepository for SqliteRepository {
     fn find(&self, id: Uuid) -> Result<Option<Goal>, RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         let result = connection.query_row(
             "SELECT id, area_id, title, description, status FROM goals WHERE id = ?1",
             params![id.to_string()],
@@ -535,7 +536,8 @@ impl GoalRepository for SqliteRepository {
     }
 
     fn list(&self) -> Result<Vec<Goal>, RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         let mut statement = connection.prepare(
             "SELECT id, area_id, title, description, status FROM goals ORDER BY title"
         )?;
@@ -556,7 +558,8 @@ impl GoalRepository for SqliteRepository {
     }
 
     fn list_by_area(&self, area_id: Uuid) -> Result<Vec<Goal>, RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         let mut statement = connection.prepare(
             "SELECT id, area_id, title, description, status FROM goals WHERE area_id = ?1 ORDER BY title"
         )?;
@@ -577,7 +580,8 @@ impl GoalRepository for SqliteRepository {
     }
 
     fn create(&self, goal: &Goal) -> Result<(), RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         connection.execute(
             "INSERT INTO goals (id, area_id, title, description, status) VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
@@ -592,7 +596,8 @@ impl GoalRepository for SqliteRepository {
     }
 
     fn update(&self, goal: &Goal) -> Result<(), RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         connection.execute(
             "UPDATE goals SET area_id = ?1, title = ?2, description = ?3, status = ?4 WHERE id = ?5",
             params![
@@ -607,7 +612,8 @@ impl GoalRepository for SqliteRepository {
     }
 
     fn update_status(&self, id: Uuid, status: GoalStatus) -> Result<(), RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         connection.execute(
             "UPDATE goals SET status = ?1 WHERE id = ?2",
             params![goal_status_as_str(status), id.to_string()],
@@ -616,7 +622,8 @@ impl GoalRepository for SqliteRepository {
     }
 
     fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         connection.execute(
             "DELETE FROM goals WHERE id = ?1",
             params![id.to_string()],
@@ -639,7 +646,8 @@ pub trait TaskRepository {
 
 impl TaskRepository for SqliteRepository {
     fn find(&self, id: Uuid) -> Result<Option<DeskTask>, RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         let mut tasks = load_tasks_with_filter(
             &connection,
             "WHERE id = ?1",
@@ -653,7 +661,8 @@ impl TaskRepository for SqliteRepository {
     }
 
     fn list_by_goal(&self, goal_id: Uuid) -> Result<Vec<DeskTask>, RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         load_tasks_with_filter(
             &connection,
             "WHERE linked_goal_id = ?1",
@@ -662,7 +671,8 @@ impl TaskRepository for SqliteRepository {
     }
 
     fn list_by_status(&self, status: TaskStatus) -> Result<Vec<DeskTask>, RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         load_tasks_with_filter(
             &connection,
             "WHERE status = ?1",
@@ -671,7 +681,8 @@ impl TaskRepository for SqliteRepository {
     }
 
     fn create(&self, task: &DeskTask) -> Result<(), RepositoryError> {
-        let mut connection = Connection::open(&self.path)?;
+        let mut guard = self.cached_connection()?;
+        let connection = guard.as_mut().unwrap();
         let transaction = connection.transaction()?;
 
         transaction.execute(
@@ -709,7 +720,8 @@ impl TaskRepository for SqliteRepository {
     }
 
     fn update(&self, task: &DeskTask) -> Result<(), RepositoryError> {
-        let mut connection = Connection::open(&self.path)?;
+        let mut guard = self.cached_connection()?;
+        let connection = guard.as_mut().unwrap();
         let transaction = connection.transaction()?;
 
         transaction.execute(
@@ -754,7 +766,8 @@ impl TaskRepository for SqliteRepository {
     }
 
     fn update_status(&self, id: Uuid, status: TaskStatus) -> Result<(), RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         connection.execute(
             "UPDATE desk_tasks SET status = ?1 WHERE id = ?2",
             params![task_status_as_str(status), id.to_string()],
@@ -763,7 +776,8 @@ impl TaskRepository for SqliteRepository {
     }
 
     fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
-        let mut connection = Connection::open(&self.path)?;
+        let mut guard = self.cached_connection()?;
+        let connection = guard.as_mut().unwrap();
         let transaction = connection.transaction()?;
 
         transaction.execute(
@@ -792,7 +806,8 @@ pub trait AreaRepository {
 
 impl AreaRepository for SqliteRepository {
     fn find(&self, id: Uuid) -> Result<Option<Area>, RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         let result = connection.query_row(
             "SELECT id, title FROM areas WHERE id = ?1",
             params![id.to_string()],
@@ -815,7 +830,8 @@ impl AreaRepository for SqliteRepository {
     }
 
     fn list(&self) -> Result<Vec<Area>, RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         let mut statement = connection.prepare("SELECT id, title FROM areas ORDER BY title")?;
         let mut rows = statement.query([])?;
         let mut areas = Vec::new();
@@ -833,7 +849,8 @@ impl AreaRepository for SqliteRepository {
     }
 
     fn create(&self, area: &Area) -> Result<(), RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         connection.execute(
             "INSERT INTO areas (id, title) VALUES (?1, ?2)",
             params![area.id.to_string(), &area.title],
@@ -842,7 +859,8 @@ impl AreaRepository for SqliteRepository {
     }
 
     fn update(&self, area: &Area) -> Result<(), RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         connection.execute(
             "UPDATE areas SET title = ?1 WHERE id = ?2",
             params![&area.title, area.id.to_string()],
@@ -851,7 +869,8 @@ impl AreaRepository for SqliteRepository {
     }
 
     fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
-        let connection = Connection::open(&self.path)?;
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
         connection.execute(
             "DELETE FROM areas WHERE id = ?1",
             params![id.to_string()],

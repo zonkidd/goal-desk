@@ -88,9 +88,7 @@ export function CalendarView() {
   const [hideCompleted, setHideCompleted] = useState(false)
 
   const { today: { timeline: todayTimeline } } = useWorkspaceDerived()
-  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
-  const openReminderDrawer = useUiStore((state) => state.openReminderDrawer)
-  const openCalendarEventDrawer = useUiStore((state) => state.openCalendarEventDrawer)
+  const openDrawer = useUiStore((state) => state.openDrawer)
 
   const weekDays = getWeekDays(weekStart)
 
@@ -108,11 +106,11 @@ export function CalendarView() {
 
   const handleEventClick = (event: TimelineItem) => {
     if (event.source === 'todo') {
-      openTaskDrawer(event.id)
+      openDrawer('task', event.id)
     } else if (event.source === 'reminder') {
-      openReminderDrawer(event.id)
+      openDrawer('reminder', event.id)
     } else if (event.source === 'calendar') {
-      openCalendarEventDrawer?.(event.id)
+      openDrawer('calendarEvent', event.id)
     }
   }
 

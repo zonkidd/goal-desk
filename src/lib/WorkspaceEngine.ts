@@ -1,7 +1,6 @@
 import type { AreaFilter, GoalCard, RawAgendaItem, TodayAgenda } from '../types/app'
 import type { Task } from '../types/task'
 import {
-  deriveGoalRecords,
   deriveTodayAttentionGroups,
   deriveTodayRelevantGoals,
   deriveTodayAgenda,
@@ -43,17 +42,16 @@ export interface AtomicState {
 
 export function computeSnapshot(state: AtomicState): WorkspaceSnapshot {
   const now = state.now ?? new Date()
-  const derivedGoals = deriveGoalRecords(state.baseGoals, state.tasks)
-  const goals = filterGoalsByArea(derivedGoals, state.activeArea)
-  const filteredTasks = filterTasksByArea(state.tasks, derivedGoals, state.activeArea)
-  const focusFiltered = getTodayFocusTasks(state.tasks, derivedGoals, state.activeArea, now)
+  const goals = filterGoalsByArea(state.baseGoals, state.activeArea)
+  const filteredTasks = filterTasksByArea(state.tasks, state.baseGoals, state.activeArea)
+  const focusFiltered = getTodayFocusTasks(state.tasks, state.baseGoals, state.activeArea, now)
   const timeline = deriveTodayAgenda(state.baseTimeline, state.tasks, now)
   const timelineFiltered = state.activeArea === 'ALL' ? timeline : filterAgendaByArea(timeline, filteredTasks)
   const attentionGroups = deriveTodayAttentionGroups(
     state.activeArea === 'ALL' ? state.tasks : filteredTasks,
     now,
   )
-  const relevantGoals = deriveTodayRelevantGoals(derivedGoals, attentionGroups)
+  const relevantGoals = deriveTodayRelevantGoals(state.baseGoals, attentionGroups)
   const inbox = getInboxTaskGroups(filteredTasks, state.showCompletedTodos)
 
   return {

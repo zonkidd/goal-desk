@@ -21,13 +21,12 @@ const statusActions: Array<{ status: GoalStatus; label: string; icon: typeof Pla
 
 export function GoalDrawer() {
   const goal = useSelectedGoal()
-  const isOpen = useUiStore((state) => state.isGoalDrawerOpen)
-  const closeGoalDrawer = useUiStore((state) => state.closeGoalDrawer)
+  const isOpen = useUiStore((state) => state.activeDrawer?.type === 'goal')
+  const closeDrawer = useUiStore((state) => state.closeDrawer)
   const updateGoalFields = useGoalStore((state) => state.updateGoalFields)
   const updateGoalStatus = useGoalStore((state) => state.updateGoalStatus)
   const createTaskForGoal = useTaskStore((state) => state.createTaskForGoal)
-  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
-  const closeGoalDrawerForTask = useUiStore((state) => state.closeGoalDrawer)
+  const openDrawer = useUiStore((state) => state.openDrawer)
   const allAreas = useAreaStore((state) => state.allAreas)
   const createArea = useAreaStore((state) => state.createArea)
   const tasks = useTaskStore((state) => state.tasks)
@@ -56,7 +55,7 @@ export function GoalDrawer() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={closeGoalDrawer}
+            onClick={closeDrawer}
           />
           <motion.aside
             className="glass-panel fixed bottom-4 right-4 top-4 z-50 flex w-[560px] flex-col rounded-3xl border border-white bg-white/95 shadow-2xl outline-none"
@@ -91,7 +90,7 @@ export function GoalDrawer() {
                 <div className="text-xs font-bold uppercase tracking-widest text-slate-400">{goal.taskCount} 个关联任务</div>
               </div>
               <button
-                onClick={closeGoalDrawer}
+                onClick={closeDrawer}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:border-slate-300"
               >
                 <X className="h-5 w-5" />
@@ -154,8 +153,8 @@ export function GoalDrawer() {
                     onClick={async () => {
                       const task = await createTaskForGoal(goal, taskTitle)
                       if (task) {
-                        openTaskDrawer(task.id)
-                        closeGoalDrawerForTask()
+                        openDrawer('task', task.id)
+                        closeDrawer()
                       }
                       setTaskTitle('')
                     }}

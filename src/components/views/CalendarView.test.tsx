@@ -46,9 +46,7 @@ describe('CalendarView', () => {
     ;(useUiStore as any).mockImplementation((selector: any) => {
       const mockState = {
         currentView: 'calendar',
-        openTaskDrawer: vi.fn(),
-        openReminderDrawer: vi.fn(),
-        openCalendarEventDrawer: vi.fn(),
+        openDrawer: vi.fn(),
       }
       return selector(mockState)
     })

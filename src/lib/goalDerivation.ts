@@ -2,15 +2,6 @@ import type { GoalCard, GoalStatus } from '../types/app'
 import type { Task } from '../types/task'
 
 /**
- * Lightweight goal enrichment — only fields Rust doesn't provide.
- * Rust already computes progress, taskCount, nextTodo via build_goal_summary().
- * This function only enriches updatedAt from linked tasks.
- */
-export function deriveGoalRecords(goals: GoalCard[], _tasks: Task[]): GoalCard[] {
-  return goals
-}
-
-/**
  * Derive Goal status from persisted status + linked task completion.
  * Rust stores the raw status; this computes the effective status.
  * Called once after loading goals from Rust, not per-render.

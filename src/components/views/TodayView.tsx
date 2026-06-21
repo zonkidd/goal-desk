@@ -38,9 +38,7 @@ export function TodayView() {
   const timeline = showCompletedTodos ? rawTimeline : rawTimeline.filter(item => !item.done)
   const ongoingTasks = today.attentionGroups.ongoing
   const todayRelevantGoals = today.relevantGoals
-  const openReminderDrawer = useUiStore((state) => state.openReminderDrawer)
-  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
-  const openGoalDrawer = useUiStore((state) => state.openGoalDrawer)
+  const openDrawer = useUiStore((state) => state.openDrawer)
   const eventkitPermissions = useEventkitStore((state) => state.eventkitPermissions)
   const requestCalendarAccess = useEventkitStore((state) => state.requestCalendarAccess)
   const requestRemindersAccess = useEventkitStore((state) => state.requestRemindersAccess)
@@ -89,7 +87,7 @@ export function TodayView() {
                   <div key={task.id} className="group relative">
                     <button
                       type="button"
-                      onClick={() => openTaskDrawer(task.id)}
+                      onClick={() => openDrawer('task',task.id)}
                       className="glass-card flex w-full items-center justify-between rounded-2xl p-4 text-left transition-transform hover:-translate-y-0.5"
                     >
                       <div>
@@ -176,7 +174,7 @@ export function TodayView() {
 
             <div className="space-y-3">
               {todayRelevantGoals.map((goal) => (
-                <button key={goal.id} type="button" onClick={() => openGoalDrawer(goal.id)} className="block w-full text-left">
+                <button key={goal.id} type="button" onClick={() => openDrawer('goal',goal.id)} className="block w-full text-left">
                   <GlassCard className="rounded-2xl p-4">
                     <div className="mb-3 flex items-start justify-between gap-4">
                       <div>
@@ -265,9 +263,9 @@ export function TodayView() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (item.source === 'todo') openTaskDrawer(item.id)
-                      if (item.source === 'reminder') openReminderDrawer(item.id)
-                      if (item.source === 'calendar') openReminderDrawer(item.id)
+                      if (item.source === 'todo') openDrawer('task',item.id)
+                      if (item.source === 'reminder') openDrawer('reminder',item.id)
+                      if (item.source === 'calendar') openDrawer('reminder',item.id)
                     }}
                     className={`flex-1 rounded-xl p-3 text-left glass-card ${styles.card} transition-transform hover:-translate-y-0.5`}
                   >

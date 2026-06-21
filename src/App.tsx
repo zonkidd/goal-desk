@@ -7,10 +7,10 @@ import { getCurrentWindowLabel, isTauriRuntime } from './lib/runtime'
 import { loadDesktopSnapshot } from './lib/desktopSnapshot'
 import { loadBrowserData } from './lib/browserCodec'
 import { getRuntimeModeStatusMessage } from './lib/taskPresentation'
+import { TaskCodec, type RustTask } from './lib/codecs'
 import { useUiStore } from './store/uiStore'
 import { useAreaStore } from './store/areaStore'
 import { useAppHydration, useReceiveExternalTask } from './hooks/useStoreComposition'
-import type { Task } from './types/task'
 
 function MainApp() {
   const hydrateApp = useAppHydration()
@@ -35,43 +35,8 @@ function MainApp() {
   useEffect(() => {
     if (!isTauriRuntime() || getCurrentWindowLabel() !== 'main') return
 
-    const unlisten = listen<{
-      id: string
-      title: string
-      content: string
-      status: Task['status']
-      plannedStartAt?: string
-      dueAt?: string
-      showInTimeline: boolean
-      linkedGoalId?: string
-      linkedGoalLabel?: string
-      bearNoteId?: string
-      systemReminderId?: string
-      activityLogs: Array<{
-        action: Task['activityLogs'][0]['action']
-        note?: string
-        timestamp: string
-      }>
-    }>('desk-task-created', (event) => {
-      const payload = event.payload
-      const task: Task = {
-        id: payload.id,
-        title: payload.title,
-        content: payload.content,
-        status: payload.status,
-        plannedStartAt: payload.plannedStartAt ? new Date(payload.plannedStartAt) : undefined,
-        dueDate: payload.dueAt ? new Date(payload.dueAt) : undefined,
-        showInTimeline: payload.showInTimeline,
-        linkedGoalId: payload.linkedGoalId,
-        linkedGoalLabel: payload.linkedGoalLabel,
-        bearNoteId: payload.bearNoteId,
-        systemReminderId: payload.systemReminderId,
-        activityLogs: payload.activityLogs.map((log) => ({
-          action: log.action,
-          note: log.note,
-          timestamp: new Date(log.timestamp),
-        })),
-      }
+    const unlisten = listen<RustTask>('desk-task-created', (event) => {
+      const task = TaskCodec.fromRust(event.payload)
       receiveExternalTask(task)
     })
 

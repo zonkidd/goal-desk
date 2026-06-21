@@ -1,32 +1,7 @@
 import { describe, test, expect, beforeEach } from 'vitest'
-import { deriveGoalRecords, deriveTodayAttentionGroups, deriveTodayAgenda, filterAgendaByArea, getTodayFocusTasks, convertEventKitToRawItems, groupByDate, filterGoalsByArea, filterTasksByArea } from './workspaceDerivation'
+import { deriveTodayAttentionGroups, deriveTodayAgenda, filterAgendaByArea, getTodayFocusTasks, convertEventKitToRawItems, groupByDate, filterGoalsByArea, filterTasksByArea } from './workspaceDerivation'
 import type { Task } from '../types/task'
 import type { GoalCard } from '../types/app'
-
-describe('workspaceDerivation - Goal 进度派生', () => {
-  test('保留 Rust 已计算的 progress（不再重复计算）', () => {
-    const goals: GoalCard[] = [
-      { id: 'g1', title: 'Goal', area: 'Work', status: 'ACTIVE', description: '', progress: 75, nextTodo: 'Task 3', taskCount: 4, createdAt: new Date(), updatedAt: new Date() },
-    ]
-    const tasks: Task[] = [
-      { id: 't1', title: 'Task 1', content: '', status: 'DONE', linkedGoalId: 'g1', activityLogs: [], showInTimeline: false },
-      { id: 't2', title: 'Task 2', content: '', status: 'TODO', linkedGoalId: 'g1', activityLogs: [], showInTimeline: false },
-    ]
-
-    const derived = deriveGoalRecords(goals, tasks)
-    expect(derived[0].progress).toBe(75)
-    expect(derived[0].taskCount).toBe(4)
-  })
-
-  test('无关联任务时保持 progress 不变', () => {
-    const goals: GoalCard[] = [
-      { id: 'g1', title: 'Goal', area: 'Work', status: 'ACTIVE', description: '', progress: 50, nextTodo: '', taskCount: 2, createdAt: new Date(), updatedAt: new Date() },
-    ]
-
-    const derived = deriveGoalRecords(goals, [])
-    expect(derived[0].progress).toBe(50)
-  })
-})
 
 describe('workspaceDerivation - 今日焦点任务筛选', () => {
   let now: Date

@@ -27,11 +27,11 @@ import { useTaskStore } from './taskStore'
 import { useGoalStore } from './goalStore'
 
 export function useSelectedTask() {
-  const selectedTaskId = useUiStore((state) => state.selectedTaskId)
+  const selectedTaskId = useUiStore((state) => state.activeDrawer?.type === 'task' ? state.activeDrawer.id : undefined)
   return useTaskStore((state) => state.tasks.find((task) => task.id === selectedTaskId))
 }
 
 export function useSelectedGoal() {
-  const selectedGoalId = useUiStore((state) => state.selectedGoalId)
+  const selectedGoalId = useUiStore((state) => state.activeDrawer?.type === 'goal' ? state.activeDrawer.id : undefined)
   return useGoalStore((state) => state.baseGoals.find((goal) => goal.id === selectedGoalId))
 }

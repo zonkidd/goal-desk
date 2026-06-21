@@ -10,9 +10,9 @@ const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as cons
 
 export function CalendarEventDrawer() {
   const timeline = useTaskStore(selectFilteredTimeline as (state: any) => TodayAgenda)
-  const isOpen = useUiStore((state) => state.isCalendarEventDrawerOpen)
-  const eventId = useUiStore((state) => state.selectedCalendarEventId)
-  const onClose = useUiStore((state) => state.closeCalendarEventDrawer)
+  const isOpen = useUiStore((state) => state.activeDrawer?.type === 'calendarEvent')
+  const eventId = useUiStore((state) => state.activeDrawer?.type === 'calendarEvent' ? state.activeDrawer.id : undefined)
+  const onClose = useUiStore((state) => state.closeDrawer)
 
   // 从 timeline 中查找 Calendar Event
   const event = timeline.find((item) => item.id === eventId && item.source === 'calendar')

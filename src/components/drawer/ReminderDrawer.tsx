@@ -13,9 +13,9 @@ const accessLabel = {
 } as const
 
 export function ReminderDrawer() {
-  const isOpen = useUiStore((state) => state.isReminderDrawerOpen)
-  const closeReminderDrawer = useUiStore((state) => state.closeReminderDrawer)
-  const selectedReminderId = useUiStore((state) => state.selectedReminderId)
+  const isOpen = useUiStore((state) => state.activeDrawer?.type === 'reminder')
+  const closeDrawer = useUiStore((state) => state.closeDrawer)
+  const selectedReminderId = useUiStore((state) => state.activeDrawer?.type === 'reminder' ? state.activeDrawer.id : undefined)
   const reminders = useEventkitStore((state) => state.systemReminders)
   const integrationStatus = useEventkitStore((state) => state.integrationStatus)
   const toggleSystemReminderDone = useToggleSystemReminder()
@@ -35,7 +35,7 @@ export function ReminderDrawer() {
               <Bell className="h-4 w-4 text-indigo-500" />
               <h3 className="font-bold">Apple Reminders</h3>
             </div>
-            <button onClick={closeReminderDrawer} className="rounded-full border border-slate-200 bg-slate-100 p-1.5 text-slate-500">
+            <button onClick={closeDrawer} className="rounded-full border border-slate-200 bg-slate-100 p-1.5 text-slate-500">
               <X className="h-4 w-4" />
             </button>
           </div>

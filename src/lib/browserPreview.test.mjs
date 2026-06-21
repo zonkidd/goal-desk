@@ -10,7 +10,6 @@ import {
   logActionForTransition,
 } from './taskPresentation.ts'
 import {
-  deriveGoalRecords,
   filterGoalsByArea,
   filterTasksByArea,
   filterTimelineByArea,
@@ -85,46 +84,6 @@ test('area filter keeps linked tasks in matching area and preserves non-task tim
   assert.deepEqual(filteredGoals.map((goal) => goal.id), ['goal-health'])
   assert.deepEqual(filteredTasks.map((task) => task.id), ['task-a'])
   assert.deepEqual(filteredTimeline.map((item) => item.id), ['cal-1', 'task-a'])
-})
-
-test('goals derive ready-to-complete state and progress from linked tasks', () => {
-  const goals = [
-    {
-      id: 'goal-ship',
-      title: 'Ship Goal Desk',
-      area: '独立开发',
-      description: 'close the first local loop',
-      status: 'ACTIVE',
-      progress: 0,
-      nextTodo: '',
-      createdAt: new Date('2026-06-01T09:00:00+08:00'),
-      updatedAt: new Date('2026-06-01T09:00:00+08:00'),
-    },
-    {
-      id: 'goal-empty',
-      title: 'Future Goal',
-      area: '个人成长',
-      description: '',
-      status: 'ACTIVE',
-      progress: 0,
-      nextTodo: '',
-      createdAt: new Date('2026-06-01T09:00:00+08:00'),
-      updatedAt: new Date('2026-06-01T09:00:00+08:00'),
-    },
-  ]
-  const tasks = [
-    { id: 'task-a', linkedGoalId: 'goal-ship', title: 'Build inbox', status: 'DONE', activityLogs: [] },
-    { id: 'task-b', linkedGoalId: 'goal-ship', title: 'Build board', status: 'DONE', activityLogs: [] },
-  ]
-
-  const derived = deriveGoalRecords(goals, tasks)
-
-  assert.equal(derived[0].progress, 100)
-  assert.equal(derived[0].status, 'READY_TO_COMPLETE')
-  assert.equal(derived[0].taskCount, 2)
-  assert.equal(derived[1].progress, 0)
-  assert.equal(derived[1].status, 'ACTIVE')
-  assert.equal(derived[1].taskCount, 0)
 })
 
 test('today focus includes ongoing tasks before their deadline', () => {

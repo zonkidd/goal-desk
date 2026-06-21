@@ -17,7 +17,7 @@ export function BoardView() {
   const tasks = useTaskStore((state) => state.tasks)
   const goals = useGoalStore((state) => state.baseGoals)
   const activeArea = useUiStore((state) => state.activeArea)
-  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
+  const openDrawer = useUiStore((state) => state.openDrawer)
   const visibleTasks = filterTasksByArea(tasks, goals, activeArea)
 
   return (
@@ -38,7 +38,7 @@ export function BoardView() {
                 <motion.button
                   key={task.id}
                   whileHover={{ y: -2 }}
-                  onClick={() => openTaskDrawer(task.id)}
+                  onClick={() => openDrawer('task',task.id)}
                   className="block w-full text-left"
                 >
                   <GlassCard className="rounded-2xl p-4">

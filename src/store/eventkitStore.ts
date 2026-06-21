@@ -7,8 +7,7 @@ import {
   fetchCalendarEvents,
   fetchReminders,
 } from '../lib/eventkitIntegration'
-import type { AuthorizationStatus } from '../lib/PermissionManager'
-import type { IntegrationStatus, ReminderItem } from '../types/app'
+import type { AccessStatus, IntegrationStatus, ReminderItem } from '../types/app'
 
 export interface EventkitStoreState {
   rawEventKit: {
@@ -19,8 +18,8 @@ export interface EventkitStoreState {
   integrationStatus: IntegrationStatus
 
   eventkitPermissions: {
-    calendar: AuthorizationStatus
-    reminders: AuthorizationStatus
+    calendar: AccessStatus
+    reminders: AccessStatus
   }
 
   hydrateEventkitData: (data: {
@@ -44,7 +43,7 @@ function createDateRange() {
   return { startOfDay, endOfDay }
 }
 
-type PendingMap = Map<'calendar' | 'reminders', Promise<AuthorizationStatus>>
+type PendingMap = Map<'calendar' | 'reminders', Promise<AccessStatus>>
 
 const pendingRequests: PendingMap = new Map()
 
@@ -110,9 +109,9 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
       })
       .catch(() => {
         set((s) => ({
-          eventkitPermissions: { ...s.eventkitPermissions, calendar: 'error' as AuthorizationStatus },
+          eventkitPermissions: { ...s.eventkitPermissions, calendar: 'error' as AccessStatus },
         }))
-        return 'error' as AuthorizationStatus
+        return 'error' as AccessStatus
       })
       .finally(() => {
         pendingRequests.delete('calendar')
@@ -134,9 +133,9 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
       })
       .catch(() => {
         set((s) => ({
-          eventkitPermissions: { ...s.eventkitPermissions, reminders: 'error' as AuthorizationStatus },
+          eventkitPermissions: { ...s.eventkitPermissions, reminders: 'error' as AccessStatus },
         }))
-        return 'error' as AuthorizationStatus
+        return 'error' as AccessStatus
       })
       .finally(() => {
         pendingRequests.delete('reminders')

@@ -9,9 +9,9 @@ const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as cons
 
 export function SystemReminderDrawer() {
   const systemReminders = useEventkitStore((state) => state.systemReminders)
-  const isOpen = useUiStore((state) => state.isReminderDrawerOpen)
-  const reminderId = useUiStore((state) => state.selectedReminderId)
-  const onClose = useUiStore((state) => state.closeReminderDrawer)
+  const isOpen = useUiStore((state) => state.activeDrawer?.type === 'reminder')
+  const reminderId = useUiStore((state) => state.activeDrawer?.type === 'reminder' ? state.activeDrawer.id : undefined)
+  const onClose = useUiStore((state) => state.closeDrawer)
 
   const reminder = systemReminders.find((r) => r.id === reminderId)
 

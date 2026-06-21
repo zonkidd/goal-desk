@@ -43,8 +43,7 @@ describe('Store action results', () => {
     useUiStore.setState({
       statusMessage: '',
       currentView: 'inbox',
-      isTaskDrawerOpen: false,
-      isGoalDrawerOpen: false,
+      activeDrawer: null,
     })
     vi.clearAllMocks()
   })

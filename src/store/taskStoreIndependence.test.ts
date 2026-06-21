@@ -12,8 +12,7 @@ describe('taskStore independence from uiStore', () => {
       tasks: [],
     })
     useUiStore.setState({
-      isTaskDrawerOpen: false,
-      selectedTaskId: undefined,
+      activeDrawer: null,
       currentView: 'inbox',
     })
     vi.clearAllMocks()
@@ -23,7 +22,7 @@ describe('taskStore independence from uiStore', () => {
     await useTaskStore.getState().addTask('Test task')
 
     const uiState = useUiStore.getState()
-    expect(uiState.isTaskDrawerOpen).toBe(false)
+    expect(uiState.activeDrawer).toBeNull()
   })
 
   it('addTask should not directly switch view', async () => {
@@ -41,16 +40,16 @@ describe('taskStore independence from uiStore', () => {
     await useTaskStore.getState().createTaskForGoal(mockGoal, 'Task for goal')
 
     const uiState = useUiStore.getState()
-    expect(uiState.isTaskDrawerOpen).toBe(false)
+    expect(uiState.activeDrawer).toBeNull()
   })
 
   it('createTaskForGoal should not directly close goal drawer', async () => {
-    useUiStore.setState({ isGoalDrawerOpen: true, selectedGoalId: 'goal-1' })
+    useUiStore.setState({ activeDrawer: { type: 'goal', id: 'goal-1' } })
 
     const mockGoal = { id: 'goal-1', title: 'Test', area: 'Work', description: '', status: 'ACTIVE' as const, progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() }
     await useTaskStore.getState().createTaskForGoal(mockGoal, 'Task for goal')
 
     const uiState = useUiStore.getState()
-    expect(uiState.isGoalDrawerOpen).toBe(true)
+    expect(uiState.activeDrawer).toEqual({ type: 'goal', id: 'goal-1' })
   })
 })

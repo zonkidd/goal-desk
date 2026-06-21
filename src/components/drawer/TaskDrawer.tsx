@@ -22,8 +22,8 @@ import type { GoalCard } from '../../types/app'
 
 function useTaskDrawerData() {
   const task = useSelectedTask()
-  const isOpen = useUiStore((s) => s.isTaskDrawerOpen)
-  const closeTaskDrawer = useUiStore((s) => s.closeTaskDrawer)
+  const isOpen = useUiStore((s) => s.activeDrawer?.type === 'task')
+  const closeDrawer = useUiStore((s) => s.closeDrawer)
   const activeArea = useUiStore((s) => s.activeArea)
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus)
   const updateTaskContent = useTaskStore((s) => s.updateTaskContent)
@@ -44,7 +44,7 @@ function useTaskDrawerData() {
   )
 
   return {
-    task, isOpen, closeTaskDrawer, activeArea,
+    task, isOpen, closeDrawer, activeArea,
     updateTaskStatus, updateTaskContent, updateTaskFields, addTaskNote,
     createAndLinkReminder, unlinkTaskFromReminder,
     createGoal, goals, allAreas, createArea, systemReminders,
@@ -55,7 +55,7 @@ const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as cons
 
 export function TaskDrawer() {
   const {
-    task, isOpen, closeTaskDrawer, activeArea,
+    task, isOpen, closeDrawer, activeArea,
     updateTaskStatus, updateTaskContent, updateTaskFields, addTaskNote,
     createAndLinkReminder, unlinkTaskFromReminder,
     createGoal, goals, allAreas, createArea, systemReminders,
@@ -113,7 +113,7 @@ export function TaskDrawer() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={closeTaskDrawer}
+            onClick={closeDrawer}
           />
           <motion.aside
             className="glass-panel fixed bottom-4 right-4 top-4 z-50 flex w-[600px] flex-col rounded-3xl border border-white bg-white/95 shadow-2xl outline-none"
@@ -125,7 +125,7 @@ export function TaskDrawer() {
             <header className="flex shrink-0 items-center justify-between rounded-t-3xl border-b border-slate-100 bg-slate-50/50 p-6">
               <StatusMachineButtons status={task.status} statusActions={statusActions} onAction={setPendingStatus} />
               <button
-                onClick={closeTaskDrawer}
+                onClick={closeDrawer}
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:border-slate-300"
               >
                 <X className="h-4 w-4" />

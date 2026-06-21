@@ -36,7 +36,7 @@ export function RemindersView() {
 
   const systemReminders = useEventkitStore((state) => state.systemReminders)
   const toggleSystemReminderDone = useToggleSystemReminder()
-  const openReminderDrawer = useUiStore((state) => state.openReminderDrawer)
+  const openDrawer = useUiStore((state) => state.openDrawer)
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroups((prev) => {
@@ -191,7 +191,7 @@ export function RemindersView() {
               lists={reminderLists}
               hideCompleted={hideCompleted}
               onToggle={handleToggleReminder}
-              onReminderClick={openReminderDrawer}
+              onReminderClick={(id) => openDrawer('reminder', id)}
             />
           </motion.div>
         ) : (
@@ -208,7 +208,7 @@ export function RemindersView() {
               expandedGroups={expandedGroups}
               onToggleGroup={toggleGroup}
               onToggle={handleToggleReminder}
-              onReminderClick={openReminderDrawer}
+              onReminderClick={(id) => openDrawer('reminder', id)}
             />
           </motion.div>
         )}

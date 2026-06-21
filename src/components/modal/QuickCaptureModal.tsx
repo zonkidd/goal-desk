@@ -9,7 +9,7 @@ export function QuickCaptureModal() {
   const closeQuickCapture = useUiStore((state) => state.closeQuickCapture)
   const addTask = useTaskStore((state) => state.addTask)
   const createAndLinkReminder = useTaskStore((state) => state.createAndLinkReminder)
-  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
+  const openDrawer = useUiStore((state) => state.openDrawer)
   const setView = useUiStore((state) => state.setView)
   const [value, setValue] = useState('')
 
@@ -21,7 +21,7 @@ export function QuickCaptureModal() {
       // 仅创建本地任务
       const task = await addTask(trimmed)
       if (task) {
-        openTaskDrawer(task.id)
+        openDrawer('task',task.id)
         setView('inbox')
       }
     } else if (mode === 'reminder') {
@@ -32,7 +32,7 @@ export function QuickCaptureModal() {
       const task = await addTask(trimmed)
       if (task) {
         await createAndLinkReminder(task.id, trimmed)
-        openTaskDrawer(task.id)
+        openDrawer('task',task.id)
         setView('inbox')
       }
     }

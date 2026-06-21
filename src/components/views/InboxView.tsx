@@ -9,7 +9,7 @@ import { getTaskContentBadgeLabel } from '../../lib/taskPresentation'
 export function InboxView() {
   const { inbox: groupedTasks } = useWorkspaceDerived()
   const showCompleted = useUiStore((state) => state.showCompletedTodos)
-  const openTaskDrawer = useUiStore((state) => state.openTaskDrawer)
+  const openDrawer = useUiStore((state) => state.openDrawer)
   const addTask = useTaskStore((state) => state.addTask)
   const setShowCompleted = useUiStore((state) => state.setShowCompletedTodos)
 
@@ -33,7 +33,7 @@ export function InboxView() {
                 <motion.button
                   key={task.id}
                   whileHover={{ y: -2 }}
-                  onClick={() => openTaskDrawer(task.id)}
+                  onClick={() => openDrawer('task',task.id)}
                   className="glass-card flex w-full items-center gap-4 rounded-xl p-4 text-left hover:border-indigo-300"
                 >
                   <div className="h-5 w-5 shrink-0 rounded-[6px] border-2 border-slate-300 bg-white" />
@@ -69,7 +69,7 @@ export function InboxView() {
                 <motion.button
                   key={task.id}
                   whileHover={{ y: -2 }}
-                  onClick={() => openTaskDrawer(task.id)}
+                  onClick={() => openDrawer('task',task.id)}
                   className="glass-card flex w-full items-center gap-4 rounded-xl border-l-4 border-l-amber-400 p-4 text-left"
                 >
                   <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border-2 border-amber-300 bg-amber-50 text-amber-500">
@@ -107,7 +107,7 @@ export function InboxView() {
                   <motion.button
                     key={task.id}
                     whileHover={{ y: -2 }}
-                    onClick={() => openTaskDrawer(task.id)}
+                    onClick={() => openDrawer('task',task.id)}
                     className="glass-card flex w-full items-center gap-4 rounded-xl border-l-4 border-l-emerald-400 p-4 text-left"
                   >
                     <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border-2 border-emerald-300 bg-emerald-50 text-emerald-500">
