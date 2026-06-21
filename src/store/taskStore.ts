@@ -199,13 +199,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
 
       const mockReminderId = `mock-reminder-${Date.now()}`
       if (taskId) {
-        set((state) => ({
-          tasks: state.tasks.map((task) =>
-            task.id === taskId
-              ? { ...task, systemReminderId: mockReminderId, updatedAt: new Date() }
-              : task,
-          ),
-        }))
+        await get().linkTaskToReminder(taskId, mockReminderId)
       }
       return mockReminderId
     } catch (error) {

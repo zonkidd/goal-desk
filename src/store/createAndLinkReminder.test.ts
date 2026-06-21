@@ -88,4 +88,25 @@ describe('createAndLinkReminder', () => {
     const tasks = useTaskStore.getState().tasks
     expect(tasks.every(t => !t.systemReminderId)).toBe(true)
   })
+
+  it('should persist reminder link via adapter in browser mode when taskId is provided', async () => {
+    const mockAdapter = createMockAdapter()
+    mockAdapter.updateTaskFields = vi.fn().mockResolvedValue({
+      task: { id: 'task-1', title: 'Test', systemReminderId: 'mock-reminder-123' },
+      statusMessage: 'ok',
+    })
+    setWorkspaceMutationAdapter(mockAdapter)
+    setRuntimeAdapter(createMockRuntime(false))
+
+    useTaskStore.setState({
+      tasks: [{ id: 'task-1', title: 'Test', content: '', status: 'TODO', activityLogs: [] }],
+    })
+
+    const result = await useTaskStore.getState().createAndLinkReminder('task-1', 'Reminder Title')
+
+    expect(result).toContain('mock-reminder-')
+    expect(mockAdapter.updateTaskFields).toHaveBeenCalledWith('task-1', expect.objectContaining({
+      systemReminderId: expect.stringContaining('mock-reminder-'),
+    }))
+  })
 })
