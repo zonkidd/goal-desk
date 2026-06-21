@@ -28,7 +28,6 @@ describe('computeSnapshot (pure function)', () => {
     const goals: GoalCard[] = [{
       id: 'g1', title: 'Goal 1', area: 'Work', description: '',
       status: 'ACTIVE', progress: 75, nextTodo: 'Task 3', taskCount: 4,
-      createdAt: new Date(), updatedAt: new Date(),
     }]
     const tasks: Task[] = [
       { id: 't1', title: 'Task 1', content: '', status: 'DONE', showInTimeline: false, linkedGoalId: 'g1', activityLogs: [] },
@@ -42,8 +41,8 @@ describe('computeSnapshot (pure function)', () => {
 
   it('filters goals by area', () => {
     const goals: GoalCard[] = [
-      { id: 'g1', title: 'Work Goal', area: 'Work', description: '', status: 'ACTIVE', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
-      { id: 'g2', title: 'Personal Goal', area: 'Personal', description: '', status: 'ACTIVE', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: 'g1', title: 'Work Goal', area: 'Work', description: '', status: 'ACTIVE', progress: 0, nextTodo: '', taskCount: 0 },
+      { id: 'g2', title: 'Personal Goal', area: 'Personal', description: '', status: 'ACTIVE', progress: 0, nextTodo: '', taskCount: 0 },
     ]
 
     const snapshot = computeSnapshot(createMockAtomicState({ baseGoals: goals, activeArea: 'Work' }))

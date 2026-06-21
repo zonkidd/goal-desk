@@ -44,8 +44,8 @@ describe('GoalCodec', () => {
 
     // createdAt/updatedAt should NOT be set to current time
     // They should be undefined since Rust doesn't provide them
-    expect(result.createdAt).toBeUndefined()
-    expect(result.updatedAt).toBeUndefined()
+    expect((result as any).createdAt).toBeUndefined()
+    expect((result as any).updatedAt).toBeUndefined()
   })
 
   it('handles batch conversion', () => {

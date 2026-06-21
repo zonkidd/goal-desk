@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { TauriAdapter } from './tauriAdapter'
-import type { GoalCard, Task } from '../types/app'
+import type { GoalCard } from '../types/app'
+import type { Task } from '../types/task'
 
 // Mock tauriCommands
 vi.mock('./tauriCommands', () => ({

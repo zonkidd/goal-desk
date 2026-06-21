@@ -153,6 +153,40 @@ describe('BrowserAdapter', () => {
     })
   })
 
+  describe('updateTaskFields with goal progress sync', () => {
+    it('should recalculate goal taskCount when linking a task via updateTaskFields', async () => {
+      const goal: GoalCard = {
+        id: 'goal-1',
+        title: 'Test Goal',
+        area: 'Work',
+        description: '',
+        status: 'ACTIVE',
+        progress: 0,
+        nextTodo: '',
+        taskCount: 0,
+      }
+      backingStore[BROWSER_STORAGE_GOALS] = JSON.stringify([goal])
+
+      const task: Task = {
+        id: 'task-1',
+        title: 'Unlinked Task',
+        content: '',
+        status: 'TODO',
+        showInTimeline: false,
+        activityLogs: [],
+      }
+      backingStore[BROWSER_STORAGE_TASKS] = JSON.stringify([task])
+
+      await adapter.updateTaskFields('task-1', {
+        title: 'Unlinked Task',
+        linkedGoalId: 'goal-1',
+      })
+
+      const goals = JSON.parse(backingStore[BROWSER_STORAGE_GOALS] || '[]')
+      expect(goals[0].taskCount).toBe(1)
+    })
+  })
+
   describe('updateTaskStatus with activity log', () => {
     it('should always create activity log even without note', async () => {
       const task: Task = {

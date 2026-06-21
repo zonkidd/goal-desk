@@ -217,6 +217,15 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     tasks[idx] = updatedTask
     saveToLocalStorage(BROWSER_STORAGE_TASKS, tasks)
 
+    if (input.linkedGoalId !== existingTask.linkedGoalId) {
+      if (existingTask.linkedGoalId) {
+        recalculateGoalProgress(existingTask.linkedGoalId)
+      }
+      if (input.linkedGoalId) {
+        recalculateGoalProgress(input.linkedGoalId)
+      }
+    }
+
     return { task: updatedTask, statusMessage: BROWSER_PREVIEW_STATUS }
   }
 

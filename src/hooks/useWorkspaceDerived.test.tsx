@@ -35,8 +35,6 @@ const mockGoal: GoalCard = {
   progress: 0,
   nextTodo: '',
   taskCount: 0,
-  createdAt: new Date(),
-  updatedAt: new Date(),
 }
 
 describe('useWorkspaceDerived', () => {

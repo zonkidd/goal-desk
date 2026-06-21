@@ -53,10 +53,9 @@ describe('EventBus', () => {
         area: 'Work',
         description: '',
         status: 'ACTIVE',
-        progress: { totalTasks: 0, completedTasks: 0, percentage: 0 },
-        nextTodo: undefined,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        progress: 0,
+        nextTodo: '',
+        taskCount: 0,
       },
     }
 

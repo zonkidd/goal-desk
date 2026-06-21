@@ -72,8 +72,8 @@ describe('workspaceDerivation - 今日焦点任务筛选', () => {
 
   test('按领域筛选任务', () => {
     const goals: GoalCard[] = [
-      { id: 'g1', title: '工作目标', area: '工作', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
-      { id: 'g2', title: '生活目标', area: '生活', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: 'g1', title: '工作目标', area: '工作', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
+      { id: 'g2', title: '生活目标', area: '生活', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
     ]
 
     const tasks: Task[] = [
@@ -435,7 +435,7 @@ describe('workspaceDerivation - filterAgendaByArea 多日任务', () => {
   test('跨天任务展开后，filterAgendaByArea 通过纯净 id 正确匹配', () => {
     const now = new Date('2026-06-03T10:00:00+08:00')
     const goals: GoalCard[] = [
-      { id: 'g1', title: '工作目标', area: '工作', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: 'g1', title: '工作目标', area: '工作', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
     ]
     const tasks: Task[] = [
       {
@@ -486,8 +486,8 @@ describe('workspaceDerivation - filterAgendaByArea 多日任务', () => {
 describe('filterByArea - 通用领域过滤', () => {
   test('ALL 返回全部 goals', () => {
     const goals: GoalCard[] = [
-      { id: 'g1', title: 'G1', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
-      { id: 'g2', title: 'G2', area: 'Personal', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: 'g1', title: 'G1', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
+      { id: 'g2', title: 'G2', area: 'Personal', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
     ]
     const result = filterGoalsByArea(goals, 'ALL')
     expect(result).toHaveLength(2)
@@ -495,8 +495,8 @@ describe('filterByArea - 通用领域过滤', () => {
 
   test('指定领域只返回匹配的 goals', () => {
     const goals: GoalCard[] = [
-      { id: 'g1', title: 'G1', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
-      { id: 'g2', title: 'G2', area: 'Personal', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: 'g1', title: 'G1', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
+      { id: 'g2', title: 'G2', area: 'Personal', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
     ]
     const result = filterGoalsByArea(goals, 'Work')
     expect(result).toHaveLength(1)
@@ -509,8 +509,8 @@ describe('filterByArea - 通用领域过滤', () => {
       { id: 't2', title: 'T2', content: '', status: 'TODO', linkedGoalId: 'g2', activityLogs: [], showInTimeline: false },
     ]
     const goals: GoalCard[] = [
-      { id: 'g1', title: 'G1', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
-      { id: 'g2', title: 'G2', area: 'Personal', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: 'g1', title: 'G1', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
+      { id: 'g2', title: 'G2', area: 'Personal', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
     ]
     const result = filterTasksByArea(tasks, goals, 'ALL')
     expect(result).toHaveLength(2)
@@ -523,8 +523,8 @@ describe('filterByArea - 通用领域过滤', () => {
       { id: 't3', title: 'T3', content: '', status: 'TODO', activityLogs: [], showInTimeline: false },
     ]
     const goals: GoalCard[] = [
-      { id: 'g1', title: 'G1', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
-      { id: 'g2', title: 'G2', area: 'Personal', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: 'g1', title: 'G1', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
+      { id: 'g2', title: 'G2', area: 'Personal', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
     ]
     const result = filterTasksByArea(tasks, goals, 'Work')
     expect(result).toHaveLength(1)
