@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Calendar, Clock, MapPin, Tag, X, ExternalLink } from 'lucide-react'
+import { Calendar, Clock, Tag, X, ExternalLink } from 'lucide-react'
 import { useTodayTimeline } from '../../hooks/useWorkspaceDerived'
 import { useUiStore } from '../../store/uiStore'
 import { getEventKitAdapter } from '../../lib/workspaceMutations'
