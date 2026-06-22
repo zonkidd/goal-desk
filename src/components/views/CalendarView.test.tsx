@@ -29,11 +29,32 @@ vi.mock('../../hooks/useWorkspaceDerived', () => ({
   })),
 }))
 
-// Mock framer-motion
+// Mock framer-motion — strip motion-specific props before spreading to DOM
+const MOTION_KEYS = new Set(['initial', 'animate', 'exit', 'transition', 'whileHover', 'whileTap', 'whileFocus', 'whileDrag', 'whileInView', 'layout', 'layoutId', 'drag', 'dragConstraints', 'onAnimationStart', 'onAnimationComplete', 'variants'])
+function stripMotionProps({ children, ...props }: any) {
+  const domProps: Record<string, any> = {}
+  for (const key of Object.keys(props)) {
+    if (!MOTION_KEYS.has(key)) domProps[key] = props[key]
+  }
+  return <>{children ? <div {...domProps}>{children}</div> : <div {...domProps} />}</>
+}
 vi.mock('framer-motion', () => ({
   motion: {
-    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-    button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    div: stripMotionProps,
+    button: ({ children, ...props }: any) => {
+      const domProps: Record<string, any> = {}
+      for (const key of Object.keys(props)) {
+        if (!MOTION_KEYS.has(key)) domProps[key] = props[key]
+      }
+      return <button {...domProps}>{children}</button>
+    },
+    aside: ({ children, ...props }: any) => {
+      const domProps: Record<string, any> = {}
+      for (const key of Object.keys(props)) {
+        if (!MOTION_KEYS.has(key)) domProps[key] = props[key]
+      }
+      return <aside {...domProps}>{children}</aside>
+    },
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }))
