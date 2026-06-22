@@ -4,17 +4,17 @@ export async function executeMutation<T>(
   fn: (adapter: MutationAdapter) => Promise<T>,
   adapter: MutationAdapter,
   options?: {
-    onSuccess?: (result: T) => void
-    onError?: (error: unknown) => void
+    onSuccess?: (result: T) => void | Promise<void>
+    onError?: (error: unknown) => void | Promise<void>
   },
 ): Promise<T | null> {
   try {
     const result = await fn(adapter)
-    options?.onSuccess?.(result)
+    await options?.onSuccess?.(result)
     return result
   } catch (error) {
     console.error('Mutation failed:', error)
-    options?.onError?.(error)
+    await options?.onError?.(error)
     return null
   }
 }

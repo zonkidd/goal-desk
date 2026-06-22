@@ -69,5 +69,20 @@ describe('mutationHelper', () => {
       expect(onError).toHaveBeenCalledWith(expect.any(Error))
       errorSpy.mockRestore()
     })
+
+    it('awaits async onSuccess callback', async () => {
+      const adapter = createMockAdapter()
+      const fn = vi.fn().mockResolvedValue({ task: { id: 't1' } })
+      const callOrder: string[] = []
+      const onSuccess = vi.fn().mockImplementation(async () => {
+        callOrder.push('onSuccess-start')
+        await new Promise(resolve => setTimeout(resolve, 10))
+        callOrder.push('onSuccess-end')
+      })
+
+      await executeMutation(fn, adapter, { onSuccess })
+
+      expect(callOrder).toEqual(['onSuccess-start', 'onSuccess-end'])
+    })
   })
 })
