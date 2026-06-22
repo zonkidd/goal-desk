@@ -417,6 +417,19 @@ mod commands {
     }
 
     #[tauri::command]
+    pub fn create_system_reminder(
+        app: AppHandle,
+        title: String,
+        due_at: Option<String>,
+    ) -> Result<SystemReminder, String> {
+        let due = due_at
+            .map(|s| chrono::DateTime::parse_from_rfc3339(&s).map(|dt| dt.with_timezone(&chrono::Local)))
+            .transpose()
+            .map_err(|e| format!("Invalid due_at format: {e}"))?;
+        eventkit::create_system_reminder(&app, &title, due)
+    }
+
+    #[tauri::command]
     pub fn open_url(url: String) -> Result<(), String> {
         #[cfg(target_os = "macos")]
         {
@@ -493,6 +506,7 @@ pub fn run() {
             commands::request_calendar_access,
             commands::request_reminders_access,
             commands::set_system_reminder_completed,
+            commands::create_system_reminder,
             commands::open_url
         ])
         .run(tauri::generate_context!())

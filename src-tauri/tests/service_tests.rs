@@ -838,6 +838,27 @@ fn task_sync_task_system_reminder_does_not_double_write_activity_log() {
         completed_logs.len());
 }
 
+// ============================================================================
+// EventKit Create Reminder Tests
+// ============================================================================
+
+#[test]
+fn eventkit_create_system_reminder_returns_system_reminder_with_id() {
+    use goal_desk_tauri::eventkit::SystemReminder;
+
+    let reminder = SystemReminder {
+        id: "test-reminder-id".to_string(),
+        title: "Test Reminder".to_string(),
+        due_at: None,
+        done: false,
+        list_title: None,
+    };
+
+    assert_eq!(reminder.id, "test-reminder-id");
+    assert_eq!(reminder.title, "Test Reminder");
+    assert!(!reminder.done);
+}
+
 #[test]
 fn goal_summaries_shows_derived_status_when_all_tasks_done() {
     let repo = temp_repo("goal_summaries_derived_status");

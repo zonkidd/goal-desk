@@ -158,8 +158,9 @@ export async function openUrl(url: string): Promise<void> {
 // ============================================================================
 
 export async function createSystemReminder(title: string, dueAt?: Date): Promise<string> {
-  return invoke<string>('create_system_reminder', {
+  const reminder = await invoke<{ id: string }>('create_system_reminder', {
     title,
     dueAt: dueAt?.toISOString() ?? null,
   })
+  return reminder.id
 }
