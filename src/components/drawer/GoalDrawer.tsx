@@ -40,7 +40,7 @@ export function GoalDrawer() {
     setTitle(goal.title)
     setArea(goal.area)
     setDescription(goal.description)
-  }, [goal])
+  }, [goal?.id])
 
   const linkedTasks = useMemo(() => tasks.filter((task) => task.linkedGoalId === goal?.id), [goal?.id, tasks])
 
