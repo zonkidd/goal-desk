@@ -738,3 +738,29 @@ fn task_service_update_fields_preserves_show_in_timeline_when_none() {
     assert!(updated2.show_in_timeline, "should preserve true when show_in_timeline is None");
     assert_eq!(updated2.title, "Updated title");
 }
+
+#[test]
+fn task_sync_linked_tasks_respects_state_machine_paused_cannot_go_to_done() {
+    let repo = temp_repo("sync_respects_state_machine");
+    let service = TaskService::new(repo.clone());
+
+    // Create a task, pause it, set a system_reminder_id
+    let task = service.capture_task("Synced task").unwrap();
+    service.update_task_status(&task.id.to_string(), TaskStatus::InProgress, None).unwrap();
+    service.update_task_status(&task.id.to_string(), TaskStatus::Paused, None).unwrap();
+
+    // Set system_reminder_id via repository directly (not exposed in service API)
+    use goal_desk_tauri::repository::TaskRepository;
+    let mut task_ref = TaskRepository::find(&repo, task.id).unwrap().unwrap();
+    let reminder_id = uuid::Uuid::new_v4().to_string();
+    task_ref.system_reminder_id = Some(reminder_id.clone());
+    TaskRepository::update(&repo, &task_ref).unwrap();
+
+    // Now try to sync as done — PAUSED → DONE is invalid per state machine
+    service.sync_linked_tasks_for_system_reminder(&reminder_id, true).unwrap();
+
+    // The task should remain PAUSED since the transition is invalid
+    let task_after = service.find_task(&task.id.to_string()).unwrap().unwrap();
+    assert_eq!(task_after.status, TaskStatus::Paused,
+        "PAUSED task should not be set to DONE by sync — bypasses state machine");
+}

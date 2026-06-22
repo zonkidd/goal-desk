@@ -289,6 +289,9 @@ impl TaskService {
             if task.status == next_status {
                 continue;
             }
+            if !task.can_transition_to(next_status) {
+                continue;
+            }
 
             let mut updated = task.clone();
             updated.status = next_status;
