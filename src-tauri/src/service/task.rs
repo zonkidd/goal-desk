@@ -152,6 +152,13 @@ impl TaskService {
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Task not found: {task_id}"))?;
 
+        if !task.can_transition_to(status) {
+            return Err(format!(
+                "Invalid status transition from {:?} to {:?}",
+                task.status, status
+            ));
+        }
+
         if let Some(callback) = sync_callback {
             if let Some(ref reminder_id) = task.system_reminder_id {
                 callback(reminder_id, matches!(status, TaskStatus::Done))?;
@@ -347,6 +354,13 @@ impl TaskService {
     ) -> Result<DeskTask, String> {
         let task = self.find_task(task_id)?
             .ok_or_else(|| format!("Task not found: {task_id}"))?;
+
+        if !task.can_transition_to(status) {
+            return Err(format!(
+                "Invalid status transition from {:?} to {:?}",
+                task.status, status
+            ));
+        }
 
         if let Some(sync) = reminder_sync {
             if let Some(ref reminder_id) = task.system_reminder_id {

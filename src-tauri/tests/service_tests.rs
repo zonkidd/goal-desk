@@ -682,3 +682,31 @@ fn task_service_update_status_with_reminder_sync_calls_callback() {
     assert!(callback_called.load(std::sync::atomic::Ordering::Relaxed));
     assert_eq!(updated.status, TaskStatus::Done);
 }
+
+#[test]
+fn task_service_update_status_with_reminder_sync_skips_callback_on_invalid_transition() {
+    let repo = temp_repo("task_status_reminder_sync_invalid");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task with reminder").unwrap();
+    let _ = service
+        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-invalid-1".to_string()))
+        .unwrap();
+
+    let callback_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = callback_called.clone();
+
+    // IN_PROGRESS is not a valid transition from TODO (TODO can only go to IN_PROGRESS or DONE)
+    // Actually, TODO -> IN_PROGRESS IS valid. Let's use PAUSED which is NOT valid from TODO.
+    let result = service.update_task_status_with_reminder_sync(
+        &task.id.to_string(),
+        TaskStatus::Paused,
+        None,
+        Some(Box::new(move |_reminder_id, _done| {
+            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            Ok(())
+        })),
+    );
+
+    assert!(result.is_err());
+    assert!(!callback_called.load(std::sync::atomic::Ordering::Relaxed), "callback should not be called for invalid transition");
+}
