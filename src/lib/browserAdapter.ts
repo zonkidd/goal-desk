@@ -2,6 +2,7 @@ import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
 import { loadBrowserTasks } from './browserCodec'
+import { UNCATEGORIZED_AREA_TITLE } from './constants'
 
 export const BROWSER_PREVIEW_STATUS = 'Browser preview only · local database is unavailable'
 
@@ -278,7 +279,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     let changed = false
     for (const goal of goals) {
       if (goal.area === deletedAreaTitle) {
-        goal.area = '未分类'
+        goal.area = UNCATEGORIZED_AREA_TITLE
         changed = true
       }
     }
