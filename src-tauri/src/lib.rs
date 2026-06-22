@@ -243,14 +243,14 @@ mod commands {
         let task = svc.task.capture_task(&input)?;
 
         let reminder_time = task.planned_start_at.or(task.due_at);
-        if let Some(reminder_id) = maybe_create_task_system_reminder(&app, &task.title, reminder_time) {
-            let updated = svc.task.capture_task_with_system_reminder(&task.id.to_string(), reminder_id)?;
-            let _ = app.emit("desk-task-created", &updated);
-            return Ok(updated);
-        }
+        let final_task = if let Some(reminder_id) = maybe_create_task_system_reminder(&app, &task.title, reminder_time) {
+            svc.task.capture_task_with_system_reminder(&task.id.to_string(), reminder_id)?
+        } else {
+            task
+        };
 
-        let _ = app.emit("desk-task-created", &task);
-        Ok(task)
+        let _ = app.emit("desk-task-created", &final_task);
+        Ok(final_task)
     }
 
     #[tauri::command]
