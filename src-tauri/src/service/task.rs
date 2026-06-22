@@ -119,7 +119,13 @@ impl TaskService {
                             TaskActivityAction::Started
                         }
                     }
-                    TaskStatus::Todo => TaskActivityAction::NoteAdded,
+                    TaskStatus::Todo => {
+                        if previous_status == TaskStatus::Done {
+                            TaskActivityAction::Resumed
+                        } else {
+                            TaskActivityAction::NoteAdded
+                        }
+                    }
                 },
                 note: note.and_then(|n| {
                     let trimmed = n.trim().to_string();

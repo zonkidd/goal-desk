@@ -245,7 +245,7 @@ describe('BrowserAdapter', () => {
 
       await adapter.updateTaskStatus('task-1', 'TODO')
       tasks = JSON.parse(backingStore[BROWSER_STORAGE_TASKS] || '[]')
-      expect(tasks[0].activityLogs[0].action).toBe('NOTE_ADDED')
+      expect(tasks[0].activityLogs[0].action).toBe('RESUMED')
 
       await adapter.updateTaskStatus('task-1', 'IN_PROGRESS')
       tasks = JSON.parse(backingStore[BROWSER_STORAGE_TASKS] || '[]')

@@ -78,6 +78,7 @@ test('TODO to IN_PROGRESS logs STARTED, PAUSED to IN_PROGRESS logs RESUMED', () 
   assert.equal(logActionForTransition('TODO', 'DONE'), 'COMPLETED')
   assert.equal(logActionForTransition('IN_PROGRESS', 'DONE'), 'COMPLETED')
   assert.equal(logActionForTransition('PAUSED', 'DONE'), 'COMPLETED')
+  assert.equal(logActionForTransition('DONE', 'TODO'), 'RESUMED')
 })
 
 test('browser runtime exposes a preview-only status message', () => {

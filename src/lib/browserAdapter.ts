@@ -155,7 +155,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
                                        status === 'PAUSED' ? 'PAUSED' :
                                        status === 'IN_PROGRESS'
                                          ? (previousStatus === 'PAUSED' ? 'RESUMED' : 'STARTED')
-                                         : 'NOTE_ADDED'
+                                         : previousStatus === 'DONE' ? 'RESUMED' : 'NOTE_ADDED'
     const updatedTask: Task = {
       ...tasks[idx],
       status,

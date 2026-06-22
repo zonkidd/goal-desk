@@ -39,6 +39,7 @@ export function logActionForTransition(fromStatus: TaskStatus, toStatus: TaskSta
   }
   if (toStatus === 'PAUSED') return 'PAUSED'
   if (toStatus === 'DONE') return 'COMPLETED'
+  if (toStatus === 'TODO' && fromStatus === 'DONE') return 'RESUMED'
   return 'NOTE_ADDED'
 }
 
