@@ -715,6 +715,44 @@ fn task_service_update_status_with_reminder_sync_skips_callback_on_invalid_trans
 }
 
 #[test]
+fn task_service_update_fields_preserves_other_fields_when_not_passed() {
+    let repo = temp_repo("task_fields_preserve_all");
+    let service = TaskService::new(repo);
+
+    // Create a task with all fields set
+    let task = service.capture_task("Full task").unwrap();
+    let updated = service.update_task_fields(
+        &task.id.to_string(),
+        "Full task",
+        Some("2026-06-15T10:00:00+08:00".to_string()),
+        Some("2026-06-20T18:00:00+08:00".to_string()),
+        None, None,
+        Some(true),
+        Some("reminder-abc".to_string()),
+    ).unwrap();
+
+    assert!(updated.planned_start_at.is_some(), "planned_start_at should be set");
+    assert!(updated.due_at.is_some(), "due_at should be set");
+    assert!(updated.show_in_timeline, "show_in_timeline should be true");
+    assert_eq!(updated.system_reminder_id.as_deref(), Some("reminder-abc"));
+
+    // Now update only title and system_reminder_id — other fields should be preserved
+    let updated2 = service.update_task_fields(
+        &task.id.to_string(),
+        "Updated title",
+        None, None, None, None,
+        None,
+        Some("reminder-xyz".to_string()),
+    ).unwrap();
+
+    assert_eq!(updated2.title, "Updated title");
+    assert!(updated2.planned_start_at.is_some(), "planned_start_at should be preserved when None is passed");
+    assert!(updated2.due_at.is_some(), "due_at should be preserved when None is passed");
+    assert!(updated2.show_in_timeline, "show_in_timeline should be preserved when None is passed");
+    assert_eq!(updated2.system_reminder_id.as_deref(), Some("reminder-xyz"));
+}
+
+#[test]
 fn task_service_update_fields_sets_system_reminder_id() {
     let repo = temp_repo("task_fields_system_reminder");
     let service = TaskService::new(repo);

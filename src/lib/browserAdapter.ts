@@ -203,17 +203,16 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     if (idx === -1) return {}
 
     const existingTask = tasks[idx]
-    const linkedGoalLabel = input.linkedGoalLabel ?? existingTask.linkedGoalLabel
 
     const updatedTask: Task = {
       ...existingTask,
       title: input.title,
-      plannedStartAt: input.plannedStartAt,
-      dueDate: input.dueDate,
-      linkedGoalId: input.linkedGoalId,
-      linkedGoalLabel,
+      plannedStartAt: input.plannedStartAt ?? existingTask.plannedStartAt,
+      dueDate: input.dueDate ?? existingTask.dueDate,
+      linkedGoalId: input.linkedGoalId ?? existingTask.linkedGoalId,
+      linkedGoalLabel: input.linkedGoalLabel ?? existingTask.linkedGoalLabel,
       showInTimeline: input.showInTimeline ?? existingTask.showInTimeline,
-      systemReminderId: input.systemReminderId,
+      systemReminderId: input.systemReminderId ?? existingTask.systemReminderId,
     }
     tasks[idx] = updatedTask
     saveToLocalStorage(BROWSER_STORAGE_TASKS, tasks)

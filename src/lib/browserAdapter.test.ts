@@ -279,6 +279,36 @@ describe('BrowserAdapter', () => {
     })
   })
 
+  describe('updateTaskFields preserves other fields', () => {
+    it('should preserve plannedStartAt and dueDate when not passed', async () => {
+      const task: Task = {
+        id: 'task-1',
+        title: 'Test Task',
+        content: '',
+        status: 'TODO',
+        showInTimeline: true,
+        plannedStartAt: new Date('2026-06-15T10:00:00'),
+        dueDate: new Date('2026-06-20T18:00:00'),
+        linkedGoalId: 'goal-1',
+        linkedGoalLabel: 'Test Goal',
+        activityLogs: [],
+      }
+      backingStore[BROWSER_STORAGE_TASKS] = JSON.stringify([task])
+
+      const result = await adapter.updateTaskFields('task-1', {
+        title: 'Updated Title',
+      })
+
+      expect(result.task).toBeDefined()
+      expect(result.task!.title).toBe('Updated Title')
+      expect(result.task!.plannedStartAt).toBeInstanceOf(Date)
+      expect(result.task!.dueDate).toBeInstanceOf(Date)
+      expect(result.task!.linkedGoalId).toBe('goal-1')
+      expect(result.task!.linkedGoalLabel).toBe('Test Goal')
+      expect(result.task!.showInTimeline).toBe(true)
+    })
+  })
+
   describe('date deserialization after mutation', () => {
     it('should return Date objects for activityLogs.timestamp after updateTaskStatus', async () => {
       const task: Task = {

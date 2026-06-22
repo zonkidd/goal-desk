@@ -221,19 +221,19 @@ impl TaskService {
             .ok_or_else(|| format!("Task not found: {task_id}"))?;
 
         task.title = trimmed_title.to_string();
-        task.planned_start_at = planned_start_at
-            .map(|v| chrono::DateTime::parse_from_rfc3339(&v).map(|p| p.with_timezone(&chrono::Local)))
-            .transpose()
-            .map_err(|e| e.to_string())?;
-        task.due_at = due_at
-            .map(|v| chrono::DateTime::parse_from_rfc3339(&v).map(|p| p.with_timezone(&chrono::Local)))
-            .transpose()
-            .map_err(|e| e.to_string())?;
-        task.linked_goal_id = linked_goal_id
-            .as_deref()
-            .map(Uuid::parse_str)
-            .transpose()
-            .map_err(|e| e.to_string())?;
+        if let Some(v) = planned_start_at {
+            task.planned_start_at = Some(chrono::DateTime::parse_from_rfc3339(&v)
+                .map(|p| p.with_timezone(&chrono::Local))
+                .map_err(|e| e.to_string())?);
+        }
+        if let Some(v) = due_at {
+            task.due_at = Some(chrono::DateTime::parse_from_rfc3339(&v)
+                .map(|p| p.with_timezone(&chrono::Local))
+                .map_err(|e| e.to_string())?);
+        }
+        if let Some(v) = linked_goal_id {
+            task.linked_goal_id = Some(Uuid::parse_str(&v).map_err(|e| e.to_string())?);
+        }
         task.linked_goal_label = linked_goal_label.and_then(|v| {
             let trimmed = v.trim().to_string();
             if trimmed.is_empty() { None } else { Some(trimmed) }
