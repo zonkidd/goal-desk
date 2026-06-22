@@ -53,7 +53,7 @@ function createHarness({ task = buildTask(), goals = [buildGoal()] } = {}) {
     },
     createGoal: async (input, options) => {
       calls.createGoal.push({ input, options })
-      return 'goal-created-inline'
+      return { goal: { id: 'goal-created-inline' }, openGoalWorkspace: false }
     },
   })
 

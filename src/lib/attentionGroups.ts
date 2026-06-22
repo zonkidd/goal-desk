@@ -1,6 +1,6 @@
 import type { GoalCard } from '../types/app'
 import type { Task } from '../types/task'
-import { startOfDay, isSameDay, isTaskInActiveDateRange } from './dateUtils'
+import { startOfDay, isSameDay, isTaskInActiveDateRange } from './dateUtils.ts'
 
 export interface TodayAttentionGroups {
   overdue: Task[]

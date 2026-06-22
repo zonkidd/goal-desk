@@ -34,9 +34,9 @@ export function parseBrowserQuickCapture(input: string, now: Date = new Date()):
     }
     // 时间点：下午N点、N点
     else if (title.includes('点')) {
-      const hourMatch = title.match(/(\d{1,2})点/)
+      const hourMatch = title.match(/([一二三四五六七八九十\d]{1,2})点/)
       if (hourMatch) {
-        let hour = parseInt(hourMatch[1])
+        let hour = parseChineseOrDigitHour(hourMatch[1])
         // 智能判断：1-7点视为下午
         if (hour >= 1 && hour <= 7) {
           hour += 12
@@ -102,6 +102,19 @@ export function parseBrowserQuickCapture(input: string, now: Date = new Date()):
     plannedStartAt,
     dueDate,
   }
+}
+
+const ChineseDigitMap: Record<string, number> = {
+  '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+  '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+  '十一': 11, '十二': 12, '十三': 13, '十四': 14, '十五': 15,
+  '十六': 16, '十七': 17, '十八': 18, '十九': 19, '二十': 20,
+  '二十一': 21, '二十二': 22, '二十三': 23,
+}
+
+function parseChineseOrDigitHour(value: string): number {
+  if (ChineseDigitMap[value] !== undefined) return ChineseDigitMap[value]
+  return parseInt(value, 10)
 }
 
 function relativeDayTime(now: Date, dayOffset: number, hour: number, minute: number) {

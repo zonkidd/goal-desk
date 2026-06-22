@@ -23,7 +23,7 @@ test('browser preview quick capture parses tomorrow afternoon three oclock', () 
   const draft = parseBrowserQuickCapture('明天下午三点看熊掌记的总结笔记', now)
 
   assert.equal(draft.title, '看熊掌记的总结笔记')
-  assert.equal(draft.dueDate?.toISOString(), '2026-06-11T07:00:00.000Z')
+  assert.equal(draft.plannedStartAt?.toISOString(), '2026-06-11T07:00:00.000Z')
 })
 
 test('quick capture cleans 之前 deadline keyword without leaving residual characters', () => {
@@ -136,7 +136,7 @@ test('today focus includes ongoing tasks before their deadline', () => {
     },
   ]
 
-  const focusTasks = getTodayFocusTasks(tasks, now)
+  const focusTasks = getTodayFocusTasks(tasks, [], 'ALL', now)
 
   assert.deepEqual(focusTasks.map((task) => task.id), ['task-ongoing'])
 })

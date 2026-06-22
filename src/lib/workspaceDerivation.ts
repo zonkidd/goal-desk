@@ -1,9 +1,9 @@
-export { getTodayFocusTasks, filterGoalsByArea, filterTasksByArea } from './areaFilter'
-export { deriveTodayAgenda, filterAgendaByArea } from './todayAgenda'
-export { deriveTodayAttentionGroups, deriveTodayRelevantGoals } from './attentionGroups'
-export type { TodayAttentionGroups, TodayRelevantGoal } from './attentionGroups'
-export { convertEventKitToRawItems, groupByDate } from './eventkitTransform'
-export type { EventKitCalendarEvent, EventKitReminder } from './eventkitTransform'
+export { getTodayFocusTasks, filterGoalsByArea, filterTasksByArea, filterTimelineByArea } from './areaFilter.ts'
+export { deriveTodayAgenda, filterAgendaByArea } from './todayAgenda.ts'
+export { deriveTodayAttentionGroups, deriveTodayRelevantGoals } from './attentionGroups.ts'
+export type { TodayAttentionGroups, TodayRelevantGoal } from './attentionGroups.ts'
+export { convertEventKitToRawItems, groupByDate } from './eventkitTransform.ts'
+export type { EventKitCalendarEvent, EventKitReminder } from './eventkitTransform.ts'
 
 import type { Task } from '../types/task'
 

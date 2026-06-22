@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AreaWithStats, GoalCard } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
-import { getTaskStatusActions } from './taskPresentation'
+import { getTaskStatusActions } from './taskPresentation.ts'
 
 export interface TodoEditingDraft {
   title: string

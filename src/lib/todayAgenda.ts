@@ -1,6 +1,6 @@
 import type { GoalCard, RawAgendaItem, TodayAgenda } from '../types/app'
 import type { Task } from '../types/task'
-import { startOfDay, formatTimeLabel, timeLabelSortValue, isTaskInActiveDateRange } from './dateUtils'
+import { startOfDay, formatTimeLabel, timeLabelSortValue, isTaskInActiveDateRange } from './dateUtils.ts'
 
 export function deriveTodayAgenda(baseTimeline: RawAgendaItem[], tasks: Task[], now = new Date()): TodayAgenda {
   const today = startOfDay(now)

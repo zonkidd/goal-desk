@@ -1,5 +1,5 @@
 import type { RawAgendaItem } from '../types/app'
-import { startOfDay, isSameDay, formatTimeLabel, timeLabelSortValue } from './dateUtils'
+import { startOfDay, isSameDay, formatTimeLabel, timeLabelSortValue } from './dateUtils.ts'
 
 export interface EventKitCalendarEvent {
   id: string

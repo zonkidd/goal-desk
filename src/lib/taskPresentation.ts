@@ -1,5 +1,5 @@
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
-import { startOfDay } from './dateUtils'
+import { startOfDay } from './dateUtils.ts'
 
 export function getRuntimeModeStatusMessage(isTauri: boolean) {
   return isTauri ? 'Rust + Tauri data' : 'Browser preview only · no SQLite or Tauri IPC'
