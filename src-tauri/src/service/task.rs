@@ -332,11 +332,21 @@ impl TaskService {
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Task not found: {task_id}"))?;
 
-        if let Some(ref reminder_id) = task.system_reminder_id {
-            self.sync_linked_tasks_for_system_reminder(reminder_id, done)?;
+        let next_status = if done { TaskStatus::Done } else { TaskStatus::Todo };
+
+        // If task has a system_reminder_id, sync_linked_tasks_for_system_reminder
+        // already handles the status update and activity log. Skip the second update.
+        if task.system_reminder_id.is_some() && task.can_transition_to(next_status) {
+            self.sync_linked_tasks_for_system_reminder(
+                task.system_reminder_id.as_ref().unwrap(),
+                done,
+            )?;
+            // Re-read the task to return the updated version
+            return TaskRepository::find(&self.repo, task_uuid)
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| format!("Task not found: {task_id}"));
         }
 
-        let next_status = if done { TaskStatus::Done } else { TaskStatus::Todo };
         self.update_task_status(task_id, next_status, None)
     }
 

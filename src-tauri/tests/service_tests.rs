@@ -764,3 +764,28 @@ fn task_sync_linked_tasks_respects_state_machine_paused_cannot_go_to_done() {
     assert_eq!(task_after.status, TaskStatus::Paused,
         "PAUSED task should not be set to DONE by sync — bypasses state machine");
 }
+
+#[test]
+fn task_sync_task_system_reminder_does_not_double_write_activity_log() {
+    let repo = temp_repo("sync_no_double_log");
+    let service = TaskService::new(repo.clone());
+
+    // Create a task and set system_reminder_id
+    let task = service.capture_task("Double log test").unwrap();
+    let reminder_id = uuid::Uuid::new_v4().to_string();
+    use goal_desk_tauri::repository::TaskRepository;
+    let mut task_ref = TaskRepository::find(&repo, task.id).unwrap().unwrap();
+    task_ref.system_reminder_id = Some(reminder_id.clone());
+    TaskRepository::update(&repo, &task_ref).unwrap();
+
+    // Sync as done
+    let updated = service.sync_task_system_reminder(&task.id.to_string(), true).unwrap();
+
+    // Should have exactly ONE Completed activity log (plus the initial Created)
+    let completed_logs: Vec<_> = updated.activity_logs.iter()
+        .filter(|log| log.action == goal_desk_tauri::domain::TaskActivityAction::Completed)
+        .collect();
+    assert_eq!(completed_logs.len(), 1,
+        "sync_task_system_reminder should produce exactly one Completed log, got {}",
+        completed_logs.len());
+}
