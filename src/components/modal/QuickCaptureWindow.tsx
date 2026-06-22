@@ -29,10 +29,7 @@ export function QuickCaptureWindow() {
         await adapter.createSystemReminder(trimmed)
         setStatus('已创建系统提醒')
       } else if (mode === 'both') {
-        const result = await adapter.createTask(trimmed)
-        if (result.task) {
-          await adapter.createSystemReminder(trimmed)
-        }
+        await adapter.createTask(trimmed)
         setStatus('已保存到本地收集箱并创建系统提醒')
       }
 
