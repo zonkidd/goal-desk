@@ -715,6 +715,49 @@ fn task_service_update_status_with_reminder_sync_skips_callback_on_invalid_trans
 }
 
 #[test]
+fn task_service_update_fields_sets_system_reminder_id() {
+    let repo = temp_repo("task_fields_system_reminder");
+    let service = TaskService::new(repo);
+
+    let task = service.capture_task("Reminder task").unwrap();
+    assert!(task.system_reminder_id.is_none(), "new task should have no system_reminder_id");
+
+    let updated = service.update_task_fields(
+        &task.id.to_string(),
+        "Reminder task",
+        None, None, None, None,
+        None,
+        Some("reminder-123".to_string()),
+    ).unwrap();
+    assert_eq!(updated.system_reminder_id.as_deref(), Some("reminder-123"));
+}
+
+#[test]
+fn task_service_update_fields_clears_system_reminder_id() {
+    let repo = temp_repo("task_fields_clear_reminder");
+    let service = TaskService::new(repo);
+
+    let task = service.capture_task("Reminder task").unwrap();
+    let with_reminder = service.update_task_fields(
+        &task.id.to_string(),
+        "Reminder task",
+        None, None, None, None,
+        None,
+        Some("reminder-123".to_string()),
+    ).unwrap();
+    assert_eq!(with_reminder.system_reminder_id.as_deref(), Some("reminder-123"));
+
+    let cleared = service.update_task_fields(
+        &task.id.to_string(),
+        "Reminder task",
+        None, None, None, None,
+        None,
+        None,
+    ).unwrap();
+    assert!(cleared.system_reminder_id.is_none(), "system_reminder_id should be cleared when None is passed");
+}
+
+#[test]
 fn task_service_update_fields_preserves_show_in_timeline_when_none() {
     let repo = temp_repo("task_fields_preserve_timeline");
     let service = TaskService::new(repo);
@@ -728,6 +771,7 @@ fn task_service_update_fields_preserves_show_in_timeline_when_none() {
         "Timeline task",
         None, None, None, None,
         Some(true),
+        None,
     ).unwrap();
     assert!(updated.show_in_timeline, "should be true after explicit set");
 
@@ -736,6 +780,7 @@ fn task_service_update_fields_preserves_show_in_timeline_when_none() {
         &task.id.to_string(),
         "Updated title",
         None, None, None, None,
+        None,
         None,
     ).unwrap();
     assert!(updated2.show_in_timeline, "should preserve true when show_in_timeline is None");

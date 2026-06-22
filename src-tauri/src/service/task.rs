@@ -207,6 +207,7 @@ impl TaskService {
         linked_goal_id: Option<String>,
         linked_goal_label: Option<String>,
         show_in_timeline: Option<bool>,
+        system_reminder_id: Option<String>,
     ) -> Result<DeskTask, String> {
         let trimmed_title = title.trim();
         if trimmed_title.is_empty() {
@@ -238,6 +239,7 @@ impl TaskService {
             if trimmed.is_empty() { None } else { Some(trimmed) }
         });
         task.show_in_timeline = show_in_timeline.unwrap_or(task.show_in_timeline);
+        task.system_reminder_id = system_reminder_id;
 
         TaskRepository::update(&self.repo, &task).map_err(|e| e.to_string())?;
         Ok(task)

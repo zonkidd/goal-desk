@@ -284,6 +284,7 @@ mod commands {
         linked_goal_id: Option<String>,
         linked_goal_label: Option<String>,
         show_in_timeline: Option<bool>,
+        system_reminder_id: Option<String>,
     ) -> Result<DeskTask, String> {
         svc.task.update_task_fields(
             &task_id,
@@ -293,6 +294,7 @@ mod commands {
             linked_goal_id,
             linked_goal_label,
             show_in_timeline,
+            system_reminder_id,
         )
     }
 
