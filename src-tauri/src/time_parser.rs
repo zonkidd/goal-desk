@@ -170,10 +170,7 @@ fn parse_hour_expression(input: &str) -> Option<u32> {
             .chars().rev().collect();
 
         if let Ok(hour) = digits.parse::<u32>() {
-            // 智能判断：1-7点认为是下午，加12
-            if (1..=7).contains(&hour) {
-                return Some(hour + 12);
-            } else if (8..=23).contains(&hour) {
+            if (1..=23).contains(&hour) {
                 return Some(hour);
             }
         }
@@ -182,16 +179,25 @@ fn parse_hour_expression(input: &str) -> Option<u32> {
         if let Some(last_char) = before_dot.chars().last() {
             if let Some(hour) = parse_chinese_number(last_char) {
                 let hour_u32 = hour as u32;
-                // 智能判断：1-7点认为是下午，加12
-                if (1..=7).contains(&hour_u32) {
-                    return Some(hour_u32 + 12);
-                } else if (8..=23).contains(&hour_u32) {
+                if (1..=23).contains(&hour_u32) {
                     return Some(hour_u32);
                 }
             }
         }
     }
     None
+}
+
+/// Parse hour from "N点" expression with smart PM detection.
+/// Returns (hour, is_smart_adjusted) where is_smart_adjusted indicates
+/// if the 1-7 → afternoon adjustment was applied.
+fn parse_hour_expression_smart(input: &str) -> Option<(u32, bool)> {
+    let raw_hour = parse_hour_expression(input)?;
+    if (1..=7).contains(&raw_hour) {
+        Some((raw_hour + 12, true))
+    } else {
+        Some((raw_hour, false))
+    }
 }
 
 /// 解析中文数字（一到十）
@@ -275,7 +281,7 @@ fn parse_relative_week(input: &str, now: DateTime<Local>) -> Option<(DateTime<Lo
         let time = NaiveTime::from_hms_opt(h, m, 0).unwrap();
         let result = target_date.date_naive().and_time(time).and_local_timezone(Local).unwrap();
         return Some((result, clean_title(input, false)));
-    } else if let Some(h) = parse_hour_expression(input) {
+    } else if let Some((h, _)) = parse_hour_expression_smart(input) {
         h
     } else if let Some(h) = parse_time_of_day_keyword(input) {
         h
@@ -318,7 +324,7 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
             parsed_time = Some(tomorrow.date_naive().and_time(time).and_local_timezone(Local).unwrap());
         }
         // 尝试解析时间点
-        else if let Some(hour) = parse_hour_expression(trimmed) {
+        else if let Some((hour, _)) = parse_hour_expression_smart(trimmed) {
             let time = NaiveTime::from_hms_opt(hour, 0, 0).unwrap();
             parsed_time = Some(tomorrow.date_naive().and_time(time).and_local_timezone(Local).unwrap());
         } else {
@@ -338,12 +344,19 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
         let is_evening = trimmed.contains("今晚") || trimmed.contains("晚上");
 
         // 优先尝试解析精确的"点"表达
-        if let Some(mut hour_from_expression) = parse_hour_expression(trimmed) {
-            // 如果是"今晚X点"且X是1-11（明显是晚上时间），需要加12
-            if is_evening && hour_from_expression >= 1 && hour_from_expression <= 11 {
-                hour_from_expression += 12;
-            }
-            let time = NaiveTime::from_hms_opt(hour_from_expression, 0, 0).unwrap();
+        if let Some(hour_from_expression) = parse_hour_expression(trimmed) {
+            let hour = if is_evening {
+                // "今晚" context: 1-7 = AM (raw), 8-11 = PM (+12), 12-23 = raw
+                if hour_from_expression >= 8 && hour_from_expression <= 11 {
+                    hour_from_expression + 12
+                } else {
+                    hour_from_expression
+                }
+            } else {
+                // Other "today" contexts: smart PM adjustment for 1-7
+                parse_hour_expression_smart(trimmed).map(|(h, _)| h).unwrap_or(hour_from_expression)
+            };
+            let time = NaiveTime::from_hms_opt(hour, 0, 0).unwrap();
             parsed_time = Some(today.and_time(time).and_local_timezone(Local).unwrap());
         } else if let Some(hour_from_keyword) = parse_time_of_day_keyword(trimmed) {
             // 没有"点"表达时，才使用时间段关键词（今晚 -> 默认20:00）
@@ -441,7 +454,7 @@ pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
     if parsed_time.is_none() && trimmed.contains("点") {
         let today = now.date_naive();
 
-        if let Some(hour) = parse_hour_expression(trimmed) {
+        if let Some((hour, _)) = parse_hour_expression_smart(trimmed) {
             let time = NaiveTime::from_hms_opt(hour, 0, 0).unwrap();
             parsed_time = Some(today.and_time(time).and_local_timezone(Local).unwrap());
 
