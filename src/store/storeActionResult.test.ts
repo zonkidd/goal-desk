@@ -132,4 +132,24 @@ describe('Store action results', () => {
       expect(state.setStatusMessage).toBeUndefined()
     })
   })
+
+  describe('goal refresh on task status changes', () => {
+    it('updateTaskStatus to TODO (reopen) should refresh goals', async () => {
+      // Override mock to return a task
+      const { getWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
+      vi.mocked(getWorkspaceMutationAdapter).mockReturnValue({
+        ...vi.mocked(getWorkspaceMutationAdapter)() as any,
+        updateTaskStatus: vi.fn().mockResolvedValue({
+          task: { id: 't1', status: 'TODO', title: 'Reopened' },
+        }),
+      })
+
+      const refreshGoalsSpy = vi.spyOn(useGoalStore.getState(), 'refreshGoals')
+
+      await useTaskStore.getState().updateTaskStatus('t1', 'TODO')
+
+      expect(refreshGoalsSpy).toHaveBeenCalled()
+      refreshGoalsSpy.mockRestore()
+    })
+  })
 })

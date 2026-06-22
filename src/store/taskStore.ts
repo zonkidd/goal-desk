@@ -112,10 +112,8 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
       { onSuccess: ({ task }) => { 
         if (task) {
           get().replaceTask(task)
-          // Refresh Goal progress after Task completion
-          if (status === 'DONE') {
-            useGoalStore.getState().refreshGoals()
-          }
+          // Refresh Goal progress when task status changes (completion or reopen)
+          useGoalStore.getState().refreshGoals()
         }
       } },
     )
