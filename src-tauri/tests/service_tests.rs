@@ -710,3 +710,31 @@ fn task_service_update_status_with_reminder_sync_skips_callback_on_invalid_trans
     assert!(result.is_err());
     assert!(!callback_called.load(std::sync::atomic::Ordering::Relaxed), "callback should not be called for invalid transition");
 }
+
+#[test]
+fn task_service_update_fields_preserves_show_in_timeline_when_none() {
+    let repo = temp_repo("task_fields_preserve_timeline");
+    let service = TaskService::new(repo);
+
+    let task = service.capture_task("Timeline task").unwrap();
+    assert!(!task.show_in_timeline, "new task should default to false");
+
+    // Explicitly set show_in_timeline to true
+    let updated = service.update_task_fields(
+        &task.id.to_string(),
+        "Timeline task",
+        None, None, None, None,
+        Some(true),
+    ).unwrap();
+    assert!(updated.show_in_timeline, "should be true after explicit set");
+
+    // Update title without passing show_in_timeline (None) — should preserve true
+    let updated2 = service.update_task_fields(
+        &task.id.to_string(),
+        "Updated title",
+        None, None, None, None,
+        None,
+    ).unwrap();
+    assert!(updated2.show_in_timeline, "should preserve true when show_in_timeline is None");
+    assert_eq!(updated2.title, "Updated title");
+}

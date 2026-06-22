@@ -40,7 +40,7 @@ export async function updateTaskFields(
     title: input.title,
     plannedStartAt: input.plannedStartAt?.toISOString() ?? null,
     dueAt: input.dueAt?.toISOString() ?? null,
-    showInTimeline: input.showInTimeline ?? false,
+    showInTimeline: input.showInTimeline ?? null,
     linkedGoalId: input.linkedGoalId ?? null,
     linkedGoalLabel: input.linkedGoalLabel ?? null,
     systemReminderId: input.systemReminderId ?? null,
