@@ -5,7 +5,7 @@ use crate::repository::{AreaRepository, GoalRepository, SqliteRepository, TaskRe
 use std::collections::HashMap;
 use uuid::Uuid;
 
-pub fn build_goal_summary(goal: &Goal, area_title: &str, goal_tasks: &[&DeskTask]) -> GoalSummary {
+pub fn build_goal_summary(goal: &Goal, area_title: &str, goal_tasks: &[&DeskTask], derived_status: GoalStatus) -> GoalSummary {
     let task_count = goal_tasks.len();
     let done_count = goal_tasks
         .iter()
@@ -27,7 +27,7 @@ pub fn build_goal_summary(goal: &Goal, area_title: &str, goal_tasks: &[&DeskTask
         title: goal.title.clone(),
         area: area_title.to_string(),
         description: goal.description.clone(),
-        status: goal.status,
+        status: derived_status,
         progress,
         task_count,
         next_todo,
@@ -161,7 +161,9 @@ impl GoalService {
                     .unwrap_or_else(|| "Unsorted".to_string());
 
                 let goal_tasks = tasks_by_goal.get(&goal.id).map(|v| v.as_slice()).unwrap_or(&[]);
-                build_goal_summary(goal, &area_title, &goal_tasks)
+                let all_tasks_vec: Vec<DeskTask> = tasks.iter().cloned().collect();
+                let derived_status = goal.compute_derived_status(&all_tasks_vec);
+                build_goal_summary(goal, &area_title, &goal_tasks, derived_status)
             })
             .collect())
     }
@@ -187,6 +189,7 @@ impl GoalService {
             .filter(|t| t.linked_goal_id == Some(goal_uuid))
             .collect();
 
-        Ok(build_goal_summary(&goal, &area_title, &goal_tasks))
+        let derived_status = goal.compute_derived_status(&all_tasks);
+        Ok(build_goal_summary(&goal, &area_title, &goal_tasks, derived_status))
     }
 }

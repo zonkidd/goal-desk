@@ -515,8 +515,9 @@ fn build_goal_summary_zero_tasks() {
         status: GoalStatus::Active,
     };
     let goal_tasks: Vec<&goal_desk_tauri::domain::DeskTask> = vec![];
+    let all_tasks: Vec<goal_desk_tauri::domain::DeskTask> = vec![];
 
-    let summary = build_goal_summary(&goal, "Unsorted", &goal_tasks);
+    let summary = build_goal_summary(&goal, "Unsorted", &goal_tasks, goal.compute_derived_status(&all_tasks));
     assert_eq!(summary.progress, 0);
     assert_eq!(summary.task_count, 0);
     assert_eq!(summary.next_todo, "");
@@ -542,7 +543,8 @@ fn build_goal_summary_half_done() {
     let t2 = DeskTask::new_todo("Task 2".to_string());
 
     let goal_tasks: Vec<&DeskTask> = vec![&t1, &t2];
-    let summary = build_goal_summary(&goal, "Work", &goal_tasks);
+    let all_tasks: Vec<DeskTask> = vec![t1.clone(), t2.clone()];
+    let summary = build_goal_summary(&goal, "Work", &goal_tasks, goal.compute_derived_status(&all_tasks));
 
     assert_eq!(summary.progress, 50);
     assert_eq!(summary.task_count, 2);
@@ -568,7 +570,8 @@ fn build_goal_summary_all_done() {
     t2.status = TaskStatus::Done;
 
     let goal_tasks: Vec<&DeskTask> = vec![&t1, &t2];
-    let summary = build_goal_summary(&goal, "Personal", &goal_tasks);
+    let all_tasks: Vec<DeskTask> = vec![t1.clone(), t2.clone()];
+    let summary = build_goal_summary(&goal, "Personal", &goal_tasks, goal.compute_derived_status(&all_tasks));
 
     assert_eq!(summary.progress, 100);
     assert_eq!(summary.task_count, 2);
@@ -788,4 +791,26 @@ fn task_sync_task_system_reminder_does_not_double_write_activity_log() {
     assert_eq!(completed_logs.len(), 1,
         "sync_task_system_reminder should produce exactly one Completed log, got {}",
         completed_logs.len());
+}
+
+#[test]
+fn goal_summaries_shows_derived_status_when_all_tasks_done() {
+    let repo = temp_repo("goal_summaries_derived_status");
+    let goal_service = GoalService::new(repo.clone());
+    let task_service = TaskService::new(repo);
+
+    let goal = goal_service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
+    let t1 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 1").unwrap();
+    let t2 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 2").unwrap();
+
+    // Complete all tasks
+    task_service.update_task_status(&t1.id.to_string(), TaskStatus::Done, None).unwrap();
+    task_service.update_task_status(&t2.id.to_string(), TaskStatus::Done, None).unwrap();
+
+    // Goal status in DB is still ACTIVE, but summary should show READY_TO_COMPLETE
+    let summaries = goal_service.goal_summaries().unwrap();
+    let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
+    assert_eq!(s.progress, 100);
+    assert_eq!(s.status, goal_desk_tauri::domain::GoalStatus::ReadyToComplete,
+        "goal_summaries should return derived status ReadyToComplete when all tasks are done");
 }
