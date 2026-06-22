@@ -53,8 +53,8 @@ export interface ManagedTodoEditingSession {
   actions: {
     setTitle(value: string): void
     setContent(value: string): void
-    setPlannedStartAtDraft(value: string): void
-    setDueDateDraft(value: string): void
+    setPlannedStartAtDraft(value: string, baseDraft?: TodoEditingDraft): void
+    setDueDateDraft(value: string, baseDraft?: TodoEditingDraft): void
     setLinkedGoalIdDraft(value: string): void
     setShowInTimelineDraft(value: boolean): void
     setMarkdownMode(value: TodoEditingDraft['markdownMode']): void
@@ -273,13 +273,13 @@ export function useTodoEditingSession(
           const nextDraft = baseSession.actions.setContent(value, baseSession.draft)
           setDraft(nextDraft)
         },
-        setPlannedStartAtDraft(value: string) {
-          const nextDraft = baseSession.actions.setPlannedStartAtDraft(value, baseSession.draft)
+        setPlannedStartAtDraft(value: string, baseDraft?: TodoEditingDraft) {
+          const nextDraft = baseSession.actions.setPlannedStartAtDraft(value, baseDraft ?? baseSession.draft)
           setDraft(nextDraft)
           void baseSession.actions.saveFields(nextDraft)
         },
-        setDueDateDraft(value: string) {
-          const nextDraft = baseSession.actions.setDueDateDraft(value, baseSession.draft)
+        setDueDateDraft(value: string, baseDraft?: TodoEditingDraft) {
+          const nextDraft = baseSession.actions.setDueDateDraft(value, baseDraft ?? baseSession.draft)
           setDraft(nextDraft)
           void baseSession.actions.saveFields(nextDraft)
         },

@@ -190,6 +190,10 @@ export function TaskDrawer() {
                             defaultTime="09:00"
                             onChange={(value) => editingSession.actions.setPlannedStartAtDraft(value)}
                             onClose={() => editingSession.actions.setActiveEditor('none')}
+                            onApply={(value) => {
+                              editingSession.actions.setActiveEditor('none')
+                              editingSession.actions.setPlannedStartAtDraft(value, { ...draft, activeEditor: 'none' })
+                            }}
                           />
                         )}
                       </div>
@@ -207,6 +211,10 @@ export function TaskDrawer() {
                           defaultTime="18:00"
                           onChange={(value) => editingSession.actions.setDueDateDraft(value)}
                           onClose={() => editingSession.actions.setActiveEditor('none')}
+                          onApply={(value) => {
+                            editingSession.actions.setActiveEditor('none')
+                            editingSession.actions.setDueDateDraft(value, { ...draft, activeEditor: 'none' })
+                          }}
                         />
                       )}
                     </div>

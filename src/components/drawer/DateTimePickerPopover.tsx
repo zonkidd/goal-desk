@@ -11,11 +11,13 @@ export function DateTimePickerPopover({
   defaultTime,
   onChange,
   onClose,
+  onApply,
 }: {
   value: string
   defaultTime: string
   onChange: (value: string) => void
   onClose: () => void
+  onApply?: (value: string) => void
 }) {
   const parsed = parseDatetimeLocal(value)
   const current = parsed || new Date()
@@ -126,8 +128,13 @@ export function DateTimePickerPopover({
             <button
               type="button"
               onClick={() => {
-                onClose()
-                apply()
+                const appliedValue = toDatetimeLocalValue(selectedDay, timeValue)
+                if (onApply) {
+                  onApply(appliedValue)
+                } else {
+                  onClose()
+                  onChange(appliedValue)
+                }
               }}
               className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-500/30 transition-colors hover:bg-indigo-700"
             >
