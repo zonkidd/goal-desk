@@ -229,7 +229,29 @@ fn area_service_create_validates_empty() {
 }
 
 #[test]
-fn area_service_create_duplicate() {
+fn area_service_find_or_create_area_is_case_insensitive() {
+    let repo = temp_repo("area_case_insensitive");
+    let goal_service = GoalService::new(repo.clone());
+
+    // Create goals with different casing of the same area name
+    let g1 = goal_service.create_goal("Goal 1", "Work", "", GoalStatus::Active).unwrap();
+    let g2 = goal_service.create_goal("Goal 2", "work", "", GoalStatus::Active).unwrap();
+    let g3 = goal_service.create_goal("Goal 3", "WORK", "", GoalStatus::Active).unwrap();
+
+    // All goals should share the same area (first created)
+    assert_eq!(g1.area_id, g2.area_id);
+    assert_eq!(g2.area_id, g3.area_id);
+
+    // Should only have one area (not three separate ones)
+    let areas = goal_desk_tauri::repository::AreaRepository::list(&repo).unwrap();
+    let work_areas: Vec<_> = areas.iter()
+        .filter(|a| a.title.to_lowercase() == "work")
+        .collect();
+    assert_eq!(work_areas.len(), 1, "should have exactly one 'work' area, got {}", work_areas.len());
+}
+
+#[test]
+fn area_service_create_duplicate_case_insensitive() {
     let repo = temp_repo("area_dup");
     let service = AreaService::new(repo);
     service.create_area("Work").unwrap();

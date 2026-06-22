@@ -152,7 +152,7 @@ pub fn find_or_create_area(
 ) -> Result<Uuid, String> {
     repo.initialize().map_err(|e| e.to_string())?;
     let areas = AreaRepository::list(repo).map_err(|e| e.to_string())?;
-    if let Some(existing) = areas.iter().find(|a| a.title == area_title) {
+    if let Some(existing) = areas.iter().find(|a| a.title.to_lowercase() == area_title.to_lowercase()) {
         return Ok(existing.id);
     }
     let area = Area {
