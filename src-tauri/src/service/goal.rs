@@ -62,7 +62,7 @@ impl GoalService {
             trimmed_area
         };
 
-        self.repo.initialize().map_err(|e| e.to_string())?;
+
         let area_id = super::area::find_or_create_area(&self.repo, area_title)?;
 
         let goal = Goal {
@@ -135,7 +135,7 @@ impl GoalService {
     }
 
     pub fn goal_summaries(&self) -> Result<Vec<GoalSummary>, String> {
-        self.repo.initialize().map_err(|e| e.to_string())?;
+
         let goals = GoalRepository::list(&self.repo).map_err(|e| e.to_string())?;
         let areas = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;
         let tasks = TaskRepository::list(&self.repo).map_err(|e| e.to_string())?;
@@ -170,7 +170,7 @@ impl GoalService {
 
     pub fn get_goal_summary_by_id(&self, goal_id: &str) -> Result<GoalSummary, String> {
         let goal_uuid = Uuid::parse_str(goal_id).map_err(|e| e.to_string())?;
-        self.repo.initialize().map_err(|e| e.to_string())?;
+
 
         let goal = GoalRepository::find(&self.repo, goal_uuid)
             .map_err(|e| e.to_string())?

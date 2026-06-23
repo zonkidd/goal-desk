@@ -343,4 +343,47 @@ describe('BrowserAdapter', () => {
       expect(result.task!.activityLogs[0].timestamp).toBeInstanceOf(Date)
     })
   })
+
+  describe('input validation', () => {
+    it('rejects empty task title', async () => {
+      const result = await adapter.createTask('')
+      expect(result.task).toBeUndefined()
+    })
+
+    it('rejects whitespace-only task title', async () => {
+      const result = await adapter.createTask('   ')
+      expect(result.task).toBeUndefined()
+    })
+
+    it('trims whitespace from valid task title', async () => {
+      const result = await adapter.createTask('  Buy milk  ')
+      expect(result.task).toBeDefined()
+      expect(result.task!.title).toBe('Buy milk')
+    })
+
+    it('rejects empty goal title', async () => {
+      const result = await adapter.createGoal({ title: '', area: 'Work', description: '' })
+      expect(result.goal).toBeUndefined()
+    })
+
+    it('defaults area to uncategorized when empty', async () => {
+      const result = await adapter.createGoal({ title: 'Goal', area: '', description: '' })
+      expect(result.goal).toBeDefined()
+      expect(result.goal!.area).toBe('未分类')
+    })
+
+    it('rejects empty area title for createArea', async () => {
+      const result = await adapter.createArea('')
+      expect(result.area).toBeUndefined()
+    })
+
+    it('rejects empty area title for renameArea', async () => {
+      const areas: AreaWithStats[] = [
+        { id: 'area-1', title: 'Work', goalCount: 0, activeGoalCount: 0, isSystem: false },
+      ]
+      backingStore[BROWSER_STORAGE_AREAS] = JSON.stringify(areas)
+      const result = await adapter.renameArea('area-1', '  ')
+      expect(result.area).toBeUndefined()
+    })
+  })
 })

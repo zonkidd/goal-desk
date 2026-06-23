@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useUiStore } from '../store/uiStore'
 import { useTaskStore } from '../store/taskStore'
 import { useGoalStore } from '../store/goalStore'
@@ -68,4 +69,31 @@ export function useReloadWorkspaceAfterAreaChange() {
       })
     }
   }
+}
+
+export function useTaskGoalBridge() {
+  const refreshGoals = useGoalStore((s) => s.refreshGoals)
+  const prevTasksRef = useRef<Task[]>([])
+
+  useEffect(() => {
+    const unsubscribe = useTaskStore.subscribe((state) => {
+      const prevTasks = prevTasksRef.current
+      const currTasks = state.tasks
+
+      const statusChanged = currTasks.some((t) => {
+        const prev = prevTasks.find((p) => p.id === t.id)
+        return prev && prev.status !== t.status
+      })
+
+      if (statusChanged) {
+        refreshGoals()
+      }
+
+      prevTasksRef.current = currTasks
+    })
+
+    prevTasksRef.current = useTaskStore.getState().tasks
+
+    return unsubscribe
+  }, [refreshGoals])
 }

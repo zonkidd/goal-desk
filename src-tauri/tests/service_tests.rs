@@ -919,6 +919,131 @@ fn eventkit_create_system_reminder_returns_system_reminder_with_id() {
     assert!(!reminder.done);
 }
 
+// ============================================================================
+// SqliteRepository - auto-initialize on construction
+// ============================================================================
+
+#[test]
+fn repository_auto_initializes_on_construction() {
+    let dir = std::env::temp_dir().join("goal_desk_test_auto_init");
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join("test.sqlite");
+    let _ = std::fs::remove_file(&path);
+    let repo = SqliteRepository::new(path);
+
+    // Service should work immediately without explicit initialize() call
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Auto-init task").unwrap();
+    assert_eq!(task.title, "Auto-init task");
+
+    let found = service.find_task(&task.id.to_string()).unwrap();
+    assert!(found.is_some());
+}
+
+// ============================================================================
+// TaskService - update_task_status_with_effects (unified method)
+// ============================================================================
+
+#[test]
+fn task_update_status_with_effects_none_callback() {
+    let repo = temp_repo("effects_none");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task").unwrap();
+
+    let updated = service
+        .update_task_status_with_effects(
+            &task.id.to_string(),
+            TaskStatus::InProgress,
+            None,
+            goal_desk_tauri::domain::SideEffect::None,
+        )
+        .unwrap();
+
+    assert_eq!(updated.status, TaskStatus::InProgress);
+}
+
+#[test]
+fn task_update_status_with_effects_reminder_sync_calls_callback() {
+    let repo = temp_repo("effects_reminder_sync");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task").unwrap();
+    let _ = service
+        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-1".to_string()))
+        .unwrap();
+
+    let callback_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = callback_called.clone();
+
+    let updated = service
+        .update_task_status_with_effects(
+            &task.id.to_string(),
+            TaskStatus::Done,
+            None,
+            goal_desk_tauri::domain::SideEffect::ReminderSync(Box::new(move |reminder_id, done| {
+                assert_eq!(reminder_id, "reminder-1");
+                assert!(done);
+                flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            })),
+        )
+        .unwrap();
+
+    assert_eq!(updated.status, TaskStatus::Done);
+    assert!(callback_called.load(std::sync::atomic::Ordering::SeqCst));
+}
+
+#[test]
+fn task_update_status_with_effects_reminder_skips_callback_when_no_reminder() {
+    let repo = temp_repo("effects_no_reminder");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task").unwrap();
+
+    let callback_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = callback_called.clone();
+
+    let updated = service
+        .update_task_status_with_effects(
+            &task.id.to_string(),
+            TaskStatus::InProgress,
+            None,
+            goal_desk_tauri::domain::SideEffect::ReminderSync(Box::new(move |_id, _done| {
+                flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            })),
+        )
+        .unwrap();
+
+    assert_eq!(updated.status, TaskStatus::InProgress);
+    assert!(!callback_called.load(std::sync::atomic::Ordering::SeqCst));
+}
+
+#[test]
+fn task_update_status_with_effects_skips_callback_on_invalid_transition() {
+    let repo = temp_repo("effects_invalid_transition");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task").unwrap();
+    let _ = service
+        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-1".to_string()))
+        .unwrap();
+
+    let callback_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = callback_called.clone();
+
+    // TODO -> PAUSED is invalid
+    let result = service.update_task_status_with_effects(
+        &task.id.to_string(),
+        TaskStatus::Paused,
+        None,
+        goal_desk_tauri::domain::SideEffect::ReminderSync(Box::new(move |_id, _done| {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        })),
+    );
+
+    assert!(result.is_err());
+    assert!(!callback_called.load(std::sync::atomic::Ordering::SeqCst));
+}
+
 #[test]
 fn goal_summaries_shows_derived_status_when_all_tasks_done() {
     let repo = temp_repo("goal_summaries_derived_status");

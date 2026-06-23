@@ -13,7 +13,7 @@ use domain::{
 use eventkit::{SystemAgendaSnapshot, SystemReminder};
 use repository::SqliteRepository;
 use service::AppService;
-use tauri::{AppHandle, Manager, TitleBarStyle, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager};
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 
@@ -95,25 +95,8 @@ fn load_or_seed_workspace<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Works
 }
 
 fn ensure_quick_capture_window<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<tauri::WebviewWindow<R>, String> {
-    if let Some(window) = app.get_webview_window("quick-capture") {
-        return Ok(window);
-    }
-
-    WebviewWindowBuilder::new(app, "quick-capture", WebviewUrl::App("index.html?view=quick-capture".into()))
-        .title("Quick Capture")
-        .inner_size(520.0, 240.0)
-        .resizable(false)
-        .maximizable(false)
-        .minimizable(false)
-        .closable(true)
-        .always_on_top(true)
-        .visible(false)
-        .focused(true)
-        .skip_taskbar(true)
-        .decorations(false)
-        .title_bar_style(TitleBarStyle::Overlay)
-        .build()
-        .map_err(|error| error.to_string())
+    app.get_webview_window("quick-capture")
+        .ok_or_else(|| "quick-capture window not found".to_string())
 }
 
 fn bear_note_url(note_id: &str) -> String {
@@ -140,6 +123,7 @@ mod commands {
         timeline_from_workspace, workspace_repository, DeskTask, GoalStatus,
         GoalSummary, SystemAgendaSnapshot, SystemReminder, TaskStatus, TimelineItem,
     };
+    use crate::domain;
     use crate::service::AppService;
     use chrono::{Datelike, Duration, Local, TimeZone};
     use tauri::{AppHandle, Emitter, State};
@@ -308,11 +292,11 @@ mod commands {
     ) -> Result<DeskTask, String> {
         let app_handle = app.clone();
 
-        svc.task.update_task_status_with_reminder_sync(
+        svc.task.update_task_status_with_effects(
             &task_id,
             status,
             note,
-            Some(Box::new(move |reminder_id: &str, done: bool| {
+            domain::SideEffect::ReminderSync(Box::new(move |reminder_id: &str, done: bool| {
                 eventkit::set_system_reminder_completed(&app_handle, reminder_id, done).map(|_| ())
             })),
         )

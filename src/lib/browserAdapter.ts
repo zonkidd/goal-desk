@@ -3,6 +3,8 @@ import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
 import { loadBrowserTasks } from './browserCodec'
 import { UNCATEGORIZED_AREA_TITLE } from './constants'
+import { validateTaskTitle, validateGoalInput, validateAreaTitle } from './validation'
+import { computeGoalProgress } from './goalProgress'
 
 export const BROWSER_PREVIEW_STATUS = 'Browser preview only · local database is unavailable'
 
@@ -32,20 +34,20 @@ function recalculateGoalProgress(goalId: string): void {
   const idx = goals.findIndex(g => g.id === goalId)
   if (idx === -1) return
 
-  const linkedTasks = tasks.filter(t => t.linkedGoalId === goalId)
-  const totalCount = linkedTasks.length
-  const doneCount = linkedTasks.filter(t => t.status === 'DONE').length
-  const progress = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100)
+  const { progress, taskCount } = computeGoalProgress(tasks, goalId)
 
-  goals[idx] = { ...goals[idx], taskCount: totalCount, progress }
+  goals[idx] = { ...goals[idx], taskCount, progress }
   saveToLocalStorage(BROWSER_STORAGE_GOALS, goals)
 }
 
 export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation, QueryAdapter {
   async createTask(title: string): Promise<TaskResult> {
+    const validated = validateTaskTitle(title)
+    if (!validated) return {}
+
     const mockTask: Task = {
       id: crypto.randomUUID(),
-      title,
+      title: validated,
       content: '',
       status: 'TODO',
       showInTimeline: false,
@@ -60,9 +62,12 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
   }
 
   async createTaskForGoal(goal: GoalCard, title: string): Promise<TaskResult> {
+    const validated = validateTaskTitle(title)
+    if (!validated) return {}
+
     const mockTask: Task = {
       id: crypto.randomUUID(),
-      title,
+      title: validated,
       content: '',
       status: 'TODO',
       showInTimeline: false,
@@ -85,12 +90,14 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     options?: { openGoalWorkspace?: boolean },
   ): Promise<GoalResult & { openGoalWorkspace: boolean }> {
     const openGoalWorkspace = options?.openGoalWorkspace ?? true
+    const validated = validateGoalInput(input)
+    if (!validated) return { openGoalWorkspace }
 
     const mockGoal: GoalCard = {
       id: crypto.randomUUID(),
-      title: input.title,
-      area: input.area,
-      description: input.description,
+      title: validated.title,
+      area: validated.area,
+      description: validated.description,
       status: 'ACTIVE',
       progress: 0,
       nextTodo: '',
@@ -105,11 +112,14 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
   }
 
   async updateGoalFields(goalId: string, input: { title: string; area: string; description: string }): Promise<GoalResult> {
+    const validated = validateGoalInput(input)
+    if (!validated) return {}
+
     const goals = loadFromLocalStorage<GoalCard>(BROWSER_STORAGE_GOALS)
     const idx = goals.findIndex(g => g.id === goalId)
     if (idx === -1) return {}
 
-    const updatedGoal: GoalCard = { ...goals[idx], title: input.title, area: input.area, description: input.description }
+    const updatedGoal: GoalCard = { ...goals[idx], title: validated.title, area: validated.area, description: validated.description }
     goals[idx] = updatedGoal
     saveToLocalStorage(BROWSER_STORAGE_GOALS, goals)
 
@@ -129,6 +139,9 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
   }
 
   async addTaskNote(taskId: string, note: string): Promise<TaskResult> {
+    const validated = validateTaskTitle(note)
+    if (!validated) return {}
+
     const tasks = loadBrowserTasks()
     const idx = tasks.findIndex(t => t.id === taskId)
     if (idx === -1) return {}
@@ -136,7 +149,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     const updatedTask: Task = {
       ...tasks[idx],
       activityLogs: [
-        { action: 'NOTE_ADDED' as TaskActivityAction, note, timestamp: new Date() },
+        { action: 'NOTE_ADDED' as TaskActivityAction, note: validated, timestamp: new Date() },
         ...tasks[idx].activityLogs,
       ],
     }
@@ -199,6 +212,9 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
       systemReminderId?: string
     },
   ): Promise<TaskResult> {
+    const validatedTitle = validateTaskTitle(input.title)
+    if (!validatedTitle) return {}
+
     const tasks = loadBrowserTasks()
     const idx = tasks.findIndex(t => t.id === taskId)
     if (idx === -1) return {}
@@ -207,7 +223,7 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
 
     const updatedTask: Task = {
       ...existingTask,
-      title: input.title,
+      title: validatedTitle,
       plannedStartAt: input.plannedStartAt ?? existingTask.plannedStartAt,
       dueDate: input.dueDate ?? existingTask.dueDate,
       linkedGoalId: input.linkedGoalId ?? existingTask.linkedGoalId,
@@ -238,6 +254,9 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
   }
 
   async createArea(title: string): Promise<AreaResult> {
+    const validated = validateAreaTitle(title)
+    if (!validated) return {}
+
     const mockArea: AreaWithStats = {
       id: crypto.randomUUID(),
       title,
@@ -254,11 +273,14 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
   }
 
   async renameArea(areaId: string, newTitle: string): Promise<AreaResult> {
+    const validated = validateAreaTitle(newTitle)
+    if (!validated) return {}
+
     const areas = loadFromLocalStorage<AreaWithStats>(BROWSER_STORAGE_AREAS)
     const idx = areas.findIndex(a => a.id === areaId)
     if (idx === -1) return {}
 
-    const updatedArea: AreaWithStats = { ...areas[idx], title: newTitle }
+    const updatedArea: AreaWithStats = { ...areas[idx], title: validated }
     areas[idx] = updatedArea
     saveToLocalStorage(BROWSER_STORAGE_AREAS, areas)
 

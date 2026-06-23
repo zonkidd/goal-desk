@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { getWorkspaceMutationAdapter, setWorkspaceMutationAdapter, resetWorkspaceMutationAdapter } from './workspaceMutations'
-import { ValidatingMutationAdapter } from './validatingAdapter'
+import { BrowserAdapter } from './browserAdapter'
 
 describe('workspaceMutations', () => {
   beforeEach(() => {
@@ -24,6 +24,6 @@ describe('workspaceMutations', () => {
     setWorkspaceMutationAdapter(mock)
     resetWorkspaceMutationAdapter()
     const adapter = getWorkspaceMutationAdapter()
-    expect(adapter).toBeInstanceOf(ValidatingMutationAdapter)
+    expect(adapter).toBeInstanceOf(BrowserAdapter)
   })
 })

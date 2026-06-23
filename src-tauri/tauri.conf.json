@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Goal Desk",
@@ -17,6 +18,21 @@
         "height": 860,
         "minWidth": 980,
         "minHeight": 720
+      },
+      {
+        "label": "quick-capture",
+        "title": "Quick Capture",
+        "url": "index.html?view=quick-capture",
+        "width": 520,
+        "height": 380,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false
       }
     ],
     "security": {

@@ -18,18 +18,23 @@ import {
 import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
 import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
+import { validateTaskTitle, validateGoalInput, validateAreaTitle } from './validation'
 
 export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, QueryAdapter {
   async createTask(title: string): Promise<TaskResult> {
+    const validated = validateTaskTitle(title)
+    if (!validated) return {}
     return {
-      task: await captureTask(title),
+      task: await captureTask(validated),
       statusMessage: 'Saved to local database',
     }
   }
 
   async createTaskForGoal(goal: GoalCard, title: string): Promise<TaskResult> {
+    const validated = validateTaskTitle(title)
+    if (!validated) return {}
     return {
-      task: await persistTaskForGoal(goal.id, title),
+      task: await persistTaskForGoal(goal.id, validated),
       statusMessage: 'Task linked to goal and saved to local database',
     }
   }
@@ -39,11 +44,13 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
     options?: { openGoalWorkspace?: boolean },
   ): Promise<GoalResult & { openGoalWorkspace: boolean }> {
     const openGoalWorkspace = options?.openGoalWorkspace ?? true
+    const validated = validateGoalInput(input)
+    if (!validated) return { openGoalWorkspace }
     return {
       goal: await persistGoal({
-        title: input.title,
-        area: input.area,
-        description: input.description,
+        title: validated.title,
+        area: validated.area,
+        description: validated.description,
         status: 'ACTIVE',
       }),
       statusMessage: 'Goal saved to local database',
@@ -52,8 +59,10 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
   }
 
   async updateGoalFields(goalId: string, input: { title: string; area: string; description: string }): Promise<GoalResult> {
+    const validated = validateGoalInput(input)
+    if (!validated) return {}
     return {
-      goal: await persistGoalFields(goalId, { title: input.title, area: input.area, description: input.description }),
+      goal: await persistGoalFields(goalId, { title: validated.title, area: validated.area, description: validated.description }),
       statusMessage: 'Goal details saved',
     }
   }
@@ -66,8 +75,10 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
   }
 
   async addTaskNote(taskId: string, note: string): Promise<TaskResult> {
+    const validated = validateTaskTitle(note)
+    if (!validated) return {}
     return {
-      task: await persistTaskNote(taskId, note),
+      task: await persistTaskNote(taskId, validated),
       statusMessage: 'Activity log updated',
     }
   }
@@ -98,9 +109,11 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
       systemReminderId?: string
     },
   ): Promise<TaskResult> {
+    const validatedTitle = validateTaskTitle(input.title)
+    if (!validatedTitle) return {}
     return {
       task: await persistTaskFields(taskId, {
-        title: input.title,
+        title: validatedTitle,
         plannedStartAt: input.plannedStartAt,
         dueAt: input.dueDate,
         linkedGoalId: input.linkedGoalId,
@@ -120,7 +133,9 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
   }
 
   async createArea(title: string): Promise<AreaResult> {
-    const area = await persistCreateArea(title)
+    const validated = validateAreaTitle(title)
+    if (!validated) return {}
+    const area = await persistCreateArea(validated)
     const areas = await persistListAreas()
     const fullArea = areas.find(a => a.id === area.id)
     return {
@@ -130,7 +145,9 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
   }
 
   async renameArea(areaId: string, newTitle: string): Promise<AreaResult> {
-    const area = await persistRenameArea(areaId, newTitle)
+    const validated = validateAreaTitle(newTitle)
+    if (!validated) return {}
+    const area = await persistRenameArea(areaId, validated)
     const areas = await persistListAreas()
     const fullArea = areas.find(a => a.id === area.id)
     return {

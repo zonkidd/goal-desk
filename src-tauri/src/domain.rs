@@ -326,6 +326,11 @@ pub enum Urgency {
     None,
 }
 
+pub enum SideEffect {
+    None,
+    ReminderSync(Box<dyn FnOnce(&str, bool) -> Result<(), String>>),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuickCaptureDraft {
     pub title: String,

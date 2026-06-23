@@ -41,7 +41,7 @@ export function QuickCaptureWindow() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-900/15 backdrop-blur-sm text-slate-800">
+    <main className="flex min-h-screen items-center justify-center bg-transparent text-slate-800">
       <div className="w-[520px]">
         <QuickCaptureForm
           value={value}

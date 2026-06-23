@@ -65,10 +65,12 @@ pub struct SqliteRepository {
 
 impl SqliteRepository {
     pub fn new(path: PathBuf) -> Self {
-        Self {
+        let repo = Self {
             path,
             conn: Arc::new(Mutex::new(None)),
-        }
+        };
+        let _ = repo.initialize();
+        repo
     }
 
     pub fn path(&self) -> &Path {

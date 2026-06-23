@@ -1,4 +1,4 @@
-use crate::domain::{DeskTask, TaskStatus};
+use crate::domain::{DeskTask, SideEffect, TaskStatus};
 use crate::repository::{GoalRepository, SqliteRepository, TaskRepository};
 use uuid::Uuid;
 
@@ -40,7 +40,6 @@ impl TaskService {
             }],
         };
 
-        self.repo.initialize().map_err(|e| e.to_string())?;
         TaskRepository::create(&self.repo, &task).map_err(|e| e.to_string())?;
         Ok(task)
     }
@@ -56,7 +55,6 @@ impl TaskService {
         }
 
         let goal_uuid = Uuid::parse_str(goal_id).map_err(|e| e.to_string())?;
-        self.repo.initialize().map_err(|e| e.to_string())?;
 
         let goal = GoalRepository::find(&self.repo, goal_uuid)
             .map_err(|e| e.to_string())?
@@ -139,12 +137,12 @@ impl TaskService {
         Ok(task)
     }
 
-    pub fn update_task_status_with_sync(
+    pub fn update_task_status_with_effects(
         &self,
         task_id: &str,
         status: TaskStatus,
         note: Option<String>,
-        sync_callback: Option<Box<dyn FnOnce(&str, bool) -> Result<(), String>>>,
+        side_effect: SideEffect,
     ) -> Result<DeskTask, String> {
         let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
 
@@ -159,13 +157,28 @@ impl TaskService {
             ));
         }
 
-        if let Some(callback) = sync_callback {
+        if let SideEffect::ReminderSync(callback) = side_effect {
             if let Some(ref reminder_id) = task.system_reminder_id {
-                callback(reminder_id, matches!(status, TaskStatus::Done))?;
+                let done = matches!(status, TaskStatus::Done);
+                callback(reminder_id, done)?;
             }
         }
 
         self.update_task_status(task_id, status, note)
+    }
+
+    pub fn update_task_status_with_sync(
+        &self,
+        task_id: &str,
+        status: TaskStatus,
+        note: Option<String>,
+        sync_callback: Option<Box<dyn FnOnce(&str, bool) -> Result<(), String>>>,
+    ) -> Result<DeskTask, String> {
+        let side_effect = match sync_callback {
+            Some(cb) => SideEffect::ReminderSync(cb),
+            None => SideEffect::None,
+        };
+        self.update_task_status_with_effects(task_id, status, note, side_effect)
     }
 
     pub fn add_task_note(
@@ -246,13 +259,13 @@ impl TaskService {
     }
 
     pub fn list_tasks(&self) -> Result<Vec<DeskTask>, String> {
-        self.repo.initialize().map_err(|e| e.to_string())?;
+
         TaskRepository::list(&self.repo).map_err(|e| e.to_string())
     }
 
     pub fn find_task(&self, task_id: &str) -> Result<Option<DeskTask>, String> {
         let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
-        self.repo.initialize().map_err(|e| e.to_string())?;
+
         TaskRepository::find(&self.repo, task_uuid).map_err(|e| e.to_string())
     }
 
@@ -367,23 +380,10 @@ impl TaskService {
         note: Option<String>,
         reminder_sync: Option<Box<dyn FnOnce(&str, bool) -> Result<(), String>>>,
     ) -> Result<DeskTask, String> {
-        let task = self.find_task(task_id)?
-            .ok_or_else(|| format!("Task not found: {task_id}"))?;
-
-        if !task.can_transition_to(status) {
-            return Err(format!(
-                "Invalid status transition from {:?} to {:?}",
-                task.status, status
-            ));
-        }
-
-        if let Some(sync) = reminder_sync {
-            if let Some(ref reminder_id) = task.system_reminder_id {
-                let done = matches!(status, TaskStatus::Done);
-                sync(reminder_id, done)?;
-            }
-        }
-
-        self.update_task_status(task_id, status, note)
+        let side_effect = match reminder_sync {
+            Some(cb) => SideEffect::ReminderSync(cb),
+            None => SideEffect::None,
+        };
+        self.update_task_status_with_effects(task_id, status, note, side_effect)
     }
 }

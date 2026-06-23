@@ -17,6 +17,6 @@ impl AppService {
     }
 
     pub fn initialize(&self) -> Result<(), String> {
-        self.goal.repo.initialize().map_err(|e| e.to_string())
+        Ok(())
     }
 }
