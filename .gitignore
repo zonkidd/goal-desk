@@ -31,3 +31,16 @@ Thumbs.db
 
 # Tauri
 src-tauri/WixTools/
+
+# AI agent local config
+AGENTS.md
+.snow/
+.mimocode/
+.recallloom/
+.recallloom.damaged-*/
+.scratch/
+.serena/
+.superpowers/
+.claude/settings.local.json
+.claude/worktrees/
+.geminiignore
