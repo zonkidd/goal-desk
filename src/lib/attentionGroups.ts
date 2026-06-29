@@ -1,4 +1,4 @@
-import type { GoalCard } from '../types/app'
+import type { GoalCard, ReminderItem } from '../types/app'
 import type { Task } from '../types/task'
 import { startOfDay, isSameDay, isTaskInActiveDateRange } from './dateUtils.ts'
 
@@ -6,6 +6,7 @@ export interface TodayAttentionGroups {
   overdue: Task[]
   dueToday: Task[]
   ongoing: Task[]
+  systemReminders: ReminderItem[]
 }
 
 export interface TodayRelevantGoal {
@@ -18,7 +19,12 @@ export interface TodayRelevantGoal {
   urgencyScore: number
 }
 
-export function deriveTodayAttentionGroups(tasks: Task[], now = new Date()): TodayAttentionGroups {
+export function deriveTodayAttentionGroups(
+  tasks: Task[],
+  now = new Date(),
+  allSystemReminders: ReminderItem[] = [],
+  linkedReminderIds: Set<string> = new Set(),
+): TodayAttentionGroups {
   const today = startOfDay(now)
   const activeTasks = tasks.filter((task) => task.status !== 'DONE')
 
@@ -55,7 +61,16 @@ export function deriveTodayAttentionGroups(tasks: Task[], now = new Date()): Tod
       return bDaysElapsed - aDaysElapsed
     })
 
-  return { overdue, dueToday, ongoing }
+  const systemReminders = allSystemReminders
+    .filter((r) => {
+      if (r.done) return false
+      if (linkedReminderIds.has(r.id)) return false
+      if (!r.dueAt) return false
+      return isSameDay(r.dueAt, now)
+    })
+    .sort((a, b) => (a.dueAt?.getTime() ?? 0) - (b.dueAt?.getTime() ?? 0))
+
+  return { overdue, dueToday, ongoing, systemReminders }
 }
 
 export function deriveTodayRelevantGoals(goals: GoalCard[], attentionGroups: TodayAttentionGroups): TodayRelevantGoal[] {

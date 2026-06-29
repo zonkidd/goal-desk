@@ -14,6 +14,12 @@ import {
   updateTaskContent as persistTaskContent,
   updateTaskFields as persistTaskFields,
   updateTaskStatus as persistTaskStatus,
+  softDeleteTask as persistSoftDeleteTask,
+  restoreTask as persistRestoreTask,
+  listDeletedTasks as persistListDeletedTasks,
+  softDeleteGoal as persistSoftDeleteGoal,
+  restoreGoal as persistRestoreGoal,
+  listDeletedGoals as persistListDeletedGoals,
 } from './tauriCommands'
 import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
@@ -171,5 +177,35 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
 
   async loadGoals(): Promise<GoalCard[]> {
     return persistLoadGoalList()
+  }
+
+  async softDeleteTask(taskId: string): Promise<void> {
+    return persistSoftDeleteTask(taskId)
+  }
+
+  async restoreTask(taskId: string): Promise<TaskResult> {
+    return {
+      task: await persistRestoreTask(taskId),
+      statusMessage: 'Task restored from recycle bin',
+    }
+  }
+
+  async listDeletedTasks(): Promise<Task[]> {
+    return persistListDeletedTasks()
+  }
+
+  async softDeleteGoal(goalId: string): Promise<void> {
+    return persistSoftDeleteGoal(goalId)
+  }
+
+  async restoreGoal(goalId: string): Promise<GoalResult> {
+    return {
+      goal: await persistRestoreGoal(goalId),
+      statusMessage: 'Goal restored from recycle bin',
+    }
+  }
+
+  async listDeletedGoals(): Promise<GoalCard[]> {
+    return persistListDeletedGoals()
   }
 }

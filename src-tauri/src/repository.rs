@@ -51,6 +51,12 @@ impl From<uuid::Error> for RepositoryError {
     }
 }
 
+impl From<RepositoryError> for rusqlite::Error {
+    fn from(value: RepositoryError) -> Self {
+        rusqlite::Error::InvalidParameterName(value.to_string())
+    }
+}
+
 impl From<chrono::ParseError> for RepositoryError {
     fn from(value: chrono::ParseError) -> Self {
         Self::Chrono(value)
@@ -163,6 +169,8 @@ impl SqliteRepository {
         Self::ensure_column_exists(conn, "desk_tasks", "system_reminder_id", "TEXT NULL")?;
         Self::ensure_column_exists(conn, "desk_tasks", "show_in_timeline", "INTEGER NOT NULL DEFAULT 0")?;
         Self::ensure_column_exists(conn, "desk_tasks", "planned_start_at", "TEXT NULL")?;
+        Self::ensure_column_exists(conn, "desk_tasks", "deleted_at", "TEXT NULL")?;
+        Self::ensure_column_exists(conn, "goals", "deleted_at", "TEXT NULL")?;
 
         // 确保"未分类"系统 area 存在
         conn.execute(
@@ -204,13 +212,14 @@ impl SqliteRepository {
 
         for goal in &snapshot.goals {
             transaction.execute(
-                "INSERT INTO goals (id, area_id, title, description, status) VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO goals (id, area_id, title, description, status, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     goal.id.to_string(),
                     option_uuid(goal.area_id),
                     goal.title,
                     goal.description,
-                    goal_status_as_str(goal.status)
+                    goal_status_as_str(goal.status),
+                    option_datetime(goal.deleted_at),
                 ],
             )?;
         }
@@ -265,7 +274,7 @@ impl SqliteRepository {
 
         let goals = {
             let mut statement =
-                connection.prepare("SELECT id, area_id, title, description, status FROM goals ORDER BY title")?;
+                connection.prepare("SELECT id, area_id, title, description, status, deleted_at FROM goals WHERE deleted_at IS NULL ORDER BY title")?;
             let mut rows = statement.query([])?;
             let mut items = Vec::new();
             while let Some(row) = rows.next()? {
@@ -275,6 +284,7 @@ impl SqliteRepository {
                     title: row.get(2)?,
                     description: row.get(3)?,
                     status: parse_goal_status(row.get::<_, String>(4)?)?,
+                    deleted_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
                 });
             }
             items
@@ -497,12 +507,16 @@ fn parse_optional_datetime(value: Option<String>) -> Result<Option<DateTime<Loca
 /// GoalRepository - 单个 Goal 的增删改查
 pub trait GoalRepository {
     fn find(&self, id: Uuid) -> Result<Option<Goal>, RepositoryError>;
+    fn find_any(&self, id: Uuid) -> Result<Option<Goal>, RepositoryError>;
     fn list(&self) -> Result<Vec<Goal>, RepositoryError>;
     fn list_by_area(&self, area_id: Uuid) -> Result<Vec<Goal>, RepositoryError>;
     fn create(&self, goal: &Goal) -> Result<(), RepositoryError>;
     fn update(&self, goal: &Goal) -> Result<(), RepositoryError>;
     fn update_status(&self, id: Uuid, status: GoalStatus) -> Result<(), RepositoryError>;
     fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
+    fn soft_delete(&self, id: Uuid) -> Result<(), RepositoryError>;
+    fn restore(&self, id: Uuid) -> Result<(), RepositoryError>;
+    fn list_deleted(&self) -> Result<Vec<Goal>, RepositoryError>;
 }
 
 impl GoalRepository for SqliteRepository {
@@ -510,22 +524,41 @@ impl GoalRepository for SqliteRepository {
         let guard = self.cached_connection()?;
         let connection = guard.as_ref().unwrap();
         let result = connection.query_row(
-            "SELECT id, area_id, title, description, status FROM goals WHERE id = ?1",
+            "SELECT id, area_id, title, description, status, deleted_at FROM goals WHERE id = ?1 AND deleted_at IS NULL",
             params![id.to_string()],
             |row| {
                 Ok(Goal {
-                    id: row.get::<_, String>(0).and_then(|s| Uuid::parse_str(&s).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))))?,
-                    area_id: row.get::<_, Option<String>>(1)?.and_then(|s| Uuid::parse_str(&s).ok()),
+                    id: parse_uuid(row.get::<_, String>(0)?)?,
+                    area_id: parse_optional_uuid(row.get::<_, Option<String>>(1)?)?,
                     title: row.get(2)?,
                     description: row.get(3)?,
-                    status: row.get::<_, String>(4).and_then(|s| match s.as_str() {
-                        "ACTIVE" => Ok(GoalStatus::Active),
-                        "PAUSED" => Ok(GoalStatus::Paused),
-                        "READY_TO_COMPLETE" => Ok(GoalStatus::ReadyToComplete),
-                        "COMPLETED" => Ok(GoalStatus::Completed),
-                        "ARCHIVED" => Ok(GoalStatus::Archived),
-                        _ => Err(rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid goal status")))),
-                    })?,
+                    status: parse_goal_status(row.get::<_, String>(4)?)?,
+                    deleted_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
+                })
+            },
+        );
+
+        match result {
+            Ok(goal) => Ok(Some(goal)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn find_any(&self, id: Uuid) -> Result<Option<Goal>, RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        let result = connection.query_row(
+            "SELECT id, area_id, title, description, status, deleted_at FROM goals WHERE id = ?1",
+            params![id.to_string()],
+            |row| {
+                Ok(Goal {
+                    id: parse_uuid(row.get::<_, String>(0)?)?,
+                    area_id: parse_optional_uuid(row.get::<_, Option<String>>(1)?)?,
+                    title: row.get(2)?,
+                    description: row.get(3)?,
+                    status: parse_goal_status(row.get::<_, String>(4)?)?,
+                    deleted_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
                 })
             },
         );
@@ -541,7 +574,7 @@ impl GoalRepository for SqliteRepository {
         let guard = self.cached_connection()?;
         let connection = guard.as_ref().unwrap();
         let mut statement = connection.prepare(
-            "SELECT id, area_id, title, description, status FROM goals ORDER BY title"
+            "SELECT id, area_id, title, description, status, deleted_at FROM goals WHERE deleted_at IS NULL ORDER BY title"
         )?;
         let mut rows = statement.query([])?;
         let mut goals = Vec::new();
@@ -553,6 +586,7 @@ impl GoalRepository for SqliteRepository {
                 title: row.get(2)?,
                 description: row.get(3)?,
                 status: parse_goal_status(row.get::<_, String>(4)?)?,
+                deleted_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
             });
         }
 
@@ -563,7 +597,7 @@ impl GoalRepository for SqliteRepository {
         let guard = self.cached_connection()?;
         let connection = guard.as_ref().unwrap();
         let mut statement = connection.prepare(
-            "SELECT id, area_id, title, description, status FROM goals WHERE area_id = ?1 ORDER BY title"
+            "SELECT id, area_id, title, description, status, deleted_at FROM goals WHERE area_id = ?1 AND deleted_at IS NULL ORDER BY title"
         )?;
         let mut rows = statement.query(params![area_id.to_string()])?;
         let mut goals = Vec::new();
@@ -575,6 +609,7 @@ impl GoalRepository for SqliteRepository {
                 title: row.get(2)?,
                 description: row.get(3)?,
                 status: parse_goal_status(row.get::<_, String>(4)?)?,
+                deleted_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
             });
         }
 
@@ -585,13 +620,14 @@ impl GoalRepository for SqliteRepository {
         let guard = self.cached_connection()?;
         let connection = guard.as_ref().unwrap();
         connection.execute(
-            "INSERT INTO goals (id, area_id, title, description, status) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO goals (id, area_id, title, description, status, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 goal.id.to_string(),
                 option_uuid(goal.area_id),
                 &goal.title,
                 &goal.description,
-                goal_status_as_str(goal.status)
+                goal_status_as_str(goal.status),
+                option_datetime(goal.deleted_at),
             ],
         )?;
         Ok(())
@@ -601,13 +637,14 @@ impl GoalRepository for SqliteRepository {
         let guard = self.cached_connection()?;
         let connection = guard.as_ref().unwrap();
         connection.execute(
-            "UPDATE goals SET area_id = ?1, title = ?2, description = ?3, status = ?4 WHERE id = ?5",
+            "UPDATE goals SET area_id = ?1, title = ?2, description = ?3, status = ?4, deleted_at = ?6 WHERE id = ?5",
             params![
                 option_uuid(goal.area_id),
                 &goal.title,
                 &goal.description,
                 goal_status_as_str(goal.status),
                 goal.id.to_string(),
+                option_datetime(goal.deleted_at),
             ],
         )?;
         Ok(())
@@ -632,6 +669,50 @@ impl GoalRepository for SqliteRepository {
         )?;
         Ok(())
     }
+
+    fn soft_delete(&self, id: Uuid) -> Result<(), RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        connection.execute(
+            "UPDATE goals SET deleted_at = ?1 WHERE id = ?2",
+            params![now, id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn restore(&self, id: Uuid) -> Result<(), RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        connection.execute(
+            "UPDATE goals SET deleted_at = NULL WHERE id = ?1",
+            params![id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn list_deleted(&self) -> Result<Vec<Goal>, RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        let mut statement = connection.prepare(
+            "SELECT id, area_id, title, description, status, deleted_at FROM goals WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC"
+        )?;
+        let mut rows = statement.query([])?;
+        let mut goals = Vec::new();
+
+        while let Some(row) = rows.next()? {
+            goals.push(Goal {
+                id: parse_uuid(row.get::<_, String>(0)?)?,
+                area_id: parse_optional_uuid(row.get::<_, Option<String>>(1)?)?,
+                title: row.get(2)?,
+                description: row.get(3)?,
+                status: parse_goal_status(row.get::<_, String>(4)?)?,
+                deleted_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
+            });
+        }
+
+        Ok(goals)
+    }
 }
 
 /// TaskRepository - 单个 Task 的增删改查
@@ -644,6 +725,9 @@ pub trait TaskRepository {
     fn update(&self, task: &DeskTask) -> Result<(), RepositoryError>;
     fn update_status(&self, id: Uuid, status: TaskStatus) -> Result<(), RepositoryError>;
     fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
+    fn soft_delete(&self, id: Uuid) -> Result<(), RepositoryError>;
+    fn restore(&self, id: Uuid) -> Result<(), RepositoryError>;
+    fn list_deleted(&self) -> Result<Vec<DeskTask>, RepositoryError>;
 }
 
 impl TaskRepository for SqliteRepository {
@@ -688,7 +772,7 @@ impl TaskRepository for SqliteRepository {
         let transaction = connection.transaction()?;
 
         transaction.execute(
-            "INSERT INTO desk_tasks (id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO desk_tasks (id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 task.id.to_string(),
                 &task.title,
@@ -700,7 +784,8 @@ impl TaskRepository for SqliteRepository {
                 task.linked_goal_label.as_deref(),
                 task.bear_note_id.as_deref(),
                 task.system_reminder_id.as_deref(),
-                task.show_in_timeline as i64
+                task.show_in_timeline as i64,
+                option_datetime(task.deleted_at),
             ],
         )?;
 
@@ -727,7 +812,7 @@ impl TaskRepository for SqliteRepository {
         let transaction = connection.transaction()?;
 
         transaction.execute(
-            "UPDATE desk_tasks SET title = ?1, content = ?2, status = ?3, planned_start_at = ?4, due_at = ?5, linked_goal_id = ?6, linked_goal_label = ?7, bear_note_id = ?8, system_reminder_id = ?9, show_in_timeline = ?10 WHERE id = ?11",
+            "UPDATE desk_tasks SET title = ?1, content = ?2, status = ?3, planned_start_at = ?4, due_at = ?5, linked_goal_id = ?6, linked_goal_label = ?7, bear_note_id = ?8, system_reminder_id = ?9, show_in_timeline = ?10, deleted_at = ?12 WHERE id = ?11",
             params![
                 &task.title,
                 &task.content,
@@ -740,6 +825,7 @@ impl TaskRepository for SqliteRepository {
                 task.system_reminder_id.as_deref(),
                 task.show_in_timeline as i64,
                 task.id.to_string(),
+                option_datetime(task.deleted_at),
             ],
         )?;
 
@@ -794,6 +880,37 @@ impl TaskRepository for SqliteRepository {
 
         transaction.commit()?;
         Ok(())
+    }
+
+    fn soft_delete(&self, id: Uuid) -> Result<(), RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        connection.execute(
+            "UPDATE desk_tasks SET deleted_at = ?1 WHERE id = ?2",
+            params![now, id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn restore(&self, id: Uuid) -> Result<(), RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        connection.execute(
+            "UPDATE desk_tasks SET deleted_at = NULL WHERE id = ?1",
+            params![id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn list_deleted(&self) -> Result<Vec<DeskTask>, RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        load_tasks_with_filter(
+            &connection,
+            "WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+            &[],
+        )
     }
 }
 
@@ -925,10 +1042,11 @@ fn row_to_task(
         system_reminder_id: row.get(9)?,
         show_in_timeline: row.get::<_, i64>(10)? != 0,
         activity_logs: logs_by_task_id.remove(&id).unwrap_or_default(),
+        deleted_at: parse_optional_datetime(row.get::<_, Option<String>>(11)?)?,
     })
 }
 
-const TASK_COLUMNS: &str = "id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline";
+const TASK_COLUMNS: &str = "id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline, deleted_at";
 
 fn load_tasks_with_filter(
     connection: &Connection,
@@ -938,7 +1056,7 @@ fn load_tasks_with_filter(
     let mut logs_by_task_id = load_all_activity_logs(connection)?;
 
     let sql = if where_clause.is_empty() {
-        format!("SELECT {TASK_COLUMNS} FROM desk_tasks ORDER BY title")
+        format!("SELECT {TASK_COLUMNS} FROM desk_tasks WHERE deleted_at IS NULL ORDER BY title")
     } else {
         format!("SELECT {TASK_COLUMNS} FROM desk_tasks {where_clause}")
     };
@@ -1101,6 +1219,7 @@ mod tests {
             title: "Test Goal".to_string(),
             description: "Test Description".to_string(),
             status: GoalStatus::Active,
+            deleted_at: None,
         };
         GoalRepository::create(&repo, &goal).unwrap();
 
@@ -1137,6 +1256,7 @@ mod tests {
             title: "Alpha Goal".to_string(),
             description: String::new(),
             status: GoalStatus::Active,
+            deleted_at: None,
         };
         let goal2 = Goal {
             id: Uuid::new_v4(),
@@ -1144,6 +1264,7 @@ mod tests {
             title: "Beta Goal".to_string(),
             description: String::new(),
             status: GoalStatus::Active,
+            deleted_at: None,
         };
 
         GoalRepository::create(&repo, &goal1).unwrap();
@@ -1172,6 +1293,7 @@ mod tests {
             title: "Goal in Area 1".to_string(),
             description: String::new(),
             status: GoalStatus::Active,
+            deleted_at: None,
         };
         let goal2 = Goal {
             id: Uuid::new_v4(),
@@ -1179,6 +1301,7 @@ mod tests {
             title: "Another Goal in Area 1".to_string(),
             description: String::new(),
             status: GoalStatus::Active,
+            deleted_at: None,
         };
         let goal3 = Goal {
             id: Uuid::new_v4(),
@@ -1186,6 +1309,7 @@ mod tests {
             title: "Goal in Area 2".to_string(),
             description: String::new(),
             status: GoalStatus::Active,
+            deleted_at: None,
         };
 
         GoalRepository::create(&repo, &goal1).unwrap();
@@ -1209,6 +1333,7 @@ mod tests {
             title: "Test Goal".to_string(),
             description: "Original Description".to_string(),
             status: GoalStatus::Active,
+            deleted_at: None,
         };
         GoalRepository::create(&repo, &goal).unwrap();
 
@@ -1251,6 +1376,7 @@ mod tests {
                 note: None,
                 timestamp: chrono::Local::now(),
             }],
+            deleted_at: None,
         };
         TaskRepository::create(&repo, &task).unwrap();
 
@@ -1299,6 +1425,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            deleted_at: None,
         };
 
         let task2 = DeskTask {
@@ -1314,6 +1441,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            deleted_at: None,
         };
 
         let task3 = DeskTask {
@@ -1329,6 +1457,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            deleted_at: None,
         };
 
         TaskRepository::create(&repo, &task1).unwrap();
@@ -1360,6 +1489,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            deleted_at: None,
         };
 
         let task2 = DeskTask {
@@ -1375,6 +1505,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            deleted_at: None,
         };
 
         TaskRepository::create(&repo, &task1).unwrap();
@@ -1409,6 +1540,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            deleted_at: None,
         };
         TaskRepository::create(&repo, &task).unwrap();
 
@@ -1419,6 +1551,101 @@ mod tests {
         assert_eq!(updated.status, TaskStatus::InProgress);
         assert_eq!(updated.title, "Test Task", "Title should not change");
         assert_eq!(updated.content, "Original Content", "Content should not change");
+    }
+
+    #[test]
+    fn test_task_soft_delete_and_restore() {
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        let task = DeskTask {
+            id: Uuid::new_v4(),
+            title: "Delete Me".to_string(),
+            content: String::new(),
+            status: TaskStatus::Todo,
+            planned_start_at: None,
+            due_at: None,
+            linked_goal_id: None,
+            linked_goal_label: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![],
+            deleted_at: None,
+        };
+        TaskRepository::create(&repo, &task).unwrap();
+
+        // Soft delete
+        TaskRepository::soft_delete(&repo, task.id).unwrap();
+
+        // Should not appear in normal list
+        let all = TaskRepository::list(&repo).unwrap();
+        assert!(all.iter().all(|t| t.id != task.id), "Soft-deleted task should not appear in list");
+
+        // Should appear in deleted list
+        let deleted = TaskRepository::list_deleted(&repo).unwrap();
+        assert_eq!(deleted.len(), 1);
+        assert_eq!(deleted[0].id, task.id);
+        assert!(deleted[0].deleted_at.is_some(), "deleted_at should be set");
+
+        // Restore
+        TaskRepository::restore(&repo, task.id).unwrap();
+
+        // Should appear in normal list again
+        let all = TaskRepository::list(&repo).unwrap();
+        assert!(all.iter().any(|t| t.id == task.id), "Restored task should appear in list");
+
+        // Should not appear in deleted list
+        let deleted = TaskRepository::list_deleted(&repo).unwrap();
+        assert!(deleted.is_empty(), "Restored task should not be in deleted list");
+    }
+
+    #[test]
+    fn test_goal_soft_delete_and_restore() {
+        let (repo, _temp_dir) = create_test_repository();
+        repo.initialize().unwrap();
+
+        let goal = Goal {
+            id: Uuid::new_v4(),
+            area_id: None,
+            title: "Delete Me Goal".to_string(),
+            description: String::new(),
+            status: GoalStatus::Active,
+            deleted_at: None,
+        };
+        GoalRepository::create(&repo, &goal).unwrap();
+
+        // Soft delete
+        GoalRepository::soft_delete(&repo, goal.id).unwrap();
+
+        // Should not appear in normal list
+        let all = GoalRepository::list(&repo).unwrap();
+        assert!(all.iter().all(|g| g.id != goal.id), "Soft-deleted goal should not appear in list");
+
+        // Should appear in deleted list
+        let deleted = GoalRepository::list_deleted(&repo).unwrap();
+        assert_eq!(deleted.len(), 1);
+        assert_eq!(deleted[0].id, goal.id);
+        assert!(deleted[0].deleted_at.is_some(), "deleted_at should be set");
+
+        // find should not find it
+        let found = GoalRepository::find(&repo, goal.id).unwrap();
+        assert!(found.is_none(), "find should not return soft-deleted goal");
+
+        // find_any should find it
+        let found_any = GoalRepository::find_any(&repo, goal.id).unwrap();
+        assert!(found_any.is_some(), "find_any should return soft-deleted goal");
+
+        // Restore
+        GoalRepository::restore(&repo, goal.id).unwrap();
+
+        // Should appear in normal list again
+        let all = GoalRepository::list(&repo).unwrap();
+        assert!(all.iter().any(|g| g.id == goal.id), "Restored goal should appear in list");
+
+        // Should not appear in deleted list
+        let deleted = GoalRepository::list_deleted(&repo).unwrap();
+        assert!(deleted.is_empty(), "Restored goal should not be in deleted list");
     }
 
     // ============================================================================

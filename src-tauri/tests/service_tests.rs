@@ -535,6 +535,7 @@ fn build_goal_summary_zero_tasks() {
         title: "Empty Goal".to_string(),
         description: "desc".to_string(),
         status: GoalStatus::Active,
+        deleted_at: None,
     };
     let goal_tasks: Vec<&goal_desk_tauri::domain::DeskTask> = vec![];
     let all_tasks: Vec<goal_desk_tauri::domain::DeskTask> = vec![];
@@ -558,6 +559,7 @@ fn build_goal_summary_half_done() {
         title: "Half Goal".to_string(),
         description: "".to_string(),
         status: GoalStatus::Active,
+        deleted_at: None,
     };
 
     let mut t1 = DeskTask::new_todo("Task 1".to_string());
@@ -584,6 +586,7 @@ fn build_goal_summary_all_done() {
         title: "Done Goal".to_string(),
         description: "".to_string(),
         status: GoalStatus::Completed,
+        deleted_at: None,
     };
 
     let mut t1 = DeskTask::new_todo("Task 1".to_string());
@@ -1064,4 +1067,66 @@ fn goal_summaries_shows_derived_status_when_all_tasks_done() {
     assert_eq!(s.progress, 100);
     assert_eq!(s.status, goal_desk_tauri::domain::GoalStatus::ReadyToComplete,
         "goal_summaries should return derived status ReadyToComplete when all tasks are done");
+}
+
+#[test]
+fn task_service_soft_delete_and_restore() {
+    let repo = temp_repo("task_soft_delete");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Test Task").unwrap();
+    let task_id = task.id.to_string();
+
+    // Soft delete
+    service.soft_delete_task(&task_id).unwrap();
+
+    // Should not appear in list
+    let all = service.list_tasks().unwrap();
+    assert!(all.iter().all(|t| t.id.to_string() != task_id));
+
+    // Should appear in deleted list
+    let deleted = service.list_deleted_tasks().unwrap();
+    assert_eq!(deleted.len(), 1);
+
+    // Restore
+    let restored = service.restore_task(&task_id).unwrap();
+    assert_eq!(restored.id.to_string(), task_id);
+
+    // Should appear in list again
+    let all = service.list_tasks().unwrap();
+    assert!(all.iter().any(|t| t.id.to_string() == task_id));
+
+    // Should not appear in deleted list
+    let deleted = service.list_deleted_tasks().unwrap();
+    assert!(deleted.is_empty());
+}
+
+#[test]
+fn goal_service_soft_delete_and_restore() {
+    let repo = temp_repo("goal_soft_delete");
+    let service = GoalService::new(repo);
+    let goal = service.create_goal("Test Goal", "Work", "desc", GoalStatus::Active).unwrap();
+    let goal_id = goal.id.to_string();
+
+    // Soft delete
+    service.soft_delete_goal(&goal_id).unwrap();
+
+    // Should not appear in summaries
+    let summaries = service.goal_summaries().unwrap();
+    assert!(summaries.iter().all(|g| g.id != goal_id));
+
+    // Should appear in deleted list
+    let deleted = service.list_deleted_goals().unwrap();
+    assert_eq!(deleted.len(), 1);
+
+    // Restore
+    let restored = service.restore_goal(&goal_id).unwrap();
+    assert_eq!(restored.id, goal_id);
+
+    // Should appear in summaries again
+    let summaries = service.goal_summaries().unwrap();
+    assert!(summaries.iter().any(|g| g.id == goal_id));
+
+    // Should not appear in deleted list
+    let deleted = service.list_deleted_goals().unwrap();
+    assert!(deleted.is_empty());
 }

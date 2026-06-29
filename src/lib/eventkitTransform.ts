@@ -22,13 +22,22 @@ export function convertEventKitToRawItems(
   reminders: EventKitReminder[],
   tasks: { id: string; systemReminderId?: string }[],
   now = new Date(),
+  rangeStart?: Date,
+  rangeEnd?: Date,
 ): RawAgendaItem[] {
   const today = startOfDay(now)
+  const start = rangeStart ?? today
+  const end = rangeEnd ?? today
   const items: RawAgendaItem[] = []
+
+  const isInRange = (date: Date) => {
+    const d = startOfDay(date)
+    return d.getTime() >= start.getTime() && d.getTime() <= end.getTime()
+  }
 
   for (const event of events) {
     const startsAt = new Date(event.startsAt)
-    if (Number.isNaN(startsAt.getTime()) || !isSameDay(startsAt, today)) continue
+    if (Number.isNaN(startsAt.getTime()) || !isInRange(startsAt)) continue
     items.push({
       id: event.id,
       title: event.title,
@@ -37,13 +46,14 @@ export function convertEventKitToRawItems(
       readonly: true,
       done: false,
       sourceLabel: event.calendarTitle,
+      startsAt,
     })
   }
 
   for (const reminder of reminders) {
     if (!reminder.dueAt) continue
     const dueAt = new Date(reminder.dueAt)
-    if (Number.isNaN(dueAt.getTime()) || !isSameDay(dueAt, today)) continue
+    if (Number.isNaN(dueAt.getTime()) || !isInRange(dueAt)) continue
     items.push({
       id: reminder.id,
       title: reminder.title,
@@ -52,6 +62,7 @@ export function convertEventKitToRawItems(
       readonly: false,
       done: reminder.done,
       sourceLabel: reminder.listTitle,
+      startsAt: dueAt,
     })
   }
 

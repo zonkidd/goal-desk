@@ -429,6 +429,52 @@ mod commands {
             Err("URL opening only supported on macOS".to_string())
         }
     }
+
+    #[tauri::command]
+    pub fn soft_delete_task(
+        svc: State<'_, AppService>,
+        task_id: String,
+    ) -> Result<(), String> {
+        svc.task.soft_delete_task(&task_id)
+    }
+
+    #[tauri::command]
+    pub fn restore_task(
+        svc: State<'_, AppService>,
+        task_id: String,
+    ) -> Result<DeskTask, String> {
+        svc.task.restore_task(&task_id)
+    }
+
+    #[tauri::command]
+    pub fn list_deleted_tasks(
+        svc: State<'_, AppService>,
+    ) -> Result<Vec<DeskTask>, String> {
+        svc.task.list_deleted_tasks()
+    }
+
+    #[tauri::command]
+    pub fn soft_delete_goal(
+        svc: State<'_, AppService>,
+        goal_id: String,
+    ) -> Result<(), String> {
+        svc.goal.soft_delete_goal(&goal_id)
+    }
+
+    #[tauri::command]
+    pub fn restore_goal(
+        svc: State<'_, AppService>,
+        goal_id: String,
+    ) -> Result<GoalSummary, String> {
+        svc.goal.restore_goal(&goal_id)
+    }
+
+    #[tauri::command]
+    pub fn list_deleted_goals(
+        svc: State<'_, AppService>,
+    ) -> Result<Vec<GoalSummary>, String> {
+        svc.goal.list_deleted_goals()
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -491,7 +537,13 @@ pub fn run() {
             commands::request_reminders_access,
             commands::set_system_reminder_completed,
             commands::create_system_reminder,
-            commands::open_url
+            commands::open_url,
+            commands::soft_delete_task,
+            commands::restore_task,
+            commands::list_deleted_tasks,
+            commands::soft_delete_goal,
+            commands::restore_goal,
+            commands::list_deleted_goals
         ])
         .run(tauri::generate_context!())
         .expect("error while running Goal Desk");

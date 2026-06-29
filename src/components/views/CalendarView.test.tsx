@@ -9,20 +9,29 @@ vi.mock('../../store/uiStore', () => ({
 }))
 
 vi.mock('../../store/taskStore', () => ({
-  useTaskStore: vi.fn()
+  useTaskStore: vi.fn((selector?: any) => {
+    const state = { tasks: [] }
+    return selector ? selector(state) : state
+  })
 }))
 
 vi.mock('../../store/goalStore', () => ({
-  useGoalStore: vi.fn()
+  useGoalStore: vi.fn(() => ({ baseGoals: [] }))
 }))
 
 vi.mock('../../store/eventkitStore', () => ({
-  useEventkitStore: vi.fn()
+  useEventkitStore: vi.fn((selector?: any) => {
+    const state = {
+      rawEventKit: { calendarEvents: [], reminders: [] },
+      systemReminders: [],
+    }
+    return selector ? selector(state) : state
+  })
 }))
 
 vi.mock('../../hooks/useWorkspaceDerived', () => ({
   useWorkspaceDerived: vi.fn(() => ({
-    today: { timeline: [], focusTasks: [], attentionGroups: { overdue: [], dueToday: [], ongoing: [] }, relevantGoals: [] },
+    today: { timeline: [], focusTasks: [], attentionGroups: { overdue: [], dueToday: [], ongoing: [], systemReminders: [] }, relevantGoals: [] },
     goals: [],
     inbox: { activeTasks: [], pausedTasks: [], completed: { totalCount: 0, visibleTasks: [], isCollapsedByDefault: true } },
     meta: { computedAt: new Date(), activeArea: 'ALL', taskCount: 0, goalCount: 0 },

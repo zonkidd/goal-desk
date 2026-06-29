@@ -164,3 +164,35 @@ export async function createSystemReminder(title: string, dueAt?: Date): Promise
   })
   return reminder.id
 }
+
+// ============================================================================
+// Soft Delete & Restore Commands
+// ============================================================================
+
+export async function softDeleteTask(taskId: string): Promise<void> {
+  return invoke('soft_delete_task', { taskId })
+}
+
+export async function restoreTask(taskId: string): Promise<Task> {
+  const task = await invoke<RustTask>('restore_task', { taskId })
+  return TaskCodec.fromRust(task)
+}
+
+export async function listDeletedTasks(): Promise<Task[]> {
+  const tasks = await invoke<RustTask[]>('list_deleted_tasks')
+  return tasks.map((item) => TaskCodec.fromRust(item))
+}
+
+export async function softDeleteGoal(goalId: string): Promise<void> {
+  return invoke('soft_delete_goal', { goalId })
+}
+
+export async function restoreGoal(goalId: string): Promise<GoalCard> {
+  const goal = await invoke<RustGoalCard>('restore_goal', { goalId })
+  return GoalCodec.fromRust(goal)
+}
+
+export async function listDeletedGoals(): Promise<GoalCard[]> {
+  const goals = await invoke<RustGoalCard[]>('list_deleted_goals')
+  return goals.map((item) => GoalCodec.fromRust(item))
+}

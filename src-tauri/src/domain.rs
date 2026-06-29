@@ -77,6 +77,7 @@ pub struct Goal {
     pub title: String,
     pub description: String,
     pub status: GoalStatus,
+    pub deleted_at: Option<DateTime<Local>>,
 }
 
 impl Goal {
@@ -150,6 +151,7 @@ impl Goal {
                 note: None,
                 timestamp: Local::now(),
             }],
+            deleted_at: None,
         }
     }
 }
@@ -230,6 +232,7 @@ pub struct DeskTask {
     pub system_reminder_id: Option<String>,
     pub show_in_timeline: bool,
     pub activity_logs: Vec<TaskActivityLog>,
+    pub deleted_at: Option<DateTime<Local>>,
 }
 
 impl DeskTask {
@@ -253,6 +256,7 @@ impl DeskTask {
                 note: None,
                 timestamp: Local::now(),
             }],
+            deleted_at: None,
         }
     }
 
@@ -446,6 +450,7 @@ mod tests {
             title: "Test Goal".to_string(),
             description: String::new(),
             status: GoalStatus::Active,
+            deleted_at: None,
         };
 
         // ACTIVE 可以转到 PAUSED, COMPLETED, ARCHIVED
@@ -484,6 +489,7 @@ mod tests {
             title: "Test".to_string(),
             description: String::new(),
             status: GoalStatus::Active,
+            deleted_at: None,
         };
 
         // 无任务时保持原状态
@@ -504,6 +510,7 @@ mod tests {
                 system_reminder_id: None,
                 show_in_timeline: false,
                 activity_logs: vec![],
+                deleted_at: None,
             },
             DeskTask {
                 id: Uuid::new_v4(),
@@ -518,6 +525,7 @@ mod tests {
                 system_reminder_id: None,
                 show_in_timeline: false,
                 activity_logs: vec![],
+                deleted_at: None,
             },
         ];
 
@@ -538,6 +546,7 @@ mod tests {
                 system_reminder_id: None,
                 show_in_timeline: false,
                 activity_logs: vec![],
+                deleted_at: None,
             },
         ];
 
@@ -663,6 +672,7 @@ mod tests {
             title: "Test Goal".to_string(),
             description: String::new(),
             status: GoalStatus::Active,
+            deleted_at: None,
         };
 
         let task = goal.create_task("New Task".to_string());

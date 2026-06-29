@@ -11,6 +11,8 @@ export const BROWSER_PREVIEW_STATUS = 'Browser preview only · local database is
 const BROWSER_STORAGE_TASKS = 'goal-desk-browser-tasks'
 const BROWSER_STORAGE_GOALS = 'goal-desk-browser-goals'
 const BROWSER_STORAGE_AREAS = 'goal-desk-browser-areas'
+const BROWSER_STORAGE_DELETED_TASKS = 'goal-desk-browser-deleted-tasks'
+const BROWSER_STORAGE_DELETED_GOALS = 'goal-desk-browser-deleted-goals'
 
 function loadFromLocalStorage<T>(key: string): T[] {
   try {
@@ -316,5 +318,61 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
 
   async loadGoals(): Promise<GoalCard[]> {
     return loadFromLocalStorage<GoalCard>(BROWSER_STORAGE_GOALS)
+  }
+
+  async softDeleteTask(taskId: string): Promise<void> {
+    const tasks = loadBrowserTasks()
+    const idx = tasks.findIndex(t => t.id === taskId)
+    if (idx === -1) return
+    const [deleted] = tasks.splice(idx, 1)
+    saveToLocalStorage(BROWSER_STORAGE_TASKS, tasks)
+    const deletedTasks = loadFromLocalStorage<Task & { deletedAt?: string }>(BROWSER_STORAGE_DELETED_TASKS)
+    deletedTasks.unshift({ ...deleted, deletedAt: new Date().toISOString() })
+    saveToLocalStorage(BROWSER_STORAGE_DELETED_TASKS, deletedTasks)
+  }
+
+  async restoreTask(taskId: string): Promise<TaskResult> {
+    const deletedTasks = loadFromLocalStorage<Task & { deletedAt?: string }>(BROWSER_STORAGE_DELETED_TASKS)
+    const idx = deletedTasks.findIndex(t => t.id === taskId)
+    if (idx === -1) return { task: undefined, statusMessage: 'Task not found in recycle bin' }
+    const [restored] = deletedTasks.splice(idx, 1)
+    delete restored.deletedAt
+    saveToLocalStorage(BROWSER_STORAGE_DELETED_TASKS, deletedTasks)
+    const tasks = loadBrowserTasks()
+    tasks.unshift(restored)
+    saveToLocalStorage(BROWSER_STORAGE_TASKS, tasks)
+    return { task: restored, statusMessage: 'Task restored from recycle bin' }
+  }
+
+  async listDeletedTasks(): Promise<Task[]> {
+    return loadFromLocalStorage<Task & { deletedAt?: string }>(BROWSER_STORAGE_DELETED_TASKS)
+  }
+
+  async softDeleteGoal(goalId: string): Promise<void> {
+    const goals = loadFromLocalStorage<GoalCard>(BROWSER_STORAGE_GOALS)
+    const idx = goals.findIndex(g => g.id === goalId)
+    if (idx === -1) return
+    const [deleted] = goals.splice(idx, 1)
+    saveToLocalStorage(BROWSER_STORAGE_GOALS, goals)
+    const deletedGoals = loadFromLocalStorage<GoalCard & { deletedAt?: string }>(BROWSER_STORAGE_DELETED_GOALS)
+    deletedGoals.unshift({ ...deleted, deletedAt: new Date().toISOString() })
+    saveToLocalStorage(BROWSER_STORAGE_DELETED_GOALS, deletedGoals)
+  }
+
+  async restoreGoal(goalId: string): Promise<GoalResult> {
+    const deletedGoals = loadFromLocalStorage<GoalCard & { deletedAt?: string }>(BROWSER_STORAGE_DELETED_GOALS)
+    const idx = deletedGoals.findIndex(g => g.id === goalId)
+    if (idx === -1) return { goal: undefined, statusMessage: 'Goal not found in recycle bin' }
+    const [restored] = deletedGoals.splice(idx, 1)
+    delete restored.deletedAt
+    saveToLocalStorage(BROWSER_STORAGE_DELETED_GOALS, deletedGoals)
+    const goals = loadFromLocalStorage<GoalCard>(BROWSER_STORAGE_GOALS)
+    goals.unshift(restored)
+    saveToLocalStorage(BROWSER_STORAGE_GOALS, goals)
+    return { goal: restored, statusMessage: 'Goal restored from recycle bin' }
+  }
+
+  async listDeletedGoals(): Promise<GoalCard[]> {
+    return loadFromLocalStorage<GoalCard & { deletedAt?: string }>(BROWSER_STORAGE_DELETED_GOALS)
   }
 }

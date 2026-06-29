@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Pause, Play, CheckCircle2, Archive, Plus, X } from 'lucide-react'
+import { Pause, Play, CheckCircle2, Archive, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { GlassCard } from '../common/GlassCard'
 import { AreaSelectWithCreate } from '../shared/AreaSelectWithCreate'
@@ -25,6 +25,7 @@ export function GoalDrawer() {
   const closeDrawer = useUiStore((state) => state.closeDrawer)
   const updateGoalFields = useGoalStore((state) => state.updateGoalFields)
   const updateGoalStatus = useGoalStore((state) => state.updateGoalStatus)
+  const softDeleteGoal = useGoalStore((state) => state.softDeleteGoal)
   const createTaskForGoal = useTaskStore((state) => state.createTaskForGoal)
   const openDrawer = useUiStore((state) => state.openDrawer)
   const allAreas = useAreaStore((state) => state.allAreas)
@@ -89,12 +90,26 @@ export function GoalDrawer() {
                 </div>
                 <div className="text-xs font-bold uppercase tracking-widest text-slate-400">{goal.taskCount} 个关联任务</div>
               </div>
-              <button
-                onClick={closeDrawer}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:border-slate-300"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (confirm('确定要删除这个目标吗？\n\n关联的任务不会被删除。\n删除后可以在回收站中找回。')) {
+                      void softDeleteGoal(goal.id)
+                      closeDrawer()
+                    }
+                  }}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+                  title="删除目标"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={closeDrawer}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:border-slate-300"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </header>
 
             <div className="flex-1 space-y-6 overflow-y-auto p-8">

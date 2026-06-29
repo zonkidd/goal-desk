@@ -96,4 +96,28 @@ export class ValidatingMutationAdapter implements MutationAdapter {
   async loadGoals(): Promise<GoalCard[]> {
     return this.inner.loadGoals()
   }
+
+  async softDeleteTask(taskId: string): Promise<void> {
+    return this.inner.softDeleteTask(taskId)
+  }
+
+  async restoreTask(taskId: string): Promise<TaskResult> {
+    return this.inner.restoreTask(taskId)
+  }
+
+  async listDeletedTasks(): Promise<Task[]> {
+    return this.inner.listDeletedTasks()
+  }
+
+  async softDeleteGoal(goalId: string): Promise<void> {
+    return this.inner.softDeleteGoal(goalId)
+  }
+
+  async restoreGoal(goalId: string): Promise<GoalResult> {
+    return this.inner.restoreGoal(goalId)
+  }
+
+  async listDeletedGoals(): Promise<GoalCard[]> {
+    return this.inner.listDeletedGoals()
+  }
 }

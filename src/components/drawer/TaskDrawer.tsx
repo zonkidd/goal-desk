@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlignLeft, Bell, BookOpen, Calendar, CheckCircle, Clock, Folder, Send, X } from 'lucide-react'
+import { AlignLeft, Bell, BookOpen, Calendar, CheckCircle, Clock, Folder, Send, Trash2, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { getRuntimeAdapter } from '../../lib/runtimeAdapter'
 import { openTaskInBear } from '../../lib/tauriCommands'
@@ -31,6 +31,7 @@ function useTaskDrawerData() {
   const addTaskNote = useTaskStore((s) => s.addTaskNote)
   const createAndLinkReminder = useTaskStore((s) => s.createAndLinkReminder)
   const unlinkTaskFromReminder = useTaskStore((s) => s.unlinkTaskFromReminder)
+  const softDeleteTask = useTaskStore((s) => s.softDeleteTask)
   const createGoal = useGoalStore((s) => s.createGoal)
   const goals = useDerivedGoals()
   const allAreas = useAreaStore((s) => s.allAreas)
@@ -46,7 +47,7 @@ function useTaskDrawerData() {
   return {
     task, isOpen, closeDrawer, activeArea,
     updateTaskStatus, updateTaskContent, updateTaskFields, addTaskNote,
-    createAndLinkReminder, unlinkTaskFromReminder,
+    createAndLinkReminder, unlinkTaskFromReminder, softDeleteTask,
     createGoal, goals, allAreas, createArea, systemReminders,
   }
 }
@@ -57,7 +58,7 @@ export function TaskDrawer() {
   const {
     task, isOpen, closeDrawer, activeArea,
     updateTaskStatus, updateTaskContent, updateTaskFields, addTaskNote,
-    createAndLinkReminder, unlinkTaskFromReminder,
+    createAndLinkReminder, unlinkTaskFromReminder, softDeleteTask,
     createGoal, goals, allAreas, createArea, systemReminders,
   } = useTaskDrawerData()
   const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null)
@@ -124,12 +125,26 @@ export function TaskDrawer() {
           >
             <header className="flex shrink-0 items-center justify-between rounded-t-3xl border-b border-slate-100 bg-slate-50/50 p-6">
               <StatusMachineButtons status={task.status} statusActions={statusActions} onAction={setPendingStatus} />
-              <button
-                onClick={closeDrawer}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:border-slate-300"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (confirm('确定要删除这个待办事项吗？\n\n删除后可以在回收站中找回。')) {
+                      void softDeleteTask(task.id)
+                      closeDrawer()
+                    }
+                  }}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+                  title="删除"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={closeDrawer}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:border-slate-300"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </header>
 
             {pendingStatus && canChangeStatus && (
@@ -286,19 +301,25 @@ export function TaskDrawer() {
                     <span className="font-medium text-slate-700">关联系统提醒获得通知</span>
                   </label>
                 )}
-                {task.systemReminderId && linkedReminder && (
+                {task.systemReminderId && (
                   <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2">
                     <div className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-green-600" />
                       <div className="text-xs">
-                        <span className="font-bold text-green-800">已关联:</span>
-                        <span className="text-slate-700"> {linkedReminder.title} · {formatReminderDate(linkedReminder.dueAt)}</span>
+                        {linkedReminder ? (
+                          <>
+                            <span className="font-bold text-green-800">已关联:</span>
+                            <span className="text-slate-700"> {linkedReminder.title}{linkedReminder.dueAt ? ` · ${formatReminderDate(linkedReminder.dueAt)}` : ''}</span>
+                          </>
+                        ) : (
+                          <span className="font-bold text-green-800">已关联系统提醒（提醒可能已被外部删除）</span>
+                        )}
                       </div>
                     </div>
                     <button
                       className="text-xs font-semibold text-slate-500 hover:text-slate-700 underline"
                       onClick={() => {
-                        if (task) {
+                        if (task && confirm('确定要解除系统提醒关联吗？')) {
                           void unlinkTaskFromReminder(task.id)
                         }
                       }}

@@ -43,6 +43,12 @@ describe('MutationAdapter interface', () => {
       deleteArea: vi.fn().mockResolvedValue({ success: true, message: 'deleted', statusMessage: 'ok' }),
       createSystemReminder: vi.fn().mockResolvedValue('reminder-id'),
       loadGoals: vi.fn().mockResolvedValue([mockGoal]),
+      softDeleteTask: vi.fn().mockResolvedValue(undefined),
+      restoreTask: vi.fn().mockResolvedValue({ task: mockTask, statusMessage: 'restored' }),
+      listDeletedTasks: vi.fn().mockResolvedValue([]),
+      softDeleteGoal: vi.fn().mockResolvedValue(undefined),
+      restoreGoal: vi.fn().mockResolvedValue({ goal: mockGoal, statusMessage: 'restored' }),
+      listDeletedGoals: vi.fn().mockResolvedValue([]),
     } as MutationAdapter
   })
 

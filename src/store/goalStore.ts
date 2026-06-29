@@ -6,6 +6,7 @@ import type { GoalCard, GoalStatus } from '../types/app'
 
 export interface GoalStoreState {
   baseGoals: GoalCard[]
+  deletedGoals: GoalCard[]
 
   hydrateGoals: (goals: GoalCard[]) => void
   replaceGoal: (goal: GoalCard) => GoalCard[]
@@ -16,10 +17,14 @@ export interface GoalStoreState {
   ) => Promise<{ goal?: GoalCard; openGoalWorkspace: boolean }>
   updateGoalFields: (goalId: string, input: { title: string; area: string; description: string }) => Promise<GoalCard | null>
   updateGoalStatus: (goalId: string, status: GoalStatus) => Promise<GoalCard | null>
+  softDeleteGoal: (goalId: string) => Promise<void>
+  restoreGoal: (goalId: string) => Promise<void>
+  loadDeletedGoals: () => Promise<void>
 }
 
 export const useGoalStore = create<GoalStoreState>((set, get) => ({
   baseGoals: [],
+  deletedGoals: [],
 
   hydrateGoals: (goals) => set({ baseGoals: goals }),
 
@@ -72,6 +77,40 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
       { onSuccess: ({ goal }) => { if (goal) get().replaceGoal(goal) } },
     )
     return result?.goal ?? null
+  },
+
+  softDeleteGoal: async (goalId: string) => {
+    const adapter = getWorkspaceMutationAdapter()
+    try {
+      await adapter.softDeleteGoal(goalId)
+      set({ baseGoals: get().baseGoals.filter((g) => g.id !== goalId) })
+      await get().loadDeletedGoals()
+    } catch (error) {
+      console.error('Failed to soft delete goal:', error)
+    }
+  },
+
+  restoreGoal: async (goalId: string) => {
+    const adapter = getWorkspaceMutationAdapter()
+    try {
+      const result = await adapter.restoreGoal(goalId)
+      if (result.goal) {
+        set({ baseGoals: [...get().baseGoals, result.goal] })
+      }
+      await get().loadDeletedGoals()
+    } catch (error) {
+      console.error('Failed to restore goal:', error)
+    }
+  },
+
+  loadDeletedGoals: async () => {
+    const adapter = getWorkspaceMutationAdapter()
+    try {
+      const deletedGoals = await adapter.listDeletedGoals()
+      set({ deletedGoals })
+    } catch (error) {
+      console.error('Failed to load deleted goals:', error)
+    }
   },
 }))
 

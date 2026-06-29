@@ -12,7 +12,7 @@ const emptySnapshot: WorkspaceSnapshot = {
   today: {
     timeline: [],
     focusTasks: [],
-    attentionGroups: { overdue: [], dueToday: [], ongoing: [] },
+    attentionGroups: { overdue: [], dueToday: [], ongoing: [], systemReminders: [] },
     relevantGoals: [],
   },
   inbox: {
@@ -39,6 +39,7 @@ function recompute() {
       getShowCompletedTodos: () => useUiStore.getState().showCompletedTodos,
       getRawCalendarEvents: () => useEventkitStore.getState().rawEventKit.calendarEvents,
       getRawReminders: () => useEventkitStore.getState().rawEventKit.reminders,
+      getSystemReminders: () => useEventkitStore.getState().systemReminders,
     })
 
     snapshot = deriver.compute()

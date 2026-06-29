@@ -1,7 +1,8 @@
 import { Plus } from 'lucide-react'
 import { useUiStore } from '../../store/uiStore'
+import type { ViewKey } from '../../types/app'
 
-const titles = {
+const titles: Record<ViewKey, string> = {
   inbox: 'Inbox',
   today: 'Today Workbench',
   board: 'Goal Board',
@@ -9,6 +10,7 @@ const titles = {
   areas: '领域管理',
   calendar: 'Calendar',
   reminders: 'Reminders',
+  'recycle-bin': '回收站',
 }
 
 export function TopBar() {

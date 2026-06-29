@@ -35,6 +35,7 @@ fn sqlite_repository_creates_and_reloads_workspace_snapshot() {
             title: "Sample Goal B".to_string(),
             description: "Track progress with consistent training and nutrition logging.".to_string(),
             status: goal_desk_tauri::domain::GoalStatus::Active,
+            deleted_at: None,
         }],
         reminders: vec![Reminder {
             id: reminder_id,
@@ -77,6 +78,7 @@ fn sqlite_repository_round_trips_goal_description_and_status() {
             title: "Prepare July product release".to_string(),
             description: "Prepare content, checklist, and demo for July release.".to_string(),
             status: goal_desk_tauri::domain::GoalStatus::Paused,
+            deleted_at: None,
         }],
         reminders: vec![],
     };
@@ -119,6 +121,7 @@ fn sqlite_repository_saves_and_loads_desk_tasks() {
             note: None,
             timestamp: Local::now(),
         }],
+        deleted_at: None,
     };
 
     repository.save_desk_tasks(&[task.clone()]).unwrap();
@@ -152,8 +155,9 @@ fn task_repository_loads_task_with_empty_activity_logs() {
         bear_note_id: None,
         system_reminder_id: None,
         show_in_timeline: false,
-        activity_logs: vec![],
-    };
+            activity_logs: vec![],
+            deleted_at: None,
+        };
 
     TaskRepository::create(&repository, &task).unwrap();
     let loaded = TaskRepository::find(&repository, task.id).unwrap().unwrap();
@@ -199,6 +203,7 @@ fn task_repository_filters_by_goal_and_status() {
                 note: None,
                 timestamp: Local::now(),
             }],
+            deleted_at: None,
         },
         DeskTask {
             id: Uuid::new_v4(),
@@ -213,6 +218,7 @@ fn task_repository_filters_by_goal_and_status() {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            deleted_at: None,
         },
         DeskTask {
             id: Uuid::new_v4(),
@@ -227,6 +233,7 @@ fn task_repository_filters_by_goal_and_status() {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            deleted_at: None,
         },
     ];
 

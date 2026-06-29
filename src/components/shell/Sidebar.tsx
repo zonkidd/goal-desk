@@ -1,4 +1,4 @@
-import { Calendar, CheckSquare, Inbox, KanbanSquare, PauseCircle, Sun, Target, Workflow } from 'lucide-react'
+import { Calendar, CheckSquare, Inbox, KanbanSquare, PauseCircle, Sun, Target, Trash2, Workflow } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '../../lib/cn'
 import { useGoalStore } from '../../store/goalStore'
@@ -15,6 +15,7 @@ const navItems: Array<{ key: ViewKey; label: string; icon: typeof Inbox }> = [
   { key: 'goals', label: '目标', icon: Target },
   { key: 'calendar', label: '📅 日历看板', icon: Calendar },
   { key: 'reminders', label: '⏰ 提醒看板', icon: CheckSquare },
+  { key: 'recycle-bin', label: '回收站', icon: Trash2 },
 ]
 
 export function Sidebar() {

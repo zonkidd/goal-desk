@@ -8,6 +8,7 @@ import type { GoalCard } from '../types/app'
 
 export interface TaskStoreState {
   tasks: Task[]
+  deletedTasks: Task[]
 
   hydrateTasks: (tasks: Task[]) => void
   replaceTask: (task: Task) => Task[]
@@ -33,6 +34,9 @@ export interface TaskStoreState {
   linkTaskToReminder: (taskId: string, reminderId: string) => Promise<void>
   unlinkTaskFromReminder: (taskId: string) => Promise<void>
   createAndLinkReminder: (taskId: string, title: string, dueAt?: Date) => Promise<string>
+  softDeleteTask: (taskId: string) => Promise<void>
+  restoreTask: (taskId: string) => Promise<void>
+  loadDeletedTasks: () => Promise<void>
 }
 
 function syncTasksForReminderInArray(tasks: Task[], reminderId: string, done: boolean): Task[] {
@@ -59,6 +63,7 @@ function syncTasksForReminderInArray(tasks: Task[], reminderId: string, done: bo
 
 export const useTaskStore = create<TaskStoreState>((set, get) => ({
   tasks: [],
+  deletedTasks: [],
 
   hydrateTasks: (tasks) => set({ tasks }),
 
@@ -199,6 +204,40 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
       return mockReminderId
     } catch (error) {
       return ''
+    }
+  },
+
+  softDeleteTask: async (taskId: string) => {
+    const adapter = getWorkspaceMutationAdapter()
+    try {
+      await adapter.softDeleteTask(taskId)
+      set({ tasks: get().tasks.filter((t) => t.id !== taskId) })
+      await get().loadDeletedTasks()
+    } catch (error) {
+      console.error('Failed to soft delete task:', error)
+    }
+  },
+
+  restoreTask: async (taskId: string) => {
+    const adapter = getWorkspaceMutationAdapter()
+    try {
+      const result = await adapter.restoreTask(taskId)
+      if (result.task) {
+        set({ tasks: [...get().tasks, result.task] })
+      }
+      await get().loadDeletedTasks()
+    } catch (error) {
+      console.error('Failed to restore task:', error)
+    }
+  },
+
+  loadDeletedTasks: async () => {
+    const adapter = getWorkspaceMutationAdapter()
+    try {
+      const deletedTasks = await adapter.listDeletedTasks()
+      set({ deletedTasks })
+    } catch (error) {
+      console.error('Failed to load deleted tasks:', error)
     }
   },
 }))

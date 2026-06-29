@@ -44,6 +44,7 @@ export function TodayView() {
     })
     .filter(item => showCompletedTodos || !item.done)
   const ongoingTasks = today.attentionGroups.ongoing
+  const systemReminders = today.attentionGroups.systemReminders
   const todayRelevantGoals = today.relevantGoals
   const openDrawer = useUiStore((state) => state.openDrawer)
   const eventkitPermissions = useEventkitStore((state) => state.eventkitPermissions)
@@ -162,10 +163,34 @@ export function TodayView() {
                   </div>
                 )
               })}
-              {ongoingTasks.length === 0 && (
+              {ongoingTasks.length === 0 && systemReminders.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm font-medium text-slate-400">
                   今天没有持续推进任务
                 </div>
+              )}
+              {systemReminders.length > 0 && (
+                <>
+                  {ongoingTasks.length > 0 && (
+                    <div className="pt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">系统提醒</div>
+                  )}
+                  {systemReminders.map((reminder) => (
+                    <div key={reminder.id} className="group relative">
+                      <button
+                        type="button"
+                        onClick={() => openDrawer('reminder', reminder.id)}
+                        className="glass-card flex w-full items-center justify-between rounded-2xl border-l-4 border-l-indigo-500 bg-indigo-50/30 p-4 text-left transition-transform hover:-translate-y-0.5"
+                      >
+                        <div>
+                          <div className="text-sm font-bold text-slate-900">{reminder.title}</div>
+                          <div className="mt-1 text-xs font-semibold text-slate-500">{reminder.listTitle || 'Apple Reminders'}</div>
+                        </div>
+                        <div className="text-right text-xs font-bold text-indigo-600">
+                          {reminder.dueAt?.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                        </div>
+                      </button>
+                    </div>
+                  ))}
+                </>
               )}
             </div>
           </GlassPanel>

@@ -7,6 +7,7 @@ import { GoalsView } from '../views/GoalsView'
 import { AreasView } from '../views/AreasView'
 import { CalendarView } from '../views/CalendarView'
 import { RemindersView } from '../views/RemindersView'
+import { RecycleBinView } from '../views/RecycleBinView'
 import { TaskDrawer } from '../drawer/TaskDrawer'
 import { GoalDrawer } from '../drawer/GoalDrawer'
 import { CalendarEventDrawer } from '../drawer/CalendarEventDrawer'
@@ -45,6 +46,7 @@ export function AppShell() {
           {currentView === 'areas' && <AreasView />}
           {currentView === 'calendar' && <CalendarView />}
           {currentView === 'reminders' && <RemindersView />}
+          {currentView === 'recycle-bin' && <RecycleBinView />}
         </div>
       </section>
 

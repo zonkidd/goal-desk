@@ -70,7 +70,7 @@ export interface AreaWithStats {
   isSystem: boolean
 }
 
-export type ViewKey = 'inbox' | 'today' | 'board' | 'goals' | 'areas' | 'calendar' | 'reminders'
+export type ViewKey = 'inbox' | 'today' | 'board' | 'goals' | 'areas' | 'calendar' | 'reminders' | 'recycle-bin'
 export type AreaFilter = 'ALL' | string
 
 export type AccessStatus = 'granted' | 'denied' | 'restricted' | 'not_determined' | 'error'

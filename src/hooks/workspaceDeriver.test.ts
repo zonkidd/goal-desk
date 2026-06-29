@@ -10,6 +10,7 @@ const emptyGetters: StoreGetters = {
   getShowCompletedTodos: () => false,
   getRawCalendarEvents: () => [],
   getRawReminders: () => [],
+  getSystemReminders: () => [],
 }
 
 describe('WorkspaceDeriver', () => {

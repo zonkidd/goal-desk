@@ -37,6 +37,12 @@ describe('goalStore.refreshGoals', () => {
       deleteArea: vi.fn(),
       createSystemReminder: vi.fn(),
       loadGoals: vi.fn().mockResolvedValue([mockGoal]),
+      softDeleteTask: vi.fn(),
+      restoreTask: vi.fn(),
+      listDeletedTasks: vi.fn().mockResolvedValue([]),
+      softDeleteGoal: vi.fn(),
+      restoreGoal: vi.fn(),
+      listDeletedGoals: vi.fn().mockResolvedValue([]),
     } as MutationAdapter
   })
 

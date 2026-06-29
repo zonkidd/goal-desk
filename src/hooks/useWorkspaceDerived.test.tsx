@@ -45,7 +45,7 @@ describe('useWorkspaceDerived', () => {
   it('returns empty initial state', () => {
     const { result } = renderHook(() => useWorkspaceDerived())
     expect(result.current.today.focusTasks).toEqual([])
-    expect(result.current.today.attentionGroups).toEqual({ overdue: [], dueToday: [], ongoing: [] })
+    expect(result.current.today.attentionGroups).toEqual({ overdue: [], dueToday: [], ongoing: [], systemReminders: [] })
     expect(result.current.today.timeline).toEqual([])
     expect(result.current.inbox).toEqual({
       activeTasks: [],

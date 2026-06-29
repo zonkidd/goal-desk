@@ -71,6 +71,7 @@ impl GoalService {
             title: trimmed_title.to_string(),
             description: description.to_string(),
             status,
+            deleted_at: None,
         };
 
         GoalRepository::create(&self.repo, &goal).map_err(|e| e.to_string())?;
@@ -191,5 +192,49 @@ impl GoalService {
 
         let derived_status = goal.compute_derived_status(&all_tasks);
         Ok(build_goal_summary(&goal, &area_title, &goal_tasks, derived_status))
+    }
+
+    pub fn soft_delete_goal(&self, goal_id: &str) -> Result<(), String> {
+        let goal_uuid = Uuid::parse_str(goal_id).map_err(|e| e.to_string())?;
+        GoalRepository::soft_delete(&self.repo, goal_uuid).map_err(|e| e.to_string())
+    }
+
+    pub fn restore_goal(&self, goal_id: &str) -> Result<GoalSummary, String> {
+        let goal_uuid = Uuid::parse_str(goal_id).map_err(|e| e.to_string())?;
+        GoalRepository::restore(&self.repo, goal_uuid).map_err(|e| e.to_string())?;
+        self.get_goal_summary_by_id(goal_id)
+    }
+
+    pub fn list_deleted_goals(&self) -> Result<Vec<GoalSummary>, String> {
+        let goals = GoalRepository::list_deleted(&self.repo).map_err(|e| e.to_string())?;
+        let areas = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;
+        let tasks = TaskRepository::list(&self.repo).map_err(|e| e.to_string())?;
+
+        let area_titles: std::collections::HashMap<Uuid, String> = areas
+            .iter()
+            .map(|a| (a.id, a.title.clone()))
+            .collect();
+
+        let mut tasks_by_goal: std::collections::HashMap<Uuid, Vec<&crate::domain::DeskTask>> = std::collections::HashMap::new();
+        for task in &tasks {
+            if let Some(goal_id) = task.linked_goal_id {
+                tasks_by_goal.entry(goal_id).or_default().push(task);
+            }
+        }
+
+        Ok(goals
+            .iter()
+            .map(|goal| {
+                let area_title = goal
+                    .area_id
+                    .and_then(|aid| area_titles.get(&aid).cloned())
+                    .unwrap_or_else(|| "Unsorted".to_string());
+
+                let goal_tasks = tasks_by_goal.get(&goal.id).map(|v| v.as_slice()).unwrap_or(&[]);
+                let all_tasks_vec: Vec<crate::domain::DeskTask> = tasks.iter().cloned().collect();
+                let derived_status = goal.compute_derived_status(&all_tasks_vec);
+                build_goal_summary(goal, &area_title, &goal_tasks, derived_status)
+            })
+            .collect())
     }
 }

@@ -38,6 +38,7 @@ impl TaskService {
                 note: None,
                 timestamp: now,
             }],
+            deleted_at: None,
         };
 
         TaskRepository::create(&self.repo, &task).map_err(|e| e.to_string())?;
@@ -385,5 +386,22 @@ impl TaskService {
             None => SideEffect::None,
         };
         self.update_task_status_with_effects(task_id, status, note, side_effect)
+    }
+
+    pub fn soft_delete_task(&self, task_id: &str) -> Result<(), String> {
+        let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
+        TaskRepository::soft_delete(&self.repo, task_uuid).map_err(|e| e.to_string())
+    }
+
+    pub fn restore_task(&self, task_id: &str) -> Result<DeskTask, String> {
+        let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
+        TaskRepository::restore(&self.repo, task_uuid).map_err(|e| e.to_string())?;
+        TaskRepository::find(&self.repo, task_uuid)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Task not found after restore: {task_id}"))
+    }
+
+    pub fn list_deleted_tasks(&self) -> Result<Vec<DeskTask>, String> {
+        TaskRepository::list_deleted(&self.repo).map_err(|e| e.to_string())
     }
 }

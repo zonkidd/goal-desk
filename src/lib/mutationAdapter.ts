@@ -42,6 +42,9 @@ export interface TaskMutation {
     },
   ): Promise<TaskResult>
   createSystemReminder(title: string, dueAt?: Date): Promise<string>
+  softDeleteTask(taskId: string): Promise<void>
+  restoreTask(taskId: string): Promise<TaskResult>
+  listDeletedTasks(): Promise<Task[]>
 }
 
 export interface GoalMutation {
@@ -51,6 +54,9 @@ export interface GoalMutation {
   ): Promise<GoalResult & { openGoalWorkspace: boolean }>
   updateGoalFields(goalId: string, input: { title: string; area: string; description: string }): Promise<GoalResult>
   updateGoalStatus(goalId: string, status: GoalStatus): Promise<GoalResult>
+  softDeleteGoal(goalId: string): Promise<void>
+  restoreGoal(goalId: string): Promise<GoalResult>
+  listDeletedGoals(): Promise<GoalCard[]>
 }
 
 export interface AreaMutation {

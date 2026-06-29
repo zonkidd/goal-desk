@@ -22,6 +22,12 @@ function createMockAdapter(): MutationAdapter {
     renameArea: vi.fn().mockResolvedValue({ area: undefined, statusMessage: 'ok' }),
     deleteArea: vi.fn().mockResolvedValue({ success: true, message: 'ok', statusMessage: 'ok' }),
     loadGoals: vi.fn().mockResolvedValue([]),
+    softDeleteTask: vi.fn().mockResolvedValue(undefined),
+    restoreTask: vi.fn().mockResolvedValue({ task: undefined, statusMessage: 'restored' }),
+    listDeletedTasks: vi.fn().mockResolvedValue([]),
+    softDeleteGoal: vi.fn().mockResolvedValue(undefined),
+    restoreGoal: vi.fn().mockResolvedValue({ goal: undefined, statusMessage: 'restored' }),
+    listDeletedGoals: vi.fn().mockResolvedValue([]),
   }
 }
 

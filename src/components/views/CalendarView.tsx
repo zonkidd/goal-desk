@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Calendar, List } from 'lucide-react'
 import { DayPicker } from 'react-day-picker'
@@ -6,8 +6,10 @@ import { zhCN } from 'date-fns/locale'
 import { GlassPanel } from '../common/GlassPanel'
 import { useUiStore } from '../../store/uiStore'
 import { useWorkspaceDerived } from '../../hooks/useWorkspaceDerived'
+import { useEventkitStore } from '../../store/eventkitStore'
+import { useTaskStore } from '../../store/taskStore'
 import type { TimelineItem } from '../../types/app'
-import { groupByDate } from '../../lib/workspaceDerivation'
+import { groupByDate, computeRangeTimeline } from '../../lib/workspaceDerivation'
 import { formatDateKey } from '../../lib/calendarUtils'
 
 type ViewMode = 'week' | 'day'
@@ -87,7 +89,33 @@ export function CalendarView() {
   const [hideCompleted, setHideCompleted] = useState(false)
 
   const { today: { timeline: todayTimeline } } = useWorkspaceDerived()
+  const rawCalendarEvents = useEventkitStore((s) => s.rawEventKit.calendarEvents)
+  const rawReminders = useEventkitStore((s) => s.rawEventKit.reminders)
+  const tasks = useTaskStore((s) => s.tasks)
   const openDrawer = useUiStore((state) => state.openDrawer)
+
+  const weekEnd = useMemo(() => {
+    const end = new Date(weekStart)
+    end.setDate(weekStart.getDate() + 6)
+    end.setHours(23, 59, 59, 999)
+    return end
+  }, [weekStart])
+
+  const weekTimeline = useMemo(() => {
+    const allRawItems = computeRangeTimeline(
+      [...rawCalendarEvents.map(e => ({
+        id: e.id, title: e.title, timeLabel: '', source: 'calendar' as const,
+        readonly: true, done: false, sourceLabel: e.calendarTitle, startsAt: new Date(e.startsAt),
+      })), ...rawReminders.filter(r => r.dueAt).map(r => ({
+        id: r.id, title: r.title, timeLabel: '', source: 'reminder' as const,
+        readonly: false, done: r.done, sourceLabel: r.listTitle, startsAt: new Date(r.dueAt!),
+      }))],
+      tasks,
+      weekStart,
+      weekEnd,
+    )
+    return allRawItems
+  }, [rawCalendarEvents, rawReminders, tasks, weekStart, weekEnd])
 
   const weekDays = getWeekDays(weekStart)
 
@@ -171,6 +199,7 @@ export function CalendarView() {
           >
             <WeekView
               weekDays={weekDays}
+              timeline={weekTimeline}
               onPrevWeek={handlePrevWeek}
               onNextWeek={handleNextWeek}
               hideCompleted={hideCompleted}
@@ -201,12 +230,14 @@ export function CalendarView() {
 // Week View Component
 function WeekView({
   weekDays,
+  timeline,
   onPrevWeek,
   onNextWeek,
   hideCompleted,
   onEventClick,
 }: {
   weekDays: WeekDay[]
+  timeline: TimelineItem[]
   onPrevWeek: () => void
   onNextWeek: () => void
   hideCompleted: boolean
@@ -214,11 +245,8 @@ function WeekView({
 }) {
   const weekRange = `${weekDays[0].date.getFullYear()}年${weekDays[0].date.getMonth() + 1}月${weekDays[0].dayNumber}日 - ${weekDays[6].date.getMonth() + 1}月${weekDays[6].dayNumber}日`
 
-  // 从 store 获取 todayTimeline (CalendarView 有自己的 hideCompleted 过滤逻辑)
-  const { today: { timeline: todayTimeline } } = useWorkspaceDerived()
-
   // 按日期分组
-  const timelineByDate = groupByDate([...todayTimeline])
+  const timelineByDate = groupByDate([...timeline])
 
   return (
     <GlassPanel className="rounded-3xl p-6">

@@ -1,4 +1,4 @@
-import type { AreaFilter, GoalCard, RawAgendaItem, TodayAgenda } from '../types/app'
+import type { AreaFilter, GoalCard, RawAgendaItem, ReminderItem, TodayAgenda } from '../types/app'
 import type { Task } from '../types/task'
 import { computeSnapshot, type WorkspaceSnapshot } from '../lib/WorkspaceEngine'
 import { convertEventKitToRawItems } from '../lib/workspaceDerivation'
@@ -10,6 +10,7 @@ export interface StoreGetters {
   getShowCompletedTodos: () => boolean
   getRawCalendarEvents: () => Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
   getRawReminders: () => Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
+  getSystemReminders: () => ReminderItem[]
 }
 
 export interface WorkspaceDeriver {
@@ -25,10 +26,11 @@ export function createWorkspaceDeriver(getters: StoreGetters): WorkspaceDeriver 
       const showCompletedTodos = getters.getShowCompletedTodos()
       const rawCalendarEvents = getters.getRawCalendarEvents()
       const rawReminders = getters.getRawReminders()
+      const systemReminders = getters.getSystemReminders()
 
       const baseTimeline = convertEventKitToRawItems(rawCalendarEvents, rawReminders, tasks)
 
-      return computeSnapshot({ tasks, baseGoals, baseTimeline, activeArea, showCompletedTodos })
+      return computeSnapshot({ tasks, baseGoals, baseTimeline, activeArea, showCompletedTodos, systemReminders })
     },
   }
 }
