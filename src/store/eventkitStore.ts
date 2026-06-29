@@ -23,6 +23,7 @@ export interface EventkitStoreState {
     systemReminders: ReminderItem[]
     integrationStatus: IntegrationStatus
   }) => void
+  addSystemReminder: (reminder: ReminderItem) => void
   toggleSystemReminderDone: (reminderId: string, done: boolean) => Promise<ReminderItem | null>
   requestCalendarAccess: () => Promise<void>
   requestRemindersAccess: () => Promise<void>
@@ -63,6 +64,12 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
         reminders: integrationStatus.reminders,
       },
     })
+  },
+
+  addSystemReminder: (reminder) => {
+    set((state) => ({
+      systemReminders: [...state.systemReminders, reminder],
+    }))
   },
 
   toggleSystemReminderDone: async (reminderId, done) => {

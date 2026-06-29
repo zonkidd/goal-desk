@@ -1,6 +1,6 @@
 import { validateRequiredString, validateTaskTitle, validateGoalInput, validateAreaTitle } from './validation'
 import type { MutationAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
-import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
+import type { GoalCard, GoalStatus, AreaWithStats, ReminderItem } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
 
 export class ValidatingMutationAdapter implements MutationAdapter {
@@ -89,7 +89,7 @@ export class ValidatingMutationAdapter implements MutationAdapter {
     return this.inner.deleteArea(areaId, force)
   }
 
-  async createSystemReminder(title: string, dueAt?: Date): Promise<string> {
+  async createSystemReminder(title: string, dueAt?: Date): Promise<ReminderItem> {
     return this.inner.createSystemReminder(title, dueAt)
   }
 

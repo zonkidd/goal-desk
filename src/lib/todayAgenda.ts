@@ -7,7 +7,7 @@ export function deriveTodayAgenda(baseTimeline: RawAgendaItem[], tasks: Task[], 
   const taskItems: RawAgendaItem[] = []
 
   for (const task of tasks) {
-    if (task.status !== 'IN_PROGRESS') continue
+    if (task.status === 'DONE') continue
     if (!task.plannedStartAt) continue
     if (!isTaskInActiveDateRange(task, now)) continue
 

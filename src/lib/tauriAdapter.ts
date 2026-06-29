@@ -21,7 +21,7 @@ import {
   restoreGoal as persistRestoreGoal,
   listDeletedGoals as persistListDeletedGoals,
 } from './tauriCommands'
-import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
+import type { GoalCard, GoalStatus, AreaWithStats, ReminderItem } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
 import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
 import { validateTaskTitle, validateGoalInput, validateAreaTitle } from './validation'
@@ -171,7 +171,7 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
     }
   }
 
-  async createSystemReminder(title: string, dueAt?: Date): Promise<string> {
+  async createSystemReminder(title: string, dueAt?: Date): Promise<ReminderItem> {
     return persistCreateSystemReminder(title, dueAt)
   }
 

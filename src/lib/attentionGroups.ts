@@ -61,6 +61,19 @@ export function deriveTodayAttentionGroups(
       return bDaysElapsed - aDaysElapsed
     })
 
+  const ongoingIds = new Set(ongoing.map((t) => t.id))
+  const linkedTodayTasks = activeTasks
+    .filter((task) => {
+      if (ongoingIds.has(task.id)) return false
+      if (!task.systemReminderId) return false
+      const linkedReminder = allSystemReminders.find((r) => r.id === task.systemReminderId)
+      if (!linkedReminder || !linkedReminder.dueAt || linkedReminder.done) return false
+      return isSameDay(linkedReminder.dueAt, now)
+    })
+    .sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0))
+
+  const mergedOngoing = [...ongoing, ...linkedTodayTasks]
+
   const systemReminders = allSystemReminders
     .filter((r) => {
       if (r.done) return false
@@ -70,7 +83,7 @@ export function deriveTodayAttentionGroups(
     })
     .sort((a, b) => (a.dueAt?.getTime() ?? 0) - (b.dueAt?.getTime() ?? 0))
 
-  return { overdue, dueToday, ongoing, systemReminders }
+  return { overdue, dueToday, ongoing: mergedOngoing, systemReminders }
 }
 
 export function deriveTodayRelevantGoals(goals: GoalCard[], attentionGroups: TodayAttentionGroups): TodayRelevantGoal[] {

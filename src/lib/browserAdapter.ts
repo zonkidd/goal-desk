@@ -1,4 +1,4 @@
-import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
+import type { GoalCard, GoalStatus, AreaWithStats, ReminderItem } from '../types/app'
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
 import { loadBrowserTasks } from './browserCodec'
@@ -312,8 +312,13 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     return { success: true, message: 'Area deleted', statusMessage: BROWSER_PREVIEW_STATUS }
   }
 
-  async createSystemReminder(_title: string, _dueAt?: Date): Promise<string> {
-    return `mock-reminder-${Date.now()}`
+  async createSystemReminder(_title: string, dueAt?: Date): Promise<ReminderItem> {
+    return {
+      id: `mock-reminder-${Date.now()}`,
+      title: _title,
+      dueAt,
+      done: false,
+    }
   }
 
   async loadGoals(): Promise<GoalCard[]> {

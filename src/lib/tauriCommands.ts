@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { AreaWithStats, GoalCard } from '../types/app'
+import type { AreaWithStats, GoalCard, ReminderItem } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
 import { TaskCodec, GoalCodec, type RustTask, type RustGoalCard } from './codecs'
 import { UNCATEGORIZED_AREA_TITLE } from './constants'
@@ -157,12 +157,21 @@ export async function openUrl(url: string): Promise<void> {
 // EventKit Commands
 // ============================================================================
 
-export async function createSystemReminder(title: string, dueAt?: Date): Promise<string> {
-  const reminder = await invoke<{ id: string }>('create_system_reminder', {
-    title,
-    dueAt: dueAt?.toISOString() ?? null,
-  })
-  return reminder.id
+export async function createSystemReminder(title: string, dueAt?: Date): Promise<ReminderItem> {
+  const reminder = await invoke<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>(
+    'create_system_reminder',
+    {
+      title,
+      dueAt: dueAt?.toISOString() ?? null,
+    },
+  )
+  return {
+    id: reminder.id,
+    title: reminder.title,
+    dueAt: reminder.dueAt ? new Date(reminder.dueAt) : undefined,
+    done: reminder.done,
+    listTitle: reminder.listTitle,
+  }
 }
 
 // ============================================================================

@@ -3,6 +3,7 @@ import { getRuntimeAdapter } from '../lib/runtimeAdapter'
 import { getWorkspaceMutationAdapter } from '../lib/workspaceMutations'
 import { executeMutation } from './mutationHelper'
 import { upsertById } from './upsertById'
+import { useEventkitStore } from './eventkitStore'
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 import type { GoalCard } from '../types/app'
 
@@ -190,14 +191,19 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
     const adapter = getWorkspaceMutationAdapter()
     try {
       if (getRuntimeAdapter().isTauri()) {
-        const reminderId = await adapter.createSystemReminder(title, dueAt)
-        if (reminderId && taskId) {
-          await get().linkTaskToReminder(taskId, reminderId)
+        const reminder = await adapter.createSystemReminder(title, dueAt)
+        if (reminder && taskId) {
+          await get().linkTaskToReminder(taskId, reminder.id)
         }
-        return reminderId || ''
+        if (reminder) {
+          useEventkitStore.getState().addSystemReminder(reminder)
+        }
+        return reminder?.id ?? ''
       }
 
       const mockReminderId = `mock-reminder-${Date.now()}`
+      const mockReminder = { id: mockReminderId, title, dueAt, done: false }
+      useEventkitStore.getState().addSystemReminder(mockReminder)
       if (taskId) {
         await get().linkTaskToReminder(taskId, mockReminderId)
       }

@@ -24,7 +24,7 @@ vi.mock('../lib/workspaceMutations', () => ({
     createArea: vi.fn().mockResolvedValue({}),
     renameArea: vi.fn().mockResolvedValue({}),
     deleteArea: vi.fn().mockResolvedValue({ success: true, message: 'ok' }),
-    createSystemReminder: vi.fn().mockResolvedValue(''),
+    createSystemReminder: vi.fn().mockResolvedValue({ id: '', title: '', done: false }),
   })),
   getEventKitAdapter: vi.fn(() => ({
     requestCalendarAccess: vi.fn().mockResolvedValue('granted'),

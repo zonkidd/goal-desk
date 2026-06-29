@@ -99,10 +99,11 @@ export function computeRangeTimeline(
 
   const taskItems: TimelineItem[] = []
   for (const task of tasks) {
-    if (task.status !== 'IN_PROGRESS') continue
-    if (!task.plannedStartAt) continue
+    if (task.status === 'DONE') continue
+    const taskStartAt = task.plannedStartAt || task.dueDate
+    if (!taskStartAt) continue
 
-    const startDay = startOfDay(task.plannedStartAt)
+    const startDay = startOfDay(taskStartAt)
     const endDay = task.dueDate ? startOfDay(task.dueDate) : undefined
     const isMultiDay = endDay && endDay.getTime() > startDay.getTime()
 
@@ -111,12 +112,12 @@ export function computeRangeTimeline(
         taskItems.push({
           id: task.id,
           title: task.title,
-          timeLabel: formatTimeLabel(task.plannedStartAt),
+          timeLabel: formatTimeLabel(taskStartAt),
           source: 'todo',
           readonly: false,
           done: false,
           sourceLabel: task.linkedGoalLabel || 'Desk Task',
-          startsAt: task.plannedStartAt,
+          startsAt: taskStartAt,
           linkedGoalId: task.linkedGoalId,
         })
       }
@@ -129,12 +130,12 @@ export function computeRangeTimeline(
           taskItems.push({
             id: task.id,
             title: task.title,
-            timeLabel: formatTimeLabel(task.plannedStartAt),
+            timeLabel: formatTimeLabel(taskStartAt),
             source: 'todo',
             readonly: false,
             done: false,
             sourceLabel: task.linkedGoalLabel || 'Desk Task',
-            startsAt: task.plannedStartAt,
+            startsAt: taskStartAt,
             occurrenceDate: dayDate,
             linkedGoalId: task.linkedGoalId,
           })

@@ -93,7 +93,7 @@ vi.mock('./tauriCommands', () => ({
   createArea: vi.fn().mockResolvedValue({ id: 'area-2', title: 'Personal' }),
   renameArea: vi.fn().mockResolvedValue({ id: 'area-1', title: 'Renamed' }),
   deleteArea: vi.fn().mockResolvedValue({ success: true, message: 'Deleted' }),
-  createSystemReminder: vi.fn().mockResolvedValue('reminder-1'),
+  createSystemReminder: vi.fn().mockResolvedValue({ id: 'reminder-1', title: 'Test', done: false }),
   loadGoalList: vi.fn().mockResolvedValue([]),
 }))
 
@@ -220,7 +220,7 @@ describe('TauriAdapter', () => {
   describe('createSystemReminder', () => {
     it('creates system reminder', async () => {
       const result = await adapter.createSystemReminder('Reminder', new Date())
-      expect(result).toBe('reminder-1')
+      expect(result).toEqual({ id: 'reminder-1', title: 'Test', done: false })
     })
   })
 
