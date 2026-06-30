@@ -2,6 +2,7 @@ import { ArrowRight, Plus, Pencil, Trash2, X, Check } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { GlassCard } from '../common/GlassCard'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 import { useAreaStore } from '../../store/areaStore'
 import { useUiStore } from '../../store/uiStore'
 
@@ -18,6 +19,7 @@ export function AreasView() {
   const [newAreaTitle, setNewAreaTitle] = useState('')
   const [editModal, setEditModal] = useState<{ areaId: string; currentTitle: string } | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<{ areaId: string; goalCount: number } | null>(null)
 
   useEffect(() => {
     void loadAreas()
@@ -41,22 +43,30 @@ export function AreasView() {
   }
 
   const handleDelete = async (areaId: string, goalCount: number) => {
-    if (goalCount > 0) {
-      const confirmed = confirm(
-        `此领域有 ${goalCount} 个关联目标。\n\n删除后这些目标将移动到"未分类"领域。\n\n确认删除？`
-      )
-      if (!confirmed) return
-    } else {
-      const confirmed = confirm('确认删除此领域？')
-      if (!confirmed) return
-    }
+    setDeleteConfirm({ areaId, goalCount })
+  }
 
-    await deleteArea(areaId, true)
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return
+    await deleteArea(deleteConfirm.areaId, true)
     await loadAreas()
+    setDeleteConfirm(null)
   }
 
   return (
-    <section id="areas" className="screen active">
+    <>
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        title="删除领域"
+        message={
+          deleteConfirm && deleteConfirm.goalCount > 0
+            ? `此领域有 ${deleteConfirm.goalCount} 个关联目标。\n\n删除后这些目标将移动到"未分类"领域。\n\n确认删除？`
+            : '确认删除此领域？'
+        }
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm(null)}
+      />
+      <section id="areas" className="screen active">
       <div className="mb-8 flex items-end justify-between">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">领域管理</h1>
@@ -214,5 +224,6 @@ export function AreasView() {
         </div>
       )}
     </section>
+    </>
   )
 }

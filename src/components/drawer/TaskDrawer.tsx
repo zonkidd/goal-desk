@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlignLeft, Bell, BookOpen, Calendar, CheckCircle, Clock, Folder, Send, Trash2, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 import { getRuntimeAdapter } from '../../lib/runtimeAdapter'
 import { openTaskInBear } from '../../lib/tauriCommands'
 import { useTodoEditingSession } from '../../lib/todoEditing'
@@ -64,6 +65,8 @@ export function TaskDrawer() {
   const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null)
   const [statusNote, setStatusNote] = useState('')
   const [logNote, setLogNote] = useState('')
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false)
 
   const promptText = useMemo(() => {
     if (pendingStatus === 'PAUSED') return '记录一下暂停原因'
@@ -104,7 +107,33 @@ export function TaskDrawer() {
   }
 
   return (
-    <AnimatePresence>
+    <>
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        title="删除待办"
+        message={'确定要删除这个待办事项吗？\n\n删除后可以在回收站中找回。'}
+        onConfirm={() => {
+          if (task) {
+            void softDeleteTask(task.id)
+            setDeleteConfirmOpen(false)
+            closeDrawer()
+          }
+        }}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        open={unlinkConfirmOpen}
+        title="解除关联"
+        message="确定要解除系统提醒关联吗？"
+        onConfirm={() => {
+          if (task) {
+            void unlinkTaskFromReminder(task.id)
+            setUnlinkConfirmOpen(false)
+          }
+        }}
+        onCancel={() => setUnlinkConfirmOpen(false)}
+      />
+      <AnimatePresence>
       {isOpen && task && draft && editingSession && (
         <>
           <motion.button
@@ -127,12 +156,7 @@ export function TaskDrawer() {
               <StatusMachineButtons status={task.status} statusActions={statusActions} onAction={setPendingStatus} />
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    if (confirm('确定要删除这个待办事项吗？\n\n删除后可以在回收站中找回。')) {
-                      void softDeleteTask(task.id)
-                      closeDrawer()
-                    }
-                  }}
+                  onClick={() => setDeleteConfirmOpen(true)}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-red-50 hover:border-red-300 hover:text-red-600"
                   title="删除"
                 >
@@ -318,11 +342,7 @@ export function TaskDrawer() {
                     </div>
                     <button
                       className="text-xs font-semibold text-slate-500 hover:text-slate-700 underline"
-                      onClick={() => {
-                        if (task && confirm('确定要解除系统提醒关联吗？')) {
-                          void unlinkTaskFromReminder(task.id)
-                        }
-                      }}
+                      onClick={() => setUnlinkConfirmOpen(true)}
                     >
                       解除
                     </button>
@@ -440,6 +460,7 @@ export function TaskDrawer() {
         </>
       )}
     </AnimatePresence>
+    </>
   )
 }
 

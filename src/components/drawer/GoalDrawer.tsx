@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Pause, Play, CheckCircle2, Archive, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { GlassCard } from '../common/GlassCard'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 import { AreaSelectWithCreate } from '../shared/AreaSelectWithCreate'
 import { useSelectedGoal } from '../../store/appStore'
 import { useGoalStore } from '../../store/goalStore'
@@ -35,6 +36,7 @@ export function GoalDrawer() {
   const [area, setArea] = useState('')
   const [description, setDescription] = useState('')
   const [taskTitle, setTaskTitle] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   useEffect(() => {
     if (!goal) return
@@ -46,7 +48,21 @@ export function GoalDrawer() {
   const linkedTasks = useMemo(() => tasks.filter((task) => task.linkedGoalId === goal?.id), [goal?.id, tasks])
 
   return (
-    <AnimatePresence>
+    <>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="删除目标"
+        message={'确定要删除这个目标吗？\n\n关联的任务不会被删除。\n删除后可以在回收站中找回。'}
+        onConfirm={() => {
+          if (goal) {
+            void softDeleteGoal(goal.id)
+            setConfirmOpen(false)
+            closeDrawer()
+          }
+        }}
+        onCancel={() => setConfirmOpen(false)}
+      />
+      <AnimatePresence>
       {isOpen && goal && (
         <>
           <motion.button
@@ -92,12 +108,7 @@ export function GoalDrawer() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    if (confirm('确定要删除这个目标吗？\n\n关联的任务不会被删除。\n删除后可以在回收站中找回。')) {
-                      void softDeleteGoal(goal.id)
-                      closeDrawer()
-                    }
-                  }}
+                  onClick={() => setConfirmOpen(true)}
                   className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-red-50 hover:border-red-300 hover:text-red-600"
                   title="删除目标"
                 >
@@ -202,5 +213,6 @@ export function GoalDrawer() {
         </>
       )}
     </AnimatePresence>
+    </>
   )
 }
