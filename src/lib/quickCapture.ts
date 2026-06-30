@@ -34,11 +34,15 @@ export function parseBrowserQuickCapture(input: string, now: Date = new Date()):
     }
     // 时间点：下午N点、N点
     else if (title.includes('点')) {
-      const hourMatch = title.match(/([一二三四五六七八九十\d]{1,2})点/)
+      const hourMatch = title.match(/([一二三四五六七八九十\d]{1,2})\s*点/)
       if (hourMatch) {
         let hour = parseChineseOrDigitHour(hourMatch[1])
-        // 智能判断：1-7点视为下午
-        if (hour >= 1 && hour <= 7) {
+        // 有"下午"关键词时，1-12点转为24小时制
+        if (title.includes('下午') && hour >= 1 && hour <= 12) {
+          hour += 12
+        }
+        // 无关键词时，1-7点智能视为下午
+        else if (hour >= 1 && hour <= 7) {
           hour += 12
         }
         parsedTime = relativeDayTime(now, 1, hour, 0)

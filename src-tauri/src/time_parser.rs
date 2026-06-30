@@ -56,18 +56,21 @@ fn clean_title(input: &str, is_deadline: bool) -> String {
     // 移除时间关键词
     title = title.replace("下午", "").replace("上午", "").replace("早上", "").replace("晚上", "");
 
-    // 移除"N点"表达式（如"8点"、"下午3点"）
+    // 移除"N点"表达式（如"8点"、"下午3点"、"4 点"）
     if let Some(dot_char_pos) = title.chars().position(|c| c == '点') {
         let chars: Vec<char> = title.chars().collect();
         let mut digit_start_char_pos = dot_char_pos;
 
-        // 向前查找数字或中文数字的起始位置
+        // 向前查找数字或中文数字的起始位置（跳过空格）
         for i in (0..dot_char_pos).rev() {
             if chars[i].is_ascii_digit() {
                 digit_start_char_pos = i;
             } else if matches!(chars[i], '一' | '二' | '三' | '四' | '五' | '六' | '七' | '八' | '九' | '十') {
                 digit_start_char_pos = i;
                 break;
+            } else if chars[i] == ' ' {
+                // 跳过空格，继续向前查找
+                continue;
             } else {
                 break;
             }
@@ -158,13 +161,14 @@ fn parse_time_of_day_keyword(input: &str) -> Option<u32> {
     }
 }
 
-/// 解析时间点表达式（如 "3点"、"三点"）
+/// 解析时间点表达式（如 "3点"、"三点"、"3 点"）
 fn parse_hour_expression(input: &str) -> Option<u32> {
     if let Some(pos) = input.find("点") {
         let before_dot = &input[..pos];
 
-        // 先尝试阿拉伯数字
-        let digits: String = before_dot.chars().rev()
+        // 先尝试阿拉伯数字（跳过尾部空格）
+        let trimmed_before = before_dot.trim_end();
+        let digits: String = trimmed_before.chars().rev()
             .take_while(|c| c.is_ascii_digit())
             .collect::<String>()
             .chars().rev().collect();
@@ -175,8 +179,8 @@ fn parse_hour_expression(input: &str) -> Option<u32> {
             }
         }
 
-        // 尝试中文数字（取最后一个字符）
-        if let Some(last_char) = before_dot.chars().last() {
+        // 尝试中文数字（取最后一个非空字符）
+        if let Some(last_char) = trimmed_before.chars().last() {
             if let Some(hour) = parse_chinese_number(last_char) {
                 let hour_u32 = hour as u32;
                 if (1..=23).contains(&hour_u32) {
@@ -193,7 +197,10 @@ fn parse_hour_expression(input: &str) -> Option<u32> {
 /// if the 1-7 → afternoon adjustment was applied.
 fn parse_hour_expression_smart(input: &str) -> Option<(u32, bool)> {
     let raw_hour = parse_hour_expression(input)?;
-    if (1..=7).contains(&raw_hour) {
+    let has_afternoon = input.contains("下午");
+    if has_afternoon && (1..=12).contains(&raw_hour) {
+        Some((raw_hour + 12, true))
+    } else if (1..=7).contains(&raw_hour) {
         Some((raw_hour + 12, true))
     } else {
         Some((raw_hour, false))
@@ -296,7 +303,8 @@ fn parse_relative_week(input: &str, now: DateTime<Local>) -> Option<(DateTime<Lo
 }
 
 pub fn parse_time_expression(input: &str, now: DateTime<Local>) -> ParsedTime {
-    let trimmed = input.trim();
+    let trimmed: String = input.split_whitespace().collect::<Vec<&str>>().join(" ");
+    let trimmed = trimmed.trim();
     if trimmed.is_empty() {
         return ParsedTime {
             planned_start_at: None,
@@ -682,5 +690,38 @@ mod tests {
     fn test_clean_title_preserves_content() {
         assert_eq!(clean_title("写报告", false), "写报告");
         assert_eq!(clean_title("买牛奶", false), "买牛奶");
+    }
+}
+
+#[cfg(test)]
+mod regression_tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    #[test]
+    fn test_tomorrow_afternoon_4pm_with_spaces() {
+        let now = Local.with_ymd_and_hms(2026, 6, 30, 10, 0, 0).unwrap();
+        let result = parse_time_expression("明天下午 4 点进行计划", now);
+        let expected = Local.with_ymd_and_hms(2026, 7, 1, 16, 0, 0).unwrap();
+        assert_eq!(result.title, "进行计划");
+        assert_eq!(result.planned_start_at, Some(expected));
+    }
+
+    #[test]
+    fn test_tomorrow_space_before_point() {
+        let now = Local.with_ymd_and_hms(2026, 6, 30, 10, 0, 0).unwrap();
+        let result = parse_time_expression("明天 3 点提交", now);
+        let expected = Local.with_ymd_and_hms(2026, 7, 1, 15, 0, 0).unwrap();
+        assert_eq!(result.title, "提交");
+        assert_eq!(result.planned_start_at, Some(expected));
+    }
+
+    #[test]
+    fn test_tomorrow_afternoon_8pm_with_spaces() {
+        let now = Local.with_ymd_and_hms(2026, 6, 30, 10, 0, 0).unwrap();
+        let result = parse_time_expression("明天下午 8 点开会", now);
+        let expected = Local.with_ymd_and_hms(2026, 7, 1, 20, 0, 0).unwrap();
+        assert_eq!(result.title, "开会");
+        assert_eq!(result.planned_start_at, Some(expected));
     }
 }
