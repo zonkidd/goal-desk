@@ -246,7 +246,11 @@ impl TaskService {
                 .map_err(|e| e.to_string())?);
         }
         if let Some(v) = linked_goal_id {
-            task.linked_goal_id = Some(Uuid::parse_str(&v).map_err(|e| e.to_string())?);
+            if v.is_empty() {
+                task.linked_goal_id = None;
+            } else {
+                task.linked_goal_id = Some(Uuid::parse_str(&v).map_err(|e| e.to_string())?);
+            }
         }
         task.linked_goal_label = linked_goal_label.and_then(|v| {
             let trimmed = v.trim().to_string();

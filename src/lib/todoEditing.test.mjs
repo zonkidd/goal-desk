@@ -131,6 +131,7 @@ test('selecting an existing goal links the todo through the editing session acti
         linkedGoalId: 'goal-2',
         linkedGoalLabel: 'Improve architecture',
         showInTimeline: false,
+        systemReminderId: undefined,
       },
     },
   ])
@@ -152,9 +153,10 @@ test('unlinking a goal clears the todo goal association', async () => {
         title: 'Refine drawer architecture',
         plannedStartAt: undefined,
         dueDate: undefined,
-        linkedGoalId: undefined,
-        linkedGoalLabel: undefined,
+        linkedGoalId: '',
+        linkedGoalLabel: '',
         showInTimeline: false,
+        systemReminderId: undefined,
       },
     },
   ])
@@ -193,6 +195,7 @@ test('inline goal creation keeps the todo drawer context and links the new goal 
         linkedGoalId: 'goal-created-inline',
         linkedGoalLabel: undefined,
         showInTimeline: false,
+        systemReminderId: undefined,
       },
     },
   ])

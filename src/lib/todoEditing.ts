@@ -90,6 +90,7 @@ interface CreateTodoEditingSessionInput {
       linkedGoalId?: string
       linkedGoalLabel?: string
       showInTimeline?: boolean
+      systemReminderId?: string
     },
   ) => Promise<void>
   updateTaskContent: (taskId: string, content: string) => Promise<void>
@@ -137,9 +138,12 @@ export function createTodoEditingSession(input: CreateTodoEditingSessionInput): 
           title: nextDraft.title.trim(),
           plannedStartAt: parseDateDraft(nextDraft.plannedStartAtDraft),
           dueDate: parseDateDraft(nextDraft.dueDateDraft),
-          linkedGoalId: nextDraft.linkedGoalIdDraft || undefined,
+          linkedGoalId: nextDraft.linkedGoalIdDraft !== (task.linkedGoalId || '')
+            ? nextDraft.linkedGoalIdDraft
+            : undefined,
           linkedGoalLabel: resolveLinkedGoalLabel(goals, nextDraft.linkedGoalIdDraft),
           showInTimeline: nextDraft.showInTimelineDraft,
+          systemReminderId: task.systemReminderId,
         })
       },
       linkGoal: async (goalId) => {
@@ -151,9 +155,10 @@ export function createTodoEditingSession(input: CreateTodoEditingSessionInput): 
           title: nextDraft.title.trim(),
           plannedStartAt: parseDateDraft(nextDraft.plannedStartAtDraft),
           dueDate: parseDateDraft(nextDraft.dueDateDraft),
-          linkedGoalId: goalId || undefined,
+          linkedGoalId: goalId,
           linkedGoalLabel: resolveLinkedGoalLabel(goals, goalId),
           showInTimeline: nextDraft.showInTimelineDraft,
+          systemReminderId: task.systemReminderId,
         })
         return nextDraft
       },
@@ -166,9 +171,10 @@ export function createTodoEditingSession(input: CreateTodoEditingSessionInput): 
           title: nextDraft.title.trim(),
           plannedStartAt: parseDateDraft(nextDraft.plannedStartAtDraft),
           dueDate: parseDateDraft(nextDraft.dueDateDraft),
-          linkedGoalId: undefined,
-          linkedGoalLabel: undefined,
+          linkedGoalId: '',
+          linkedGoalLabel: '',
           showInTimeline: nextDraft.showInTimelineDraft,
+          systemReminderId: task.systemReminderId,
         })
         return nextDraft
       },
@@ -201,6 +207,7 @@ export function createTodoEditingSession(input: CreateTodoEditingSessionInput): 
           linkedGoalId: goalId,
           linkedGoalLabel: resolveLinkedGoalLabel(goals, goalId),
           showInTimeline: linkedDraft.showInTimelineDraft,
+          systemReminderId: task.systemReminderId,
         })
 
         return { goalId, draft: linkedDraft }
