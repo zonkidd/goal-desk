@@ -1,6 +1,6 @@
-# Goal Desk Tauri
+# Kairos · 见独
 
-Goal Desk Tauri is a local-first macOS desktop app for goals, projects, todos, reminders, and calendar context.
+Kairos（καιρός / 见独）is a local-first macOS desktop app for goals, projects, todos, reminders, and calendar context.
 
 ## Language
 

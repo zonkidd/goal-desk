@@ -8,7 +8,7 @@
 
 如果没有运行，执行：
 ```bash
-cd /Users/zonkidd/IdeaProjects/goal-desk-tauri
+cd /Users/zonkidd/IdeaProjects/kairos
 nvm use 26
 npm run dev
 ```
@@ -161,4 +161,4 @@ location.reload()
 
 ## 🎉 享受测试！
 
-这个脚本包含了完整的真实场景数据，能够全面展示 Goal Desk 的各项功能，特别是**今日焦点**这个核心功能！
+这个脚本包含了完整的真实场景数据，能够全面展示 Kairos 的各项功能，特别是**今日焦点**这个核心功能！

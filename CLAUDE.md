@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 环境约束
 
 - 运行任何 Node.js / npm / npx 命令前，先执行 `nvm use 26`。
-- 这是 Tauri 2 + React + TypeScript + Tailwind 的本地优先桌面应用；持久化数据在本机 SQLite，macOS 日历/提醒事项通过原生 EventKit 桥接。
+- 这是 Kairos · 见独（Tauri 2 + React + TypeScript + Tailwind）的本地优先桌面应用；持久化数据在本机 SQLite，macOS 日历/提醒事项通过原生 EventKit 桥接。
 - **重要**：本项目尚未正式发版，所有代码改动无需考虑向后兼容性。可以直接修改数据结构、API 接口、数据库 schema 等，不需要保留旧版本兼容逻辑。
 
 ## 常用命令
@@ -51,6 +51,7 @@ npm run test:e2e
 - 背景、间距、颜色、字体、圆角等视觉属性应该在两个环境中完全相同。
 
 **验证流程**：
+
 1. 修改 UI 组件后，先运行 `npm run dev` 在浏览器中预览
 2. 确认样式符合预期后，运行 `npm run tauri:dev` 验证 Tauri 窗口
 3. 对比两者，确保视觉呈现一致

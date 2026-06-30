@@ -546,5 +546,5 @@ pub fn run() {
             commands::list_deleted_goals
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Goal Desk");
+        .expect("error while running Kairos");
 }

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Goal Desk",
+  "productName": "Kairos",
   "version": "0.1.1",
-  "identifier": "com.goaldesk.app",
+  "identifier": "com.kairos.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Goal Desk",
+        "title": "Kairos",
         "width": 1280,
         "height": 860,
         "minWidth": 980,

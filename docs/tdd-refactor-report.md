@@ -7,7 +7,7 @@
 
 ## 🎯 目标回顾
 
-将 Goal Desk 从单体 appStore 架构重构为响应式 Command 架构，彻底解决：
+将 Kairos 从单体 appStore 架构重构为响应式 Command 架构，彻底解决：
 1. ✅ 浅层编排问题（10+ 薄包装 hooks）
 2. ✅ 函数袋问题（workspaceDerivation 导出 10 个函数）
 3. ✅ 循环依赖（stores 通过 require() 互调）

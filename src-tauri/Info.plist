@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
   <key>NSCalendarsFullAccessUsageDescription</key>
-  <string>Goal Desk needs calendar access to render your upcoming schedule inside the unified timeline.</string>
+  <string>Kairos needs calendar access to render your upcoming schedule inside the unified timeline.</string>
   <key>NSRemindersFullAccessUsageDescription</key>
-  <string>Goal Desk needs reminders access to sync Apple Reminders with goal progress and task completion.</string>
+  <string>Kairos needs reminders access to sync Apple Reminders with goal progress and task completion.</string>
   <key>NSCalendarsUsageDescription</key>
-  <string>Goal Desk needs calendar access to render your upcoming schedule inside the unified timeline.</string>
+  <string>Kairos needs calendar access to render your upcoming schedule inside the unified timeline.</string>
   <key>NSRemindersUsageDescription</key>
-  <string>Goal Desk needs reminders access to sync Apple Reminders with goal progress and task completion.</string>
+  <string>Kairos needs reminders access to sync Apple Reminders with goal progress and task completion.</string>
 </dict>
 </plist>
