@@ -13,6 +13,9 @@ interface AreaSelectWithCreateProps {
 export function AreaSelectWithCreate({ value, areas, onChange, onCreateArea, placeholder, className }: AreaSelectWithCreateProps) {
   const [showModal, setShowModal] = useState(false)
   const [newAreaName, setNewAreaName] = useState('')
+  const [localAreas, setLocalAreas] = useState<AreaWithStats[]>([])
+
+  const mergedAreas = [...areas, ...localAreas.filter((la) => !areas.some((a) => a.id === la.id))]
 
   const handleSelectChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const selected = event.target.value
@@ -29,6 +32,10 @@ export function AreaSelectWithCreate({ value, areas, onChange, onCreateArea, pla
     if (!trimmed) return
 
     await onCreateArea(trimmed)
+    setLocalAreas((prev) => [
+      ...prev,
+      { id: `local-${Date.now()}`, title: trimmed, goalCount: 0, activeGoalCount: 0, isSystem: false },
+    ])
     onChange(trimmed)
     setShowModal(false)
     setNewAreaName('')
@@ -38,7 +45,7 @@ export function AreaSelectWithCreate({ value, areas, onChange, onCreateArea, pla
     <>
       <select value={value} onChange={handleSelectChange} className={className}>
         <option value="">{placeholder || '选择领域'}</option>
-        {areas.map((area) => (
+        {mergedAreas.map((area) => (
           <option key={area.id} value={area.title}>
             {area.title} ({area.goalCount})
           </option>
