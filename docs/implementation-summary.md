@@ -78,7 +78,7 @@
 **3. lib.rs**
 - 更新 `capture_task` 命令
 - 使用新的 `planned_start_at` 和 `due_at` 字段
-- 优先用 `planned_start_at` 创建系统提醒
+- 优先用 `planned_start_at` 作为 Todo 的计划开始时间，并据此设置本地时间线显示
 
 ---
 

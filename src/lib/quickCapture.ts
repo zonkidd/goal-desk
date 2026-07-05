@@ -17,83 +17,98 @@ export function parseBrowserQuickCapture(input: string, now: Date = new Date()):
   // 检测截止时间关键词
   const isDeadline = title.includes('前') || title.includes('之前') || title.includes('截止')
 
-  // 相对日期 + 时间点解析
-  let parsedTime: Date | undefined
+  // 1. Determine dayOffset (default to 0: today)
+  let dayOffset = 0
+  let hasDateKeyword = false
 
-  // 检测"明天"
   if (title.includes('明天')) {
-    const tomorrow = relativeDayTime(now, 1, 9, 0)
-
-    // HH:MM 格式
-    const hhmmMatch = title.match(/(\d{1,2}):(\d{2})/)
-    if (hhmmMatch) {
-      const hour = parseInt(hhmmMatch[1])
-      const minute = parseInt(hhmmMatch[2])
-      parsedTime = relativeDayTime(now, 1, hour, minute)
-      title = title.replace(hhmmMatch[0], '').replace('明天', '').trim()
-    }
-    // 时间点：下午N点、N点
-    else if (title.includes('点')) {
-      const hourMatch = title.match(/([一二三四五六七八九十\d]{1,2})\s*点/)
-      if (hourMatch) {
-        let hour = parseChineseOrDigitHour(hourMatch[1])
-        // 有"下午"关键词时，1-12点转为24小时制
-        if (title.includes('下午') && hour >= 1 && hour <= 12) {
-          hour += 12
-        }
-        // 无关键词时，1-7点智能视为下午
-        else if (hour >= 1 && hour <= 7) {
-          hour += 12
-        }
-        parsedTime = relativeDayTime(now, 1, hour, 0)
-        title = title.replace(hourMatch[0], '').replace('明天', '')
-                     .replace('下午', '').replace('上午', '').replace('早上', '').replace('晚上', '').trim()
-      }
-    } else {
-      parsedTime = tomorrow
-      title = title.replace('明天', '').trim()
-    }
-  }
-  // 检测"后天"
-  else if (title.includes('后天')) {
-    parsedTime = relativeDayTime(now, 2, 9, 0)
-
-    // 时间段关键词
-    if (title.includes('下午')) {
-      parsedTime = relativeDayTime(now, 2, 14, 0)
-      title = title.replace('下午', '')
-    } else if (title.includes('上午')) {
-      parsedTime = relativeDayTime(now, 2, 9, 0)
-      title = title.replace('上午', '')
-    }
-
-    title = title.replace('后天', '').trim()
-  }
-  // 检测"今晚"
-  else if (title.includes('今晚')) {
-    parsedTime = relativeDayTime(now, 0, 20, 0)
-    title = title.replace('今晚', '').trim()
-  }
-  // 检测"今天"
-  else if (title.includes('今天')) {
-    parsedTime = relativeDayTime(now, 0, 9, 0)
-    title = title.replace('今天', '').trim()
-  }
-  // 检测"N天后"
-  else if (title.match(/(\d+)天后/)) {
+    dayOffset = 1
+    hasDateKeyword = true
+    title = title.replace('明天', '')
+  } else if (title.includes('后天')) {
+    dayOffset = 2
+    hasDateKeyword = true
+    title = title.replace('后天', '')
+  } else if (title.includes('今晚')) {
+    dayOffset = 0
+    hasDateKeyword = true
+    title = title.replace('今晚', '')
+  } else if (title.includes('今天')) {
+    dayOffset = 0
+    hasDateKeyword = true
+    title = title.replace('今天', '')
+  } else if (title.match(/(\d+)天后/)) {
     const match = title.match(/(\d+)天后/)!
-    const days = parseInt(match[1])
-    parsedTime = relativeDayTime(now, days, 9, 0)
-    title = title.replace(match[0], '').trim()
+    dayOffset = parseInt(match[1])
+    hasDateKeyword = true
+    title = title.replace(match[0], '')
+  } else if (title.includes('下周一')) {
+    const dayOfWeek = now.getDay()
+    const daysUntilNextMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek
+    dayOffset = daysUntilNextMonday
+    hasDateKeyword = true
+    title = title.replace('下周一', '')
   }
 
-  // 移除截止时间关键词（长模式优先，避免 '前' 先移除导致 '之前' 无法匹配）
-  if (isDeadline) {
-    title = title.replace('之前', '').replace('前', '').replace('截止', '').trim()
+  // 2. Determine time (hour and minute)
+  let hour: number | undefined
+  let minute: number | undefined
+  let hasTimeKeyword = false
+
+  // HH:MM 格式
+  const hhmmMatch = title.match(/(\d{1,2}):(\d{2})/)
+  if (hhmmMatch) {
+    hour = parseInt(hhmmMatch[1])
+    minute = parseInt(hhmmMatch[2])
+    hasTimeKeyword = true
+    title = title.replace(hhmmMatch[0], '')
+  }
+  // 中文或数字小时: N点
+  else {
+    const hourMatch = title.match(/([一二三四五六七八九十\d]{1,2})\s*点/)
+    if (hourMatch) {
+      hour = parseChineseOrDigitHour(hourMatch[1])
+      hasTimeKeyword = true
+      title = title.replace(hourMatch[0], '')
+
+      // 检测分钟: M分 或 半
+      const minMatch = title.match(/(\d{1,2})\s*分/)
+      if (minMatch) {
+        minute = parseInt(minMatch[1])
+        title = title.replace(minMatch[0], '')
+      } else if (title.includes('半')) {
+        minute = 30
+        title = title.replace('半', '')
+      } else {
+        minute = 0
+      }
+    }
   }
 
-  // 根据截止时间标志分配到不同字段
-  if (parsedTime) {
+  // 处理时间段指示词
+  let isPm = false
+  if (title.includes('下午') || title.includes('晚上') || trimmed.includes('今晚')) {
+    isPm = true
+    title = title.replace('下午', '').replace('晚上', '')
+  } else if (title.includes('上午') || title.includes('早上') || title.includes('中午')) {
+    title = title.replace('上午', '').replace('早上', '').replace('中午', '')
+  }
+
+  if (hour !== undefined) {
+    if (isPm && hour >= 1 && hour <= 12) {
+      hour += 12
+    } else if (!isPm && hour >= 1 && hour <= 7) {
+      // 智能上下午判断：无明确指示词时，1-7点智能视为下午
+      hour += 12
+    }
+  }
+
+  // 3. Assemble Date
+  if (hasDateKeyword || hasTimeKeyword) {
+    const parsedHour = hour !== undefined ? hour : (trimmed.includes('今晚') ? 20 : 9)
+    const parsedMinute = minute !== undefined ? minute : 0
+    const parsedTime = relativeDayTime(now, dayOffset, parsedHour, parsedMinute)
+
     if (isDeadline) {
       dueDate = parsedTime
     } else {
@@ -101,12 +116,20 @@ export function parseBrowserQuickCapture(input: string, now: Date = new Date()):
     }
   }
 
+  // 移除截止时间关键词
+  if (isDeadline) {
+    title = title.replace('之前', '').replace('前', '').replace('截止', '')
+  }
+  title = title.trim()
+
   return {
     title,
     plannedStartAt,
     dueDate,
   }
 }
+
+
 
 const ChineseDigitMap: Record<string, number> = {
   '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,

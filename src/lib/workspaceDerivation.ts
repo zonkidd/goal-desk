@@ -4,7 +4,7 @@ export { deriveTodayAttentionGroups, deriveTodayRelevantGoals } from './attentio
 export type { TodayAttentionGroups, TodayRelevantGoal } from './attentionGroups.ts'
 export { convertEventKitToRawItems, groupByDate } from './eventkitTransform.ts'
 export type { EventKitCalendarEvent, EventKitReminder } from './eventkitTransform.ts'
-export { computeRangeTimeline } from './WorkspaceEngine'
+export { computeRangeTimeline } from './WorkspaceEngine.ts'
 
 import type { Task } from '../types/task'
 

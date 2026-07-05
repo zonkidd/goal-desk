@@ -19,7 +19,7 @@
   - 派生状态：todayFocusTasks, todayAttentionGroups, inbox
   - 操作：addTask, updateTaskStatus, updateTaskContent, updateTaskFields, addTaskNote
   - 目标关联：createTaskForGoal
-  - 系统提醒同步：syncTasksForSystemReminder
+  - 系统提醒关联：linkTaskToReminder, unlinkTaskFromReminder（只维护本地关联）
 
 - **goalStore.ts** (~140 行)
   - 基础数据：baseGoals
@@ -29,7 +29,7 @@
 - **eventkitStore.ts** (~190 行)
   - 基础数据：baseTimeline, systemReminders
   - 集成状态：integrationStatus, eventkitPermissions, eventkitData
-  - 操作：toggleSystemReminderDone, requestCalendarAccess, requestRemindersAccess
+  - 操作：requestCalendarAccess, requestRemindersAccess（系统提醒只读）
   - 数据刷新：refreshEventkitData
 
 ### 2. 跨 Store 协调机制 ✅
@@ -40,7 +40,6 @@
 - **useDerivedStateSync()** - 监听 tasks/goals/activeArea/showCompletedTodos 变化，自动重算派生状态
 - **useAppHydration()** - 应用启动时的数据水合
 - **useReceiveExternalTask()** - 接收快速捕获的任务
-- **useToggleSystemReminder()** - 跨 eventkit + task stores 的提醒同步
 - **useTodayViewModel()** / **useInboxViewModel()** - 视图数据聚合
 
 ### 3. 向后兼容保证 ✅

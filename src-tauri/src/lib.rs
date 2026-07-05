@@ -6,20 +6,110 @@ pub mod time_parser;
 
 use chrono::Local;
 use domain::{
-    today_timeline, CalendarEvent, DeskTask,
-    GoalStatus, GoalSummary, TaskStatus, TimelineItem,
+    today_timeline, CalendarEvent, DeskTask, GoalStatus, GoalSummary, TaskStatus, TimelineItem,
     WorkspaceSnapshot,
 };
-use eventkit::{SystemAgendaSnapshot, SystemReminder};
+use eventkit::SystemAgendaSnapshot;
 use repository::SqliteRepository;
+use serde::Deserialize;
 use service::AppService;
 use tauri::{AppHandle, Manager};
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
+use uuid::Uuid;
+
+#[derive(Debug, Deserialize)]
+pub struct NullablePatch<T> {
+    value: Option<T>,
+}
+
+impl<T> NullablePatch<T> {
+    pub fn set(value: T) -> Self {
+        Self { value: Some(value) }
+    }
+
+    pub fn clear() -> Self {
+        Self { value: None }
+    }
+}
+
+pub struct TaskFieldPatchCommand {
+    pub title: String,
+    pub planned_start_at: Option<NullablePatch<String>>,
+    pub due_at: Option<NullablePatch<String>>,
+    pub linked_goal_id: Option<NullablePatch<String>>,
+    pub linked_goal_label: Option<NullablePatch<String>>,
+    pub show_in_timeline: Option<bool>,
+    pub system_reminder_id: Option<NullablePatch<String>>,
+}
+
+impl TaskFieldPatchCommand {
+    pub fn into_task_field_patch(self) -> Result<service::TaskFieldPatch, String> {
+        Ok(service::TaskFieldPatch {
+            title: self.title,
+            planned_start_at: datetime_field_patch_from_command(self.planned_start_at)?,
+            due_at: datetime_field_patch_from_command(self.due_at)?,
+            linked_goal: goal_link_patch_from_command(self.linked_goal_id, self.linked_goal_label)?,
+            show_in_timeline: self.show_in_timeline,
+            system_reminder_id: string_field_patch_from_command(self.system_reminder_id),
+        })
+    }
+}
+
+fn parse_command_datetime(value: String) -> Result<chrono::DateTime<chrono::Local>, String> {
+    chrono::DateTime::parse_from_rfc3339(&value)
+        .map(|p| p.with_timezone(&chrono::Local))
+        .map_err(|e| e.to_string())
+}
+
+fn datetime_field_patch_from_command(
+    value: Option<NullablePatch<String>>,
+) -> Result<service::NullableFieldPatch<chrono::DateTime<chrono::Local>>, String> {
+    match value.map(|patch| patch.value) {
+        Some(Some(value)) => parse_command_datetime(value).map(service::NullableFieldPatch::set),
+        Some(None) => Ok(service::NullableFieldPatch::clear()),
+        None => Ok(service::NullableFieldPatch::preserve()),
+    }
+}
+
+fn goal_link_patch_from_command(
+    goal_id: Option<NullablePatch<String>>,
+    goal_label: Option<NullablePatch<String>>,
+) -> Result<service::NullableFieldPatch<service::GoalLink>, String> {
+    match (
+        goal_id.map(|patch| patch.value),
+        goal_label.map(|patch| patch.value),
+    ) {
+        (None, None) => Ok(service::NullableFieldPatch::preserve()),
+        (Some(None), _) => Ok(service::NullableFieldPatch::clear()),
+        (Some(Some(goal_id)), goal_label) if goal_id.trim().is_empty() => {
+            let _ = goal_label;
+            Ok(service::NullableFieldPatch::clear())
+        }
+        (Some(Some(goal_id)), goal_label) => Uuid::parse_str(&goal_id)
+            .map(|id| {
+                service::NullableFieldPatch::set(service::GoalLink {
+                    id,
+                    label: goal_label.flatten(),
+                })
+            })
+            .map_err(|e| e.to_string()),
+        (None, Some(None)) => Ok(service::NullableFieldPatch::preserve()),
+        (None, Some(Some(_))) => Ok(service::NullableFieldPatch::preserve()),
+    }
+}
+
+fn string_field_patch_from_command(
+    value: Option<NullablePatch<String>>,
+) -> service::NullableFieldPatch<String> {
+    service::NullableFieldPatch::from_optional_patch(value.map(|patch| patch.value))
+}
 
 pub fn today_snapshot_data(path: &std::path::Path) -> Result<Vec<TimelineItem>, String> {
     let repository = SqliteRepository::new(path.to_path_buf());
-    let snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
+    let snapshot = repository
+        .load_workspace()
+        .map_err(|error| error.to_string())?;
     Ok(timeline_from_workspace(&snapshot))
 }
 
@@ -75,9 +165,13 @@ fn workspace_repository<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<SqliteR
     Ok(SqliteRepository::new(path))
 }
 
-fn load_or_seed_workspace<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<WorkspaceSnapshot, String> {
+fn load_or_seed_workspace<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+) -> Result<WorkspaceSnapshot, String> {
     let repository = workspace_repository(app)?;
-    let snapshot = repository.load_workspace().map_err(|error| error.to_string())?;
+    let snapshot = repository
+        .load_workspace()
+        .map_err(|error| error.to_string())?;
 
     if snapshot.areas.is_empty()
         && snapshot.projects.is_empty()
@@ -94,7 +188,9 @@ fn load_or_seed_workspace<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Works
     }
 }
 
-fn ensure_quick_capture_window<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<tauri::WebviewWindow<R>, String> {
+fn ensure_quick_capture_window<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+) -> Result<tauri::WebviewWindow<R>, String> {
     app.get_webview_window("quick-capture")
         .ok_or_else(|| "quick-capture window not found".to_string())
 }
@@ -118,25 +214,13 @@ fn show_quick_capture_window_internal<R: tauri::Runtime>(app: &AppHandle<R>) -> 
 
 mod commands {
     use super::{
-        bear_note_url, eventkit, load_or_seed_workspace,
-        show_quick_capture_window_internal,
-        timeline_from_workspace, workspace_repository, DeskTask, GoalStatus,
-        GoalSummary, SystemAgendaSnapshot, SystemReminder, TaskStatus, TimelineItem,
+        bear_note_url, eventkit, load_or_seed_workspace, show_quick_capture_window_internal,
+        timeline_from_workspace, workspace_repository, DeskTask, GoalStatus, GoalSummary,
+        SystemAgendaSnapshot, TaskStatus, TimelineItem,
     };
-    use crate::domain;
     use crate::service::AppService;
     use chrono::{Datelike, Duration, Local, TimeZone};
     use tauri::{AppHandle, Emitter, State};
-
-    fn maybe_create_task_system_reminder(
-        app: &AppHandle,
-        title: &str,
-        due_at: Option<chrono::DateTime<Local>>,
-    ) -> Option<String> {
-        eventkit::create_system_reminder(app, title, due_at)
-            .ok()
-            .map(|reminder| reminder.id)
-    }
 
     #[tauri::command]
     pub fn today_snapshot(app: AppHandle) -> Result<Vec<TimelineItem>, String> {
@@ -169,7 +253,8 @@ mod commands {
         area: String,
         description: String,
     ) -> Result<GoalSummary, String> {
-        svc.goal.update_goal_fields(&goal_id, &title, &area, &description)?;
+        svc.goal
+            .update_goal_fields(&goal_id, &title, &area, &description)?;
         svc.goal.get_goal_summary_by_id(&goal_id)
     }
 
@@ -184,12 +269,17 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn list_areas(svc: State<'_, AppService>) -> Result<Vec<super::domain::AreaWithStats>, String> {
+    pub fn list_areas(
+        svc: State<'_, AppService>,
+    ) -> Result<Vec<super::domain::AreaWithStats>, String> {
         svc.area.list_areas_with_stats()
     }
 
     #[tauri::command]
-    pub fn create_area(svc: State<'_, AppService>, title: String) -> Result<super::domain::Area, String> {
+    pub fn create_area(
+        svc: State<'_, AppService>,
+        title: String,
+    ) -> Result<super::domain::Area, String> {
         svc.area.create_area(&title)
     }
 
@@ -223,18 +313,14 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn capture_task(app: AppHandle, svc: State<'_, AppService>, input: String) -> Result<DeskTask, String> {
+    pub fn capture_task(
+        app: AppHandle,
+        svc: State<'_, AppService>,
+        input: String,
+    ) -> Result<DeskTask, String> {
         let task = svc.task.capture_task(&input)?;
-
-        let reminder_time = task.planned_start_at.or(task.due_at);
-        let final_task = if let Some(reminder_id) = maybe_create_task_system_reminder(&app, &task.title, reminder_time) {
-            svc.task.capture_task_with_system_reminder(&task.id.to_string(), reminder_id)?
-        } else {
-            task
-        };
-
-        let _ = app.emit("desk-task-created", &final_task);
-        Ok(final_task)
+        let _ = app.emit("desk-task-created", &task);
+        Ok(task)
     }
 
     #[tauri::command]
@@ -263,43 +349,34 @@ mod commands {
         svc: State<'_, AppService>,
         task_id: String,
         title: String,
-        planned_start_at: Option<String>,
-        due_at: Option<String>,
-        linked_goal_id: Option<String>,
-        linked_goal_label: Option<String>,
+        planned_start_at: Option<crate::NullablePatch<String>>,
+        due_at: Option<crate::NullablePatch<String>>,
+        linked_goal_id: Option<crate::NullablePatch<String>>,
+        linked_goal_label: Option<crate::NullablePatch<String>>,
         show_in_timeline: Option<bool>,
-        system_reminder_id: Option<String>,
+        system_reminder_id: Option<crate::NullablePatch<String>>,
     ) -> Result<DeskTask, String> {
-        svc.task.update_task_fields(
-            &task_id,
-            &title,
+        let patch = crate::TaskFieldPatchCommand {
+            title,
             planned_start_at,
             due_at,
             linked_goal_id,
             linked_goal_label,
             show_in_timeline,
             system_reminder_id,
-        )
+        }
+        .into_task_field_patch()?;
+        svc.task.update_task_fields_with_patch(&task_id, patch)
     }
 
     #[tauri::command]
     pub fn update_task_status(
-        app: AppHandle,
         svc: State<'_, AppService>,
         task_id: String,
         status: TaskStatus,
         note: Option<String>,
     ) -> Result<DeskTask, String> {
-        let app_handle = app.clone();
-
-        svc.task.update_task_status_with_effects(
-            &task_id,
-            status,
-            note,
-            domain::SideEffect::ReminderSync(Box::new(move |reminder_id: &str, done: bool| {
-                eventkit::set_system_reminder_completed(&app_handle, reminder_id, done).map(|_| ())
-            })),
-        )
+        svc.task.update_task_status(&task_id, status, note)
     }
 
     #[tauri::command]
@@ -313,7 +390,8 @@ mod commands {
 
     #[tauri::command]
     pub fn open_task_in_bear(svc: State<'_, AppService>, task_id: String) -> Result<(), String> {
-        let task = svc.task
+        let task = svc
+            .task
             .find_task(&task_id)?
             .ok_or_else(|| format!("Task not found: {task_id}"))?;
         let note_id = task
@@ -353,8 +431,8 @@ mod commands {
     #[tauri::command]
     pub fn load_calendar_range(
         app: AppHandle,
-        start_date: String,  // ISO 8601 format: "2026-06-09"
-        end_date: String,     // ISO 8601 format: "2026-06-29"
+        start_date: String, // ISO 8601 format: "2026-06-09"
+        end_date: String,   // ISO 8601 format: "2026-06-29"
     ) -> Result<eventkit::CalendarRangeData, String> {
         use chrono::NaiveDate;
 
@@ -389,31 +467,6 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn set_system_reminder_completed(
-        app: AppHandle,
-        svc: State<'_, AppService>,
-        reminder_id: String,
-        done: bool,
-    ) -> Result<SystemReminder, String> {
-        let reminder = eventkit::set_system_reminder_completed(&app, &reminder_id, done)?;
-        svc.task.sync_task_system_reminder_by_reminder_id(&reminder_id, done)?;
-        Ok(reminder)
-    }
-
-    #[tauri::command]
-    pub fn create_system_reminder(
-        app: AppHandle,
-        title: String,
-        due_at: Option<String>,
-    ) -> Result<SystemReminder, String> {
-        let due = due_at
-            .map(|s| chrono::DateTime::parse_from_rfc3339(&s).map(|dt| dt.with_timezone(&chrono::Local)))
-            .transpose()
-            .map_err(|e| format!("Invalid due_at format: {e}"))?;
-        eventkit::create_system_reminder(&app, &title, due)
-    }
-
-    #[tauri::command]
     pub fn open_url(url: String) -> Result<(), String> {
         #[cfg(target_os = "macos")]
         {
@@ -431,33 +484,27 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn soft_delete_task(
-        svc: State<'_, AppService>,
-        task_id: String,
-    ) -> Result<(), String> {
+    pub fn open_system_reminder(reminder_id: String) -> Result<(), String> {
+        open_url(format!("x-apple-reminder://{reminder_id}"))
+    }
+
+    #[tauri::command]
+    pub fn soft_delete_task(svc: State<'_, AppService>, task_id: String) -> Result<(), String> {
         svc.task.soft_delete_task(&task_id)
     }
 
     #[tauri::command]
-    pub fn restore_task(
-        svc: State<'_, AppService>,
-        task_id: String,
-    ) -> Result<DeskTask, String> {
+    pub fn restore_task(svc: State<'_, AppService>, task_id: String) -> Result<DeskTask, String> {
         svc.task.restore_task(&task_id)
     }
 
     #[tauri::command]
-    pub fn list_deleted_tasks(
-        svc: State<'_, AppService>,
-    ) -> Result<Vec<DeskTask>, String> {
+    pub fn list_deleted_tasks(svc: State<'_, AppService>) -> Result<Vec<DeskTask>, String> {
         svc.task.list_deleted_tasks()
     }
 
     #[tauri::command]
-    pub fn soft_delete_goal(
-        svc: State<'_, AppService>,
-        goal_id: String,
-    ) -> Result<(), String> {
+    pub fn soft_delete_goal(svc: State<'_, AppService>, goal_id: String) -> Result<(), String> {
         svc.goal.soft_delete_goal(&goal_id)
     }
 
@@ -470,9 +517,7 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn list_deleted_goals(
-        svc: State<'_, AppService>,
-    ) -> Result<Vec<GoalSummary>, String> {
+    pub fn list_deleted_goals(svc: State<'_, AppService>) -> Result<Vec<GoalSummary>, String> {
         svc.goal.list_deleted_goals()
     }
 }
@@ -535,9 +580,8 @@ pub fn run() {
             commands::load_calendar_range,
             commands::request_calendar_access,
             commands::request_reminders_access,
-            commands::set_system_reminder_completed,
-            commands::create_system_reminder,
             commands::open_url,
+            commands::open_system_reminder,
             commands::soft_delete_task,
             commands::restore_task,
             commands::list_deleted_tasks,

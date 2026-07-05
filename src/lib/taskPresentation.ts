@@ -1,46 +1,21 @@
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
 import { startOfDay } from './dateUtils.ts'
+import { getAllowedTodoStatusActions, getTodoStatusActionLabel, logActionForTodoTransition } from './todoTransition.ts'
 
 export function getRuntimeModeStatusMessage(isTauri: boolean) {
   return isTauri ? 'Rust + Tauri data' : 'Browser preview only · no SQLite or Tauri IPC'
 }
 
 export function getTaskPrimaryStatusLabel(status: TaskStatus) {
-  switch (status) {
-    case 'PAUSED':
-      return 'Resume'
-    case 'DONE':
-      return ''
-    case 'IN_PROGRESS':
-      return 'Pause'
-    default:
-      return 'Start'
-  }
+  return getTodoStatusActionLabel(status)
 }
 
 export function getTaskStatusActions(status: TaskStatus): TaskStatus[] {
-  switch (status) {
-    case 'TODO':
-      return ['IN_PROGRESS', 'DONE']
-    case 'IN_PROGRESS':
-      return ['PAUSED', 'DONE']
-    case 'PAUSED':
-      return ['IN_PROGRESS', 'DONE']
-    case 'DONE':
-      return []
-    default:
-      return []
-  }
+  return getAllowedTodoStatusActions(status)
 }
 
 export function logActionForTransition(fromStatus: TaskStatus, toStatus: TaskStatus): TaskActivityAction {
-  if (toStatus === 'IN_PROGRESS') {
-    return fromStatus === 'PAUSED' ? 'RESUMED' : 'STARTED'
-  }
-  if (toStatus === 'PAUSED') return 'PAUSED'
-  if (toStatus === 'DONE') return 'COMPLETED'
-  if (toStatus === 'TODO' && fromStatus === 'DONE') return 'RESUMED'
-  return 'NOTE_ADDED'
+  return logActionForTodoTransition(fromStatus, toStatus)
 }
 
 export function getTaskContentBadgeLabel(content: string) {

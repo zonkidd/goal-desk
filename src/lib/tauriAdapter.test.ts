@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { TauriAdapter } from './tauriAdapter'
+import { updateTaskFields } from './tauriCommands'
 import type { GoalCard } from '../types/app'
 import type { Task } from '../types/task'
 
@@ -93,8 +94,8 @@ vi.mock('./tauriCommands', () => ({
   createArea: vi.fn().mockResolvedValue({ id: 'area-2', title: 'Personal' }),
   renameArea: vi.fn().mockResolvedValue({ id: 'area-1', title: 'Renamed' }),
   deleteArea: vi.fn().mockResolvedValue({ success: true, message: 'Deleted' }),
-  createSystemReminder: vi.fn().mockResolvedValue({ id: 'reminder-1', title: 'Test', done: false }),
   loadGoalList: vi.fn().mockResolvedValue([]),
+  loadTaskList: vi.fn().mockResolvedValue([]),
 }))
 
 describe('TauriAdapter', () => {
@@ -182,6 +183,16 @@ describe('TauriAdapter', () => {
       expect(result.task).toBeDefined()
       expect(result.task?.title).toBe('Updated Task')
     })
+
+    it('omits system Reminder link changes so the command seam preserves the existing link', async () => {
+      await adapter.updateTaskFields('task-1', {
+        title: 'Updated Task',
+      })
+
+      expect(updateTaskFields).toHaveBeenCalledWith('task-1', expect.not.objectContaining({
+        systemReminderId: expect.anything(),
+      }))
+    })
   })
 
   describe('listAreas', () => {
@@ -214,13 +225,6 @@ describe('TauriAdapter', () => {
     it('deletes area', async () => {
       const result = await adapter.deleteArea('area-1')
       expect(result.success).toBe(true)
-    })
-  })
-
-  describe('createSystemReminder', () => {
-    it('creates system reminder', async () => {
-      const result = await adapter.createSystemReminder('Reminder', new Date())
-      expect(result).toEqual({ id: 'reminder-1', title: 'Test', done: false })
     })
   })
 

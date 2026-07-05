@@ -13,6 +13,14 @@ export interface AreaStoreState {
   deleteArea: (areaId: string, force?: boolean) => Promise<void>
 }
 
+function sortAreas(areas: AreaWithStats[]): AreaWithStats[] {
+  return [...areas].sort((a, b) => a.title.localeCompare(b.title))
+}
+
+function replaceArea(areas: AreaWithStats[], area: AreaWithStats): AreaWithStats[] {
+  return sortAreas(upsertById(areas, area))
+}
+
 export const useAreaStore = create<AreaStoreState>((set, get) => ({
   allAreas: [],
 
@@ -34,12 +42,7 @@ export const useAreaStore = create<AreaStoreState>((set, get) => ({
       adapter,
     )
     if (result?.area) {
-      set((state) => {
-        const withoutDuplicate = state.allAreas.filter((a) => a.id !== result.area!.id)
-        return {
-          allAreas: [...withoutDuplicate, result.area!].sort((a, b) => a.title.localeCompare(b.title)),
-        }
-      })
+      set((state) => ({ allAreas: replaceArea(state.allAreas, result.area!) }))
     }
   },
 
@@ -50,9 +53,7 @@ export const useAreaStore = create<AreaStoreState>((set, get) => ({
       adapter,
     )
     if (result?.area) {
-      set((state) => ({
-        allAreas: state.allAreas.map((a) => (a.id === areaId ? { ...a, title: result.area!.title } : a)).sort((a, b) => a.title.localeCompare(b.title)),
-      }))
+      set((state) => ({ allAreas: replaceArea(state.allAreas, result.area!) }))
     }
   },
 

@@ -1,22 +1,12 @@
 import { invoke } from '@tauri-apps/api/core'
+import type { RawCalendarEvent, RawEventKitData, RawReminder } from './eventkitData'
 import type { AccessStatus, IntegrationStatus, ReminderItem } from '../types/app'
 
 export type AuthorizationStatus = AccessStatus
 
-export interface CalendarEvent {
-  id: string
-  title: string
-  startsAt: Date
-  endsAt: Date
-  calendarTitle?: string
-}
-
-export interface Reminder {
-  id: string
-  title: string
-  dueAt?: Date
-  done: boolean
-  listTitle?: string
+export type EventKitSnapshotData = RawEventKitData & {
+  systemReminders: ReminderItem[]
+  integrationStatus: IntegrationStatus
 }
 
 export interface EventKitAdapter {
@@ -24,46 +14,22 @@ export interface EventKitAdapter {
   requestRemindersAccess(): Promise<AuthorizationStatus>
   openCalendarEvent(eventId: string): Promise<void>
   openSystemReminder(reminderId: string): Promise<void>
-  setSystemReminderCompleted(reminderId: string, done: boolean): Promise<ReminderItem>
-  fetchCalendarEvents(startDate: Date, endDate: Date): Promise<CalendarEvent[]>
-  fetchReminders(): Promise<Reminder[]>
   loadCalendarRange(startDate: string, endDate: string): Promise<{
     events: Array<{ id: string; title: string; startsAt: Date; endsAt: Date; calendarTitle?: string }>
     reminders: Array<{ id: string; title: string; dueAt?: Date; done: boolean; listTitle?: string }>
   }>
-  loadRawEventKitData(): Promise<{
-    calendarEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
-    reminders: Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
-    systemReminders: ReminderItem[]
-    integrationStatus: IntegrationStatus
-  }>
-}
-
-interface RustCalendarEvent {
-  id: string
-  title: string
-  startsAt: string
-  endsAt: string
-  calendarTitle?: string
-}
-
-interface RustReminder {
-  id: string
-  title: string
-  dueAt?: string
-  done: boolean
-  listTitle?: string
+  loadRawEventKitData(): Promise<EventKitSnapshotData>
 }
 
 interface RustSystemSnapshot {
   integrationStatus: IntegrationStatus
-  calendarEvents: RustCalendarEvent[]
-  reminders: RustReminder[]
+  calendarEvents: RawCalendarEvent[]
+  reminders: RawReminder[]
 }
 
 interface CalendarRangeData {
-  events: RustCalendarEvent[]
-  reminders: RustReminder[]
+  events: RawCalendarEvent[]
+  reminders: RawReminder[]
 }
 
 export class TauriEventKitAdapter implements EventKitAdapter {
@@ -81,44 +47,7 @@ export class TauriEventKitAdapter implements EventKitAdapter {
   }
 
   async openSystemReminder(reminderId: string): Promise<void> {
-    const url = `x-apple-reminder://${reminderId}`
-    await invoke('open_url', { url })
-  }
-
-  async setSystemReminderCompleted(reminderId: string, done: boolean): Promise<ReminderItem> {
-    const reminder = await invoke<RustReminder>('set_system_reminder_completed', { reminderId, done })
-    return {
-      id: reminder.id,
-      title: reminder.title,
-      dueAt: reminder.dueAt ? new Date(reminder.dueAt) : undefined,
-      done: reminder.done,
-      listTitle: reminder.listTitle,
-    }
-  }
-
-  async fetchCalendarEvents(startDate: Date, endDate: Date): Promise<CalendarEvent[]> {
-    const rustEvents = await invoke<RustCalendarEvent[]>('fetch_calendar_events', {
-      start: startDate.toISOString(),
-      end: endDate.toISOString(),
-    })
-    return rustEvents.map(event => ({
-      id: event.id,
-      title: event.title,
-      startsAt: new Date(event.startsAt),
-      endsAt: new Date(event.endsAt),
-      calendarTitle: event.calendarTitle,
-    }))
-  }
-
-  async fetchReminders(): Promise<Reminder[]> {
-    const rustReminders = await invoke<RustReminder[]>('fetch_reminders')
-    return rustReminders.map(reminder => ({
-      id: reminder.id,
-      title: reminder.title,
-      dueAt: reminder.dueAt ? new Date(reminder.dueAt) : undefined,
-      done: reminder.done,
-      listTitle: reminder.listTitle,
-    }))
+    await invoke('open_system_reminder', { reminderId })
   }
 
   async loadCalendarRange(startDate: string, endDate: string) {
@@ -184,24 +113,6 @@ export class BrowserEventKitAdapter implements EventKitAdapter {
     console.log('Browser preview: would open reminder', _reminderId)
   }
 
-  async setSystemReminderCompleted(reminderId: string, done: boolean): Promise<ReminderItem> {
-    return {
-      id: reminderId,
-      title: 'Mock Reminder',
-      dueAt: undefined,
-      done,
-      listTitle: undefined,
-    }
-  }
-
-  async fetchCalendarEvents(_startDate: Date, _endDate: Date): Promise<CalendarEvent[]> {
-    return []
-  }
-
-  async fetchReminders(): Promise<Reminder[]> {
-    return []
-  }
-
   async loadCalendarRange(_startDate: string, _endDate: string) {
     return { events: [], reminders: [] }
   }
@@ -211,7 +122,7 @@ export class BrowserEventKitAdapter implements EventKitAdapter {
       calendarEvents: [],
       reminders: [],
       systemReminders: [],
-      integrationStatus: { calendar: 'not_determined' as const, reminders: 'not_determined' as const },
+      integrationStatus: { calendar: 'granted' as const, reminders: 'granted' as const },
     }
   }
 }

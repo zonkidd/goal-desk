@@ -1,14 +1,16 @@
 use chrono::{Local, TimeZone};
 use goal_desk_tauri::domain::{
-    parse_quick_capture, today_timeline, CalendarEvent, Reminder,
-    TimelineSource,
+    parse_quick_capture, today_timeline, CalendarEvent, Reminder, TimelineSource,
 };
 use uuid::Uuid;
 
 #[test]
 fn today_timeline_mixes_reminders_and_calendar_events_by_time() {
     let reminder_id = Uuid::new_v4();
-    let day = Local.with_ymd_and_hms(2026, 6, 9, 0, 0, 0).unwrap().date_naive();
+    let day = Local
+        .with_ymd_and_hms(2026, 6, 9, 0, 0, 0)
+        .unwrap()
+        .date_naive();
 
     let reminders = vec![Reminder {
         id: reminder_id,
@@ -30,6 +32,7 @@ fn today_timeline_mixes_reminders_and_calendar_events_by_time() {
     assert_eq!(timeline[0].title, "Design review · Work");
     assert!(timeline[0].read_only);
     assert_eq!(timeline[1].source, TimelineSource::Reminder);
+    assert!(timeline[1].read_only);
 }
 
 #[test]

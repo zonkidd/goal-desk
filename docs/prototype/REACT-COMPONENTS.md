@@ -89,8 +89,8 @@ todo: {
 - **Tab 按钮**：悬停 1.02 倍，点击 0.98 倍
 
 #### 交互功能
-- **复选框切换**：调用 `toggleSystemReminderDone` 同步到系统
-- **点击提醒项**：打开 `ReminderDrawer` 查看详情
+- **完成状态**：只读展示系统提醒完成状态
+- **点击提醒项**：打开只读提醒详情或系统提醒事项 App
 - **隐藏已完成**：全局开关，过滤两种视图
 - **分组折叠状态**：localStorage 持久化（可选）
 
@@ -139,8 +139,8 @@ RemindersView (主容器)
 // 获取系统提醒
 const systemReminders = useAppStore((state) => state.systemReminders)
 
-// 切换完成状态
-const toggleSystemReminderDone = useAppStore((state) => state.toggleSystemReminderDone)
+// 打开系统提醒事项
+const openSystemReminder = useAppStore((state) => state.openSystemReminder)
 
 // 打开抽屉
 const openReminderDrawer = useAppStore((state) => state.openReminderDrawer)
@@ -197,7 +197,7 @@ CalendarView 和 RemindersView 已经使用 `useAppStore` 连接到状态管理�
 
 - `timeline` - 时间轴数据（已有）
 - `systemReminders` - 系统提醒数据（已有）
-- `toggleSystemReminderDone` - 切换提醒完成状态（已有）
+- `openSystemReminder` - 打开系统提醒事项（只读外部源）
 - `openReminderDrawer` - 打开提醒详情抽屉（已有）
 
 **注意**：CalendarView 中的 `WeekView` 组件目前使用 Mock 数据，需要根据实际 `timeline` 数据按日期分组过滤。

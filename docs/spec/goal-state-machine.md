@@ -10,10 +10,10 @@
 
 ### 1.1 系统定位
 
-Goal 状态机系统定义了目标（Goal）在生命周期中的所有可能状态及其转换规则。与 Task 状态机不同，Goal 状态机允许更灵活的双向转换，并引入自动计算状态 `READY_TO_COMPLETE`。
+Goal 状态机系统定义了目标（Goal）在生命周期中的所有可能状态及其转换规则。Goal 允许 `ACTIVE` 与 `PAUSED` 之间往返，并引入自动计算状态 `READY_TO_COMPLETE`。
 
 **设计原则**：
-- **灵活转换**：目标可以在 ACTIVE ↔ PAUSED ↔ COMPLETED 间自由切换
+- **有限转换**：目标可以在 ACTIVE ↔ PAUSED 间切换；COMPLETED 只能归档；ARCHIVED 是终态
 - **自动计算**：READY_TO_COMPLETE 由系统根据关联任务完成情况自动标记
 - **用户决策**：COMPLETED 需要用户主动确认，不自动完成
 - **前后端一致**：Rust domain 层和 TypeScript 共享状态机规则
@@ -90,19 +90,14 @@ pub enum GoalStatus {
               │              │              │
               ↓           Complete          ↓
           ┌────────┐                   ┌───────────┐
-          │ PAUSED │◄──────Resume──────│ COMPLETED │
+          │ PAUSED │                   │ COMPLETED │
           └────┬───┘                   └─────┬─────┘
                │                             │
             Resume                        Archive
                │                             │
                │         ┌──────────┐        │
                └────────►│ ARCHIVED │◄───────┘
-                         └─────┬────┘
-                               │
-                            Reactive
-                               │
-                               ↓
-                          (回到 ACTIVE)
+                         └──────────┘
 ```
 
 ### 3.2 合法转换表
@@ -114,13 +109,9 @@ pub enum GoalStatus {
 | `ACTIVE` | `ARCHIVED` | Archive | 直接归档（放弃或转移） |
 | `ACTIVE` | `READY_TO_COMPLETE` | - | **系统自动**，所有任务完成 |
 | `PAUSED` | `ACTIVE` | Resume | 恢复推进 |
-| `PAUSED` | `COMPLETED` | Complete | 暂停状态下标记完成 |
 | `PAUSED` | `ARCHIVED` | Archive | 暂停后归档 |
-| `COMPLETED` | `ACTIVE` | Reopen | 重新开启（罕见） |
 | `COMPLETED` | `ARCHIVED` | Archive | 完成后归档 |
-| `ARCHIVED` | `ACTIVE` | Reactive | 重新激活 |
 | `READY_TO_COMPLETE` | `COMPLETED` | Complete | 确认完成 |
-| `READY_TO_COMPLETE` | `ACTIVE` | - | **系统自动**，新增未完成任务 |
 
 **注意**：
 - `READY_TO_COMPLETE` 不在 GoalDrawer 状态按钮组中（用户不可手动设置）
@@ -132,65 +123,34 @@ pub enum GoalStatus {
 
 ### 4.1 READY_TO_COMPLETE 触发条件
 
-```typescript
-// src/lib/workspaceDerivation.ts
-export function deriveGoalStatus(
-  goal: GoalCard,
-  tasks: Task[]
-): GoalStatus {
-  // 1. 筛选关联任务
-  const linkedTasks = tasks.filter(task => task.linkedGoalId === goal.id)
-  
-  // 2. 没有任务，保持原状态
-  if (linkedTasks.length === 0) {
-    return goal.status
-  }
-  
-  // 3. 所有任务完成 + 目标是 ACTIVE → READY_TO_COMPLETE
-  const allDone = linkedTasks.every(task => task.status === 'DONE')
-  if (allDone && goal.status === 'ACTIVE') {
-    return 'READY_TO_COMPLETE'
-  }
-  
-  // 4. 有未完成任务 + 目标是 READY_TO_COMPLETE → 恢复 ACTIVE
-  if (!allDone && goal.status === 'READY_TO_COMPLETE') {
-    return 'ACTIVE'
-  }
-  
-  // 5. 其它情况保持原状态
-  return goal.status
-}
-```
+自动状态由 Rust 领域层在构建 `GoalSummary` 时计算，前端不再重复推导 Goal 的状态、进度和 nextTodo。
+
+核心规则：
+- `COMPLETED` / `ARCHIVED` 保持原状态
+- 没有关联 Todo 时保持原状态
+- 关联 Todo 全部 `DONE` 时，摘要状态为 `READY_TO_COMPLETE`
+- 其它情况保持后端返回的 Goal 状态
 
 **触发时机**：
-- 任务状态变更时（Task 完成/重开）
+- 任务状态变更时（Task 完成）
 - 任务关联目标变更时（linkedGoalId 改变）
-- 加载 workspace 时（初始化）
+- 加载 workspace 时（初始化 GoalSummary）
 
 ### 4.2 前端实现
 
 ```typescript
-// src/lib/DerivedStateManager.ts
-private computeGoals(): GoalCard[] {
-  return this.baseGoals.map(goal => {
-    const linkedTasks = this.tasks.filter(task => task.linkedGoalId === goal.id)
-    const completedCount = linkedTasks.filter(task => task.status === 'DONE').length
-    const progress = linkedTasks.length === 0 
-      ? 0 
-      : Math.round((completedCount / linkedTasks.length) * 100)
-    
-    // 自动计算状态
-    const status = deriveGoalStatus(goal, this.tasks)
-    
-    return {
-      ...goal,
-      status,
-      progress,
-      taskCount: linkedTasks.length,
-      // ...
-    }
-  })
-}
+// src/lib/WorkspaceEngine.ts
+const snapshot = computeSnapshot({
+  baseGoals, // 已经是后端计算好的 GoalSummary
+  tasks,
+  baseTimeline,
+  activeArea,
+  showCompletedTodos,
+})
+
+// computeSnapshot 只负责领域过滤和工作区快照组合；
+// Goal.status / progress / nextTodo 来自 baseGoals。
+const visibleGoals = snapshot.goals
 ```
 
 ### 4.3 后端实现
@@ -354,18 +314,18 @@ const filteredGoals = goals.filter(goal => {
 - ❌ 增加状态机复杂度（需要自动计算逻辑）
 - 接受: 计算逻辑简单，性能影响可忽略
 
-### ADR-002: 允许 COMPLETED → ACTIVE 转换
+### ADR-002: COMPLETED 保持收束，只允许归档
 
-**决策**: 已完成的目标可以重新开启
+**决策**: 已完成的目标不再自动或手动回到 `ACTIVE`，只允许归档。
 
 **理由**:
-- ✅ 支持"目标重启"场景（如季度目标延续）
-- ✅ 纠正误操作（误标记完成）
-- ✅ 更灵活的目标管理
+- ✅ 保持"目标已达成"的语义稳定
+- ✅ 避免新增或同步 Todo 时隐式改变已完成目标
+- ✅ 与 Rust domain 当前转换表一致
 
 **代价**:
-- ❌ 与 Task 状态机不一致（Task DONE 是终态）
-- 接受: Goal 和 Task 语义不同，Goal 更偏向长期规划
+- ❌ 误标记完成需要通过新目标或后续显式功能处理
+- 接受: 当前产品优先保证完成状态不被隐式重写
 
 ### ADR-003: PAUSED ↔ ACTIVE 双向转换
 
@@ -380,14 +340,14 @@ const filteredGoals = goals.filter(goal => {
 - ❌ 无法追踪暂停/恢复历史（Goal 没有 activityLogs）
 - 接受: Goal 关注结果而非过程，不需要详细日志
 
-### ADR-004: ARCHIVED 状态可恢复
+### ADR-004: ARCHIVED 是终态
 
-**决策**: 归档的目标可以重新激活（Reactive）
+**决策**: 归档的目标不可重新激活。
 
 **理由**:
 - ✅ 归档不是"删除"，而是"收纳"
-- ✅ 支持"目标复盘"场景
-- ✅ 避免误归档导致数据丢失
+- ✅ 避免长期存档事项重新进入活跃工作流
+- ✅ 与 Rust domain 当前转换表一致
 
 **代价**:
 - ❌ 归档目标可能污染活跃目标列表
@@ -414,15 +374,16 @@ const filteredGoals = goals.filter(goal => {
 
 | 实现位置 | 函数 | 职责 |
 |---------|-----|------|
-| Rust domain | `Goal::derive_status()` | 后端自动计算 READY_TO_COMPLETE |
-| TypeScript | `deriveGoalStatus()` | 前端自动计算 READY_TO_COMPLETE |
+| Rust domain | `Goal::compute_derived_status()` | 后端自动计算 READY_TO_COMPLETE |
+| Rust service | `build_goal_summary()` | 汇总进度、任务数量、nextTodo 和派生状态 |
+| TypeScript | `WorkspaceEngine.computeSnapshot()` | 保留后端 GoalSummary，并按 Area 过滤 |
 | Repository | `update_status()` | 后端校验转换合法性 |
 | Store | `updateGoalStatus()` | 前端拦截非法操作 |
 
 **保证机制**:
 - 前后端都拒绝手动设置 `READY_TO_COMPLETE`
-- 自动计算逻辑在前后端同步（相同条件触发）
-- 单元测试覆盖自动计算场景
+- 自动计算逻辑集中在 Rust 领域层，前端只展示后端返回的摘要
+- Rust 单元测试覆盖自动计算场景，前端测试覆盖 `computeSnapshot()` 不重复推导 Goal 字段
 
 ---
 
@@ -433,9 +394,9 @@ const filteredGoals = goals.filter(goal => {
 | 测试场景 | 初始状态 | 关联任务状态 | 预期状态 |
 |---------|---------|-------------|---------|
 | 所有任务完成 | ACTIVE | 3 个 DONE | READY_TO_COMPLETE |
-| 新增未完成任务 | READY_TO_COMPLETE | 2 个 DONE + 1 个 TODO | ACTIVE |
+| 新增未完成任务 | READY_TO_COMPLETE | 2 个已完成 + 1 个待办 | 保持后端返回状态 |
 | 没有任务 | ACTIVE | 无 | ACTIVE |
-| 部分完成 | ACTIVE | 1 个 DONE + 2 个 TODO | ACTIVE |
+| 部分完成 | ACTIVE | 1 个已完成 + 2 个待办 | ACTIVE |
 | 已暂停全部完成 | PAUSED | 3 个 DONE | PAUSED（不自动变化） |
 
 ### 9.2 状态转换测试
@@ -444,17 +405,16 @@ const filteredGoals = goals.filter(goal => {
 |---------|---------|---------|---------|
 | 暂停目标 | ACTIVE | PAUSED | ✅ 成功 |
 | 完成目标 | READY_TO_COMPLETE | COMPLETED | ✅ 成功 |
-| 重开目标 | COMPLETED | ACTIVE | ✅ 成功 |
+| 已完成目标回到推进中 | COMPLETED | ACTIVE | ❌ 拒绝 |
 | 手动设置 READY_TO_COMPLETE | ACTIVE | READY_TO_COMPLETE | ❌ 拒绝，提示错误 |
 | 归档已完成目标 | COMPLETED | ARCHIVED | ✅ 成功 |
-| 重新激活归档目标 | ARCHIVED | ACTIVE | ✅ 成功 |
+| 归档目标回到推进中 | ARCHIVED | ACTIVE | ❌ 拒绝 |
 
 ### 9.3 边界测试
 
 | 测试场景 | 操作 | 预期行为 |
 |---------|-----|---------|
 | 目标无任务完成 | 点击 Complete | 直接变为 COMPLETED |
-| 任务从 DONE 改回 TODO | 系统自动 | READY_TO_COMPLETE → ACTIVE |
 | 删除关联任务 | 系统自动 | 重新计算进度和状态 |
 | 取消任务关联 | 系统自动 | 重新计算进度和状态 |
 
@@ -468,8 +428,9 @@ const filteredGoals = goals.filter(goal => {
 - [Task 状态机 Spec](./task-state-machine.md)
 
 ### 代码
-- [`src/lib/workspaceDerivation.ts`](../../src/lib/workspaceDerivation.ts) - `deriveGoalStatus()`
-- [`src-tauri/src/domain.rs`](../../src-tauri/src/domain.rs) - `Goal::derive_status()`
+- [`src/lib/WorkspaceEngine.ts`](../../src/lib/WorkspaceEngine.ts) - `computeSnapshot()`
+- [`src-tauri/src/domain.rs`](../../src-tauri/src/domain.rs) - `Goal::compute_derived_status()`
+- [`src-tauri/src/service/goal.rs`](../../src-tauri/src/service/goal.rs) - `build_goal_summary()`
 - [`src/store/appStore.ts`](../../src/store/appStore.ts) - `updateGoalStatus()`
 
 ### 测试

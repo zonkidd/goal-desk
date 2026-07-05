@@ -3,7 +3,21 @@ import { expect, test } from '@playwright/test'
 test.describe('Task drawer polish', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:1420')
-    await page.waitForLoadState('domcontentloaded')
+    // 注入包含指定标题的任务到 localStorage 以便测试能够点击打开该任务
+    await page.evaluate(() => {
+      const mockTask = {
+        id: 'task-tauri-eventkit',
+        title: '研究 Tauri 与 EventKit 的通信机制',
+        content: '# 任务描述\n\n研究 Tauri 与 EventKit 的通信机制。',
+        status: 'TODO',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        activityLogs: []
+      }
+      localStorage.setItem('goal-desk-browser-tasks', JSON.stringify([mockTask]))
+    })
+    await page.reload()
+    await page.waitForLoadState('networkidle')
     await page.getByRole('button', { name: '研究 Tauri 与 EventKit 的通信机制' }).click()
   })
 

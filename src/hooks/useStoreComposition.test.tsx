@@ -1,155 +1,77 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
-import React from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { useTaskGoalBridge } from './useStoreComposition'
 import { useTaskStore } from '../store/taskStore'
-import { useEventkitStore } from '../store/eventkitStore'
-import { useToggleSystemReminder } from './useStoreComposition'
-import { setEventKitAdapter, resetEventKitAdapter } from '../lib/workspaceMutations'
-import type { EventKitAdapter } from '../lib/eventkitAdapter'
+import { useGoalStore } from '../store/goalStore'
+import { useAreaStore } from '../store/areaStore'
+import type { Task } from '../types/task'
+import type { GoalCard } from '../types/app'
 
-vi.mock('../lib/runtime', () => ({
-  isTauriRuntime: vi.fn(() => true),
-}))
-
-function createMockAdapter(overrides: Partial<EventKitAdapter> = {}): EventKitAdapter {
-  return {
-    requestCalendarAccess: vi.fn().mockResolvedValue('granted'),
-    requestRemindersAccess: vi.fn().mockResolvedValue('granted'),
-    openCalendarEvent: vi.fn().mockResolvedValue(undefined),
-    openSystemReminder: vi.fn().mockResolvedValue(undefined),
-    setSystemReminderCompleted: vi.fn().mockResolvedValue({
-      id: 'reminder-1', title: 'Test', dueAt: undefined, done: true, listTitle: undefined,
-    }),
-    fetchCalendarEvents: vi.fn().mockResolvedValue([]),
-    fetchReminders: vi.fn().mockResolvedValue([]),
-    loadCalendarRange: vi.fn().mockResolvedValue({ events: [], reminders: [] }),
-    loadRawEventKitData: vi.fn().mockResolvedValue({
-      calendarEvents: [], reminders: [], systemReminders: [],
-      integrationStatus: { calendar: 'not_determined', reminders: 'not_determined' },
-    }),
-    ...overrides,
-  }
-}
-
-describe('useToggleSystemReminder', () => {
+describe('useTaskGoalBridge', () => {
   beforeEach(() => {
-    useTaskStore.setState({
-      tasks: [
-        {
-          id: 'task-1',
-          title: 'Buy milk',
-          content: '',
-          status: 'TODO',
-          systemReminderId: 'reminder-1',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          activityLogs: [],
-        },
-        {
-          id: 'task-2',
-          title: 'Other task',
-          content: '',
-          status: 'TODO',
-          systemReminderId: undefined,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          activityLogs: [],
-        },
-      ],
-    })
-
-    useEventkitStore.setState({
-      systemReminders: [
-        {
-          id: 'reminder-1',
-          title: 'Buy milk reminder',
-          done: false,
-        },
-      ],
-    })
-
+    useTaskStore.setState({ tasks: [] })
+    useGoalStore.setState({ baseGoals: [] })
     vi.clearAllMocks()
   })
 
-  afterEach(() => {
-    resetEventKitAdapter()
+  it('refreshes goals when a goal-linked task is removed', () => {
+    const refreshGoals = vi.fn()
+    useGoalStore.setState({ refreshGoals })
+
+    const linkedTask: Task = {
+      id: 'task-1',
+      title: 'Linked Task',
+      content: '',
+      status: 'TODO',
+      showInTimeline: false,
+      linkedGoalId: 'goal-1',
+      linkedGoalLabel: 'Goal 1',
+      activityLogs: [],
+    }
+
+    useTaskStore.setState({ tasks: [linkedTask] })
+    renderHook(() => useTaskGoalBridge())
+    refreshGoals.mockClear()
+
+    act(() => {
+      useTaskStore.setState({ tasks: [] })
+    })
+
+    expect(refreshGoals).toHaveBeenCalledOnce()
+  })
+})
+
+describe('useGoalAreaBridge', () => {
+  beforeEach(() => {
+    useGoalStore.setState({ baseGoals: [] })
+    useAreaStore.setState({ allAreas: [] })
+    vi.clearAllMocks()
   })
 
-  it('should sync related Task when toggling System Reminder', async () => {
-    const adapter = createMockAdapter({
-      setSystemReminderCompleted: vi.fn().mockResolvedValue({
-        id: 'reminder-1', title: 'Buy milk reminder', dueAt: undefined, done: true, listTitle: undefined,
-      }),
-    })
-    setEventKitAdapter(adapter)
+  it('reloads areas when a goal is removed', async () => {
+    const loadAreas = vi.fn().mockResolvedValue(undefined)
+    useAreaStore.setState({ loadAreas })
 
-    const { result } = renderHook(() => useToggleSystemReminder(), {
-      wrapper: ({ children }) => <>{children}</>,
-    })
+    const goal: GoalCard = {
+      id: 'goal-1',
+      title: 'Goal 1',
+      area: 'Work',
+      description: '',
+      status: 'ACTIVE',
+      progress: 0,
+      nextTodo: '',
+      taskCount: 0,
+    }
 
-    await act(async () => {
-      await result.current('reminder-1', true)
-    })
+    useGoalStore.setState({ baseGoals: [goal] })
+    const { useGoalAreaBridge } = await import('./useStoreComposition')
+    renderHook(() => useGoalAreaBridge())
+    loadAreas.mockClear()
 
-    const taskState = useTaskStore.getState()
-    const task = taskState.tasks.find((t) => t.id === 'task-1')
-    expect(task?.status).toBe('DONE')
-  })
-
-  it('should sync Task back to TODO when unmarking reminder', async () => {
-    useTaskStore.setState({
-      tasks: [
-        {
-          id: 'task-1',
-          title: 'Buy milk',
-          content: '',
-          status: 'DONE',
-          systemReminderId: 'reminder-1',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          activityLogs: [],
-        },
-      ],
+    act(() => {
+      useGoalStore.setState({ baseGoals: [] })
     })
 
-    const adapter = createMockAdapter({
-      setSystemReminderCompleted: vi.fn().mockResolvedValue({
-        id: 'reminder-1', title: 'Buy milk reminder', dueAt: undefined, done: false, listTitle: undefined,
-      }),
-    })
-    setEventKitAdapter(adapter)
-
-    const { result } = renderHook(() => useToggleSystemReminder(), {
-      wrapper: ({ children }) => <>{children}</>,
-    })
-
-    await act(async () => {
-      await result.current('reminder-1', false)
-    })
-
-    const taskState = useTaskStore.getState()
-    const task = taskState.tasks.find((t) => t.id === 'task-1')
-    expect(task?.status).toBe('TODO')
-  })
-
-  it('should not sync unrelated Tasks', async () => {
-    const adapter = createMockAdapter({
-      setSystemReminderCompleted: vi.fn().mockResolvedValue({
-        id: 'reminder-2', title: 'Other reminder', dueAt: undefined, done: true, listTitle: undefined,
-      }),
-    })
-    setEventKitAdapter(adapter)
-
-    const { result } = renderHook(() => useToggleSystemReminder(), {
-      wrapper: ({ children }) => <>{children}</>,
-    })
-
-    await act(async () => {
-      await result.current('reminder-2', true)
-    })
-
-    const taskState = useTaskStore.getState()
-    const task = taskState.tasks.find((t) => t.id === 'task-2')
-    expect(task?.status).toBe('TODO')
+    expect(loadAreas).toHaveBeenCalledOnce()
   })
 })

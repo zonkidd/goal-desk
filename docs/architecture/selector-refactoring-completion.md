@@ -42,7 +42,7 @@ selectFilteredGoals(state)      // 应用 area 过滤
 
 **更新的 store actions:**
 - `hydrateApp` - 移除对 `timeline` 和 `goals` 的设置
-- `toggleSystemReminderDone` - 改为更新 `baseTimeline`
+- EventKit 导入数据 - 只读刷新 `baseTimeline`
 
 **删除的代码:**
 - 移除了所有手动设置 `timeline` 和 `goals` 的同步逻辑

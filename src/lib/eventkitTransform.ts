@@ -1,5 +1,8 @@
 import type { RawAgendaItem } from '../types/app'
-import { startOfDay, isSameDay, formatTimeLabel, timeLabelSortValue } from './dateUtils.ts'
+import { startOfDay, formatTimeLabel, timeLabelSortValue } from './dateUtils.ts'
+import { getLinkedSystemReminderIds } from './externalAttentionIntake.ts'
+
+const DAY_MS = 24 * 60 * 60 * 1000
 
 export interface EventKitCalendarEvent {
   id: string
@@ -15,6 +18,31 @@ export interface EventKitReminder {
   dueAt?: string
   done: boolean
   listTitle?: string
+}
+
+export function toCalendarEventAgendaItem(event: EventKitCalendarEvent): RawAgendaItem | undefined {
+  const startsAt = new Date(event.startsAt)
+  if (Number.isNaN(startsAt.getTime())) return undefined
+
+  return {
+    id: event.id,
+    title: event.title,
+    timeLabel: formatTimeLabel(startsAt),
+    source: 'calendar',
+    readonly: true,
+    done: false,
+    sourceLabel: event.calendarTitle,
+    startsAt,
+  }
+}
+
+export function findCalendarEventAgendaItem(
+  events: EventKitCalendarEvent[],
+  eventId: string | undefined,
+): RawAgendaItem | undefined {
+  if (!eventId) return undefined
+  const event = events.find((item) => item.id === eventId)
+  return event ? toCalendarEventAgendaItem(event) : undefined
 }
 
 export function convertEventKitToRawItems(
@@ -36,18 +64,29 @@ export function convertEventKitToRawItems(
   }
 
   for (const event of events) {
-    const startsAt = new Date(event.startsAt)
-    if (Number.isNaN(startsAt.getTime()) || !isInRange(startsAt)) continue
-    items.push({
-      id: event.id,
-      title: event.title,
-      timeLabel: formatTimeLabel(startsAt),
-      source: 'calendar',
-      readonly: true,
-      done: false,
-      sourceLabel: event.calendarTitle,
-      startsAt,
-    })
+    const item = toCalendarEventAgendaItem(event)
+    if (!item || !item.startsAt) continue
+
+    const endsAt = new Date(event.endsAt)
+    const eventStartDay = startOfDay(item.startsAt)
+    const eventEndAt = Number.isNaN(endsAt.getTime())
+      ? item.startsAt
+      : new Date(Math.max(endsAt.getTime() - 1, item.startsAt.getTime()))
+    const eventEndDay = startOfDay(eventEndAt)
+    const occurrenceStart = new Date(Math.max(eventStartDay.getTime(), start.getTime()))
+    const occurrenceEnd = new Date(Math.min(eventEndDay.getTime(), end.getTime()))
+    if (occurrenceStart.getTime() > occurrenceEnd.getTime()) continue
+
+    for (
+      let occurrenceTime = occurrenceStart.getTime();
+      occurrenceTime <= occurrenceEnd.getTime();
+      occurrenceTime += DAY_MS
+    ) {
+      items.push({
+        ...item,
+        occurrenceDate: new Date(occurrenceTime),
+      })
+    }
   }
 
   for (const reminder of reminders) {
@@ -59,16 +98,14 @@ export function convertEventKitToRawItems(
       title: reminder.title,
       timeLabel: formatTimeLabel(dueAt),
       source: 'reminder',
-      readonly: false,
+      readonly: true,
       done: reminder.done,
       sourceLabel: reminder.listTitle,
       startsAt: dueAt,
     })
   }
 
-  const linkedReminderIds = new Set(
-    tasks.filter((t) => t.systemReminderId).map((t) => t.systemReminderId!),
-  )
+  const linkedReminderIds = getLinkedSystemReminderIds(tasks)
   const deduped = items.filter((item) => {
     if (item.source !== 'reminder') return true
     return !linkedReminderIds.has(item.id)

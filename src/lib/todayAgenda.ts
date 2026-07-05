@@ -1,60 +1,21 @@
-import type { GoalCard, RawAgendaItem, TodayAgenda } from '../types/app'
+import type { RawAgendaItem, TodayAgenda } from '../types/app'
 import type { Task } from '../types/task'
-import { startOfDay, formatTimeLabel, timeLabelSortValue, isTaskInActiveDateRange } from './dateUtils.ts'
+import { startOfDay } from './dateUtils.ts'
+import { computeAgendaTimeline } from './agendaTimeline.ts'
 
 export function deriveTodayAgenda(baseTimeline: RawAgendaItem[], tasks: Task[], now = new Date()): TodayAgenda {
   const today = startOfDay(now)
-  const taskItems: RawAgendaItem[] = []
+  const todayBaseTimeline = baseTimeline.map((item) => {
+    if (item.source === 'todo' || item.occurrenceDate || item.startsAt) return item
+    return { ...item, occurrenceDate: today }
+  })
 
-  for (const task of tasks) {
-    if (task.status === 'DONE') continue
-    if (!task.plannedStartAt) continue
-    if (!isTaskInActiveDateRange(task, now)) continue
-
-    const startDay = startOfDay(task.plannedStartAt)
-    const endDay = task.dueDate ? startOfDay(task.dueDate) : undefined
-
-    const isStartingToday = startDay.getTime() === today.getTime()
-    if (!isStartingToday && task.showInTimeline !== true) continue
-
-    const isMultiDay = endDay && endDay.getTime() > startDay.getTime()
-
-    if (!isMultiDay) {
-      taskItems.push({
-        id: task.id,
-        title: task.title,
-        timeLabel: formatTimeLabel(task.plannedStartAt),
-        source: 'todo' as const,
-        readonly: false,
-        done: false,
-        sourceLabel: task.linkedGoalLabel || 'Desk Task',
-        startsAt: task.plannedStartAt,
-        linkedGoalId: task.linkedGoalId,
-      })
-    } else {
-      const dayMs = 24 * 60 * 60 * 1000
-      const totalDays = Math.round((endDay.getTime() - startDay.getTime()) / dayMs)
-
-      for (let i = 0; i <= totalDays; i++) {
-        const dayDate = new Date(startDay.getTime() + i * dayMs)
-        taskItems.push({
-          id: task.id,
-          title: task.title,
-          timeLabel: formatTimeLabel(task.plannedStartAt),
-          source: 'todo' as const,
-          readonly: false,
-          done: false,
-          sourceLabel: task.linkedGoalLabel || 'Desk Task',
-          startsAt: task.plannedStartAt,
-          occurrenceDate: dayDate,
-          linkedGoalId: task.linkedGoalId,
-        })
-      }
-    }
-  }
-
-  const merged = [...baseTimeline.filter((item) => item.source !== 'todo'), ...taskItems]
-  return merged.sort((left, right) => timeLabelSortValue(left.timeLabel) - timeLabelSortValue(right.timeLabel))
+  return computeAgendaTimeline({
+    baseTimeline: todayBaseTimeline,
+    tasks,
+    rangeStart: today,
+    rangeEnd: today,
+  })
 }
 
 export function filterAgendaByArea(agenda: TodayAgenda, visibleTasks: Task[]): TodayAgenda {

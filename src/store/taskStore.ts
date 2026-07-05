@@ -1,11 +1,10 @@
 import { create } from 'zustand'
-import { getRuntimeAdapter } from '../lib/runtimeAdapter'
 import { getWorkspaceMutationAdapter } from '../lib/workspaceMutations'
 import { executeMutation } from './mutationHelper'
 import { upsertById } from './upsertById'
-import { useEventkitStore } from './eventkitStore'
-import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
+import type { Task, TaskStatus } from '../types/task'
 import type { GoalCard } from '../types/app'
+import type { MutationAdapter, TaskResult } from '../lib/mutationAdapter'
 
 export interface TaskStoreState {
   tasks: Task[]
@@ -13,53 +12,42 @@ export interface TaskStoreState {
 
   hydrateTasks: (tasks: Task[]) => void
   replaceTask: (task: Task) => Task[]
-  syncTasksForSystemReminder: (reminderId: string, done: boolean) => Task[]
   addTask: (title: string) => Promise<Task | null>
   createTaskForGoal: (goal: GoalCard, title: string) => Promise<Task | null>
-  addTaskNote: (taskId: string, note: string) => Promise<void>
-  updateTaskStatus: (taskId: string, status: TaskStatus, note?: string) => Promise<void>
-  updateTaskContent: (taskId: string, content: string) => Promise<void>
+  addTaskNote: (taskId: string, note: string) => Promise<Task | null>
+  updateTaskStatus: (taskId: string, status: TaskStatus, note?: string) => Promise<Task | null>
+  updateTaskContent: (taskId: string, content: string) => Promise<Task | null>
   updateTaskFields: (
     taskId: string,
     input: {
       title: string
-      plannedStartAt?: Date
-      dueDate?: Date
+      plannedStartAt?: Date | null
+      dueDate?: Date | null
       linkedGoalId?: string
       linkedGoalLabel?: string
       showInTimeline?: boolean
-      systemReminderId?: string
+      systemReminderId?: string | null
     },
     availableGoals: GoalCard[],
-  ) => Promise<void>
-  linkTaskToReminder: (taskId: string, reminderId: string) => Promise<void>
-  unlinkTaskFromReminder: (taskId: string) => Promise<void>
-  createAndLinkReminder: (taskId: string, title: string, dueAt?: Date) => Promise<string>
+  ) => Promise<Task | null>
+  linkTaskToReminder: (taskId: string, reminderId: string) => Promise<Task | null>
+  unlinkTaskFromReminder: (taskId: string) => Promise<Task | null>
   softDeleteTask: (taskId: string) => Promise<void>
-  restoreTask: (taskId: string) => Promise<void>
+  restoreTask: (taskId: string) => Promise<Task | null>
   loadDeletedTasks: () => Promise<void>
 }
 
-function syncTasksForReminderInArray(tasks: Task[], reminderId: string, done: boolean): Task[] {
-  return tasks.map((task) =>
-    task.systemReminderId === reminderId
-      ? {
-          ...task,
-          status: (done ? 'DONE' : 'TODO') as TaskStatus,
-          activityLogs:
-            task.status === ((done ? 'DONE' : 'TODO') as TaskStatus)
-              ? task.activityLogs
-              : [
-                  {
-                    action: (done ? 'COMPLETED' : 'RESUMED') as TaskActivityAction,
-                    note: 'Synced from Apple Reminders.',
-                    timestamp: new Date(),
-                  },
-                  ...task.activityLogs,
-                ],
-        }
-      : task,
+async function runTaskMutation(
+  get: () => TaskStoreState,
+  mutation: (adapter: MutationAdapter) => Promise<TaskResult>,
+): Promise<Task | null> {
+  const adapter = getWorkspaceMutationAdapter()
+  const result = await executeMutation(
+    mutation,
+    adapter,
+    { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
   )
+  return result?.task ?? null
 }
 
 export const useTaskStore = create<TaskStoreState>((set, get) => ({
@@ -74,71 +62,34 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
     return nextTasks
   },
 
-  syncTasksForSystemReminder: (reminderId, done) => {
-    const nextTasks = syncTasksForReminderInArray(get().tasks, reminderId, done)
-    set({ tasks: nextTasks })
-    return nextTasks
-  },
-
   addTask: async (title) => {
-    const adapter = getWorkspaceMutationAdapter()
-    const result = await executeMutation(
-      (a) => a.createTask(title),
-      adapter,
-      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
-    )
-    return result?.task ?? null
+    return runTaskMutation(get, (a) => a.createTask(title))
   },
 
   createTaskForGoal: async (goal, title) => {
-    const adapter = getWorkspaceMutationAdapter()
-    const result = await executeMutation(
-      (a) => a.createTaskForGoal(goal, title),
-      adapter,
-      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
-    )
-    return result?.task ?? null
+    return runTaskMutation(get, (a) => a.createTaskForGoal(goal, title))
   },
 
   addTaskNote: async (taskId, note) => {
-    const adapter = getWorkspaceMutationAdapter()
-    await executeMutation(
-      (a) => a.addTaskNote(taskId, note),
-      adapter,
-      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
-    )
+    return runTaskMutation(get, (a) => a.addTaskNote(taskId, note))
   },
 
   updateTaskStatus: async (taskId, status, note) => {
-    const adapter = getWorkspaceMutationAdapter()
-    await executeMutation(
-      (a) => a.updateTaskStatus(taskId, status, note),
-      adapter,
-      { onSuccess: ({ task }) => { 
-        if (task) {
-          get().replaceTask(task)
-        }
-      } },
-    )
+    return runTaskMutation(get, (a) => a.updateTaskStatus(taskId, status, note))
   },
 
   updateTaskContent: async (taskId, content) => {
-    const adapter = getWorkspaceMutationAdapter()
-    await executeMutation(
-      (a) => a.updateTaskContent(taskId, content),
-      adapter,
-      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
-    )
+    return runTaskMutation(get, (a) => a.updateTaskContent(taskId, content))
   },
 
   updateTaskFields: async (taskId, input, availableGoals) => {
-    const adapter = getWorkspaceMutationAdapter()
     const linkedGoalLabel = input.linkedGoalLabel ?? (
       input.linkedGoalId && availableGoals
         ? availableGoals.find((g) => g.id === input.linkedGoalId)?.title
         : undefined
     )
-    await executeMutation(
+    return runTaskMutation(
+      get,
       (a) => a.updateTaskFields(taskId, {
         title: input.title,
         plannedStartAt: input.plannedStartAt,
@@ -146,71 +97,33 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
         linkedGoalId: input.linkedGoalId,
         linkedGoalLabel,
         showInTimeline: input.showInTimeline,
-        systemReminderId: input.systemReminderId,
+        ...(input.systemReminderId !== undefined ? { systemReminderId: input.systemReminderId } : {}),
       }),
-      adapter,
-      { onSuccess: ({ task }) => { if (task) get().replaceTask(task) } },
     )
   },
 
   linkTaskToReminder: async (taskId: string, reminderId: string) => {
-    const adapter = getWorkspaceMutationAdapter()
     const task = get().tasks.find((t) => t.id === taskId)
-    if (!task) return
-    try {
-      const { task: updatedTask } = await adapter.updateTaskFields(taskId, {
+    if (!task) return null
+    return runTaskMutation(
+      get,
+      (a) => a.updateTaskFields(taskId, {
         title: task.title,
         systemReminderId: reminderId,
-      })
-      if (updatedTask) {
-        get().replaceTask(updatedTask)
-      }
-    } catch (error) {
-      console.error('Failed to link task to reminder:', error)
-    }
+      }),
+    )
   },
 
   unlinkTaskFromReminder: async (taskId: string) => {
-    const adapter = getWorkspaceMutationAdapter()
     const task = get().tasks.find((t) => t.id === taskId)
-    if (!task) return
-    try {
-      const { task: updatedTask } = await adapter.updateTaskFields(taskId, {
+    if (!task) return null
+    return runTaskMutation(
+      get,
+      (a) => a.updateTaskFields(taskId, {
         title: task.title,
-        systemReminderId: undefined,
-      })
-      if (updatedTask) {
-        get().replaceTask(updatedTask)
-      }
-    } catch (error) {
-      console.error('Failed to unlink task from reminder:', error)
-    }
-  },
-
-  createAndLinkReminder: async (taskId: string, title: string, dueAt?: Date) => {
-    const adapter = getWorkspaceMutationAdapter()
-    try {
-      if (getRuntimeAdapter().isTauri()) {
-        const reminder = await adapter.createSystemReminder(title, dueAt)
-        if (reminder && taskId) {
-          await get().linkTaskToReminder(taskId, reminder.id)
-        }
-        if (reminder) {
-          useEventkitStore.getState().addSystemReminder(reminder)
-        }
-        return reminder?.id ?? ''
-      }
-
-      const mockReminderId = `mock-reminder-${Date.now()}`
-      const mockReminder = { id: mockReminderId, title, dueAt, done: false }
-      useEventkitStore.getState().addSystemReminder(mockReminder)
-      if (taskId) {
-        await get().linkTaskToReminder(taskId, mockReminderId)
-      }
-      return mockReminderId
-    } catch (error) {
-      return ''
-    }
+        systemReminderId: null,
+      }),
+    )
   },
 
   softDeleteTask: async (taskId: string) => {
@@ -226,15 +139,17 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
 
   restoreTask: async (taskId: string) => {
     const adapter = getWorkspaceMutationAdapter()
-    try {
-      const result = await adapter.restoreTask(taskId)
-      if (result.task) {
-        set({ tasks: [...get().tasks, result.task] })
-      }
-      await get().loadDeletedTasks()
-    } catch (error) {
-      console.error('Failed to restore task:', error)
-    }
+    const result = await executeMutation(
+      (a) => a.restoreTask(taskId),
+      adapter,
+      {
+        onSuccess: async ({ task }) => {
+          if (task) get().replaceTask(task)
+          await get().loadDeletedTasks()
+        },
+      },
+    )
+    return result?.task ?? null
   },
 
   loadDeletedTasks: async () => {

@@ -1,12 +1,10 @@
 import { create } from 'zustand'
 import { getEventKitAdapter } from '../lib/workspaceMutations'
+import { mergeById, type RawEventKitData } from '../lib/eventkitData'
 import type { AccessStatus, IntegrationStatus, ReminderItem } from '../types/app'
 
 export interface EventkitStoreState {
-  rawEventKit: {
-    calendarEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
-    reminders: Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
-  }
+  rawEventKit: RawEventKitData
   systemReminders: ReminderItem[]
   integrationStatus: IntegrationStatus
 
@@ -16,25 +14,14 @@ export interface EventkitStoreState {
   }
 
   hydrateEventkitData: (data: {
-    rawEventKit?: {
-      calendarEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
-      reminders: Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
-    }
+    rawEventKit?: RawEventKitData
     systemReminders: ReminderItem[]
     integrationStatus: IntegrationStatus
   }) => void
-  addSystemReminder: (reminder: ReminderItem) => void
-  toggleSystemReminderDone: (reminderId: string, done: boolean) => Promise<ReminderItem | null>
+  mergeEventkitRangeData: (data: RawEventKitData) => void
   requestCalendarAccess: () => Promise<void>
   requestRemindersAccess: () => Promise<void>
   refreshEventkitData: () => Promise<void>
-}
-
-function createDateRange() {
-  const today = new Date()
-  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
-  return { startOfDay, endOfDay }
 }
 
 type PendingMap = Map<'calendar' | 'reminders', Promise<AccessStatus>>
@@ -66,41 +53,44 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
     })
   },
 
-  addSystemReminder: (reminder) => {
+  mergeEventkitRangeData: (data) => {
     set((state) => ({
-      systemReminders: [...state.systemReminders, reminder],
+      rawEventKit: {
+        calendarEvents: mergeById(state.rawEventKit.calendarEvents, data.calendarEvents),
+        reminders: mergeById(state.rawEventKit.reminders, data.reminders),
+      },
+      systemReminders: mergeById(
+        state.systemReminders,
+        data.reminders.map((reminder) => ({
+          id: reminder.id,
+          title: reminder.title,
+          dueAt: reminder.dueAt ? new Date(reminder.dueAt) : undefined,
+          done: reminder.done,
+          listTitle: reminder.listTitle,
+        })),
+      ),
     }))
   },
 
-  toggleSystemReminderDone: async (reminderId, done) => {
-    try {
-      const adapter = getEventKitAdapter()
-      const updatedReminder = await adapter.setSystemReminderCompleted(reminderId, done)
-      set((state) => ({
-        systemReminders: state.systemReminders.map((reminder) =>
-          reminder.id === reminderId ? updatedReminder : reminder,
-        ),
-      }))
-      return updatedReminder
-    } catch (error) {
-      return null
-    }
-  },
-
   requestCalendarAccess: async () => {
-    if (pendingRequests.has('calendar')) return
+    if (pendingRequests.has('calendar')) {
+      await pendingRequests.get('calendar')
+      return
+    }
 
     const adapter = getEventKitAdapter()
     const promise = adapter.requestCalendarAccess()
       .then((status) => {
         set((s) => ({
           eventkitPermissions: { ...s.eventkitPermissions, calendar: status },
+          integrationStatus: { ...s.integrationStatus, calendar: status },
         }))
         return status
       })
       .catch(() => {
         set((s) => ({
           eventkitPermissions: { ...s.eventkitPermissions, calendar: 'error' as AccessStatus },
+          integrationStatus: { ...s.integrationStatus, calendar: 'error' as AccessStatus },
         }))
         return 'error' as AccessStatus
       })
@@ -113,19 +103,24 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
   },
 
   requestRemindersAccess: async () => {
-    if (pendingRequests.has('reminders')) return
+    if (pendingRequests.has('reminders')) {
+      await pendingRequests.get('reminders')
+      return
+    }
 
     const adapter = getEventKitAdapter()
     const promise = adapter.requestRemindersAccess()
       .then((status) => {
         set((s) => ({
           eventkitPermissions: { ...s.eventkitPermissions, reminders: status },
+          integrationStatus: { ...s.integrationStatus, reminders: status },
         }))
         return status
       })
       .catch(() => {
         set((s) => ({
           eventkitPermissions: { ...s.eventkitPermissions, reminders: 'error' as AccessStatus },
+          integrationStatus: { ...s.integrationStatus, reminders: 'error' as AccessStatus },
         }))
         return 'error' as AccessStatus
       })
@@ -139,39 +134,41 @@ export const useEventkitStore = create<EventkitStoreState>((set, get) => ({
 
   refreshEventkitData: async () => {
     const state = get()
+    const hasGrantedPermission =
+      state.eventkitPermissions.calendar === 'granted' ||
+      state.eventkitPermissions.reminders === 'granted'
+    const hasSyncedDeniedSnapshot =
+      state.eventkitPermissions.calendar === 'denied' &&
+      state.eventkitPermissions.reminders === 'denied' &&
+      state.integrationStatus.calendar === 'denied' &&
+      state.integrationStatus.reminders === 'denied'
 
-    if (state.eventkitPermissions.calendar !== 'granted' && state.eventkitPermissions.reminders !== 'granted') {
+    if (!hasGrantedPermission && !hasSyncedDeniedSnapshot) {
       return
     }
 
     try {
-      const adapter = getEventKitAdapter()
-      const newRawEventKit = { ...state.rawEventKit }
-
-      if (state.eventkitPermissions.calendar === 'granted') {
-        const { startOfDay, endOfDay } = createDateRange()
-        const events = await adapter.fetchCalendarEvents(startOfDay, endOfDay)
-        newRawEventKit.calendarEvents = events.map(e => ({
-          id: e.id,
-          title: e.title,
-          startsAt: e.startsAt.toISOString(),
-          endsAt: e.endsAt.toISOString(),
-          calendarTitle: e.calendarTitle,
-        }))
+      const snapshot = await getEventKitAdapter().loadRawEventKitData()
+      const nextPermissions = {
+        calendar: snapshot.integrationStatus.calendar,
+        reminders: snapshot.integrationStatus.reminders,
       }
 
-      if (state.eventkitPermissions.reminders === 'granted') {
-        const reminders = await adapter.fetchReminders()
-        newRawEventKit.reminders = reminders.map(r => ({
-          id: r.id,
-          title: r.title,
-          dueAt: r.dueAt?.toISOString(),
-          done: r.done,
-          listTitle: r.listTitle,
-        }))
-      }
-
-      set({ rawEventKit: newRawEventKit })
+      set((s) => ({
+        rawEventKit: {
+          calendarEvents: nextPermissions.calendar === 'granted'
+            ? snapshot.calendarEvents
+            : s.rawEventKit.calendarEvents,
+          reminders: nextPermissions.reminders === 'granted'
+            ? snapshot.reminders
+            : s.rawEventKit.reminders,
+        },
+        systemReminders: nextPermissions.reminders === 'granted'
+          ? snapshot.systemReminders
+          : s.systemReminders,
+        integrationStatus: snapshot.integrationStatus,
+        eventkitPermissions: nextPermissions,
+      }))
     } catch (error) {
       // error handled by caller
     }

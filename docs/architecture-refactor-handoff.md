@@ -92,7 +92,7 @@ src/store/
     ├── selectedCalendarEventId
     ├── isReminderDrawerOpen
     ├── isCalendarEventDrawerOpen
-    └── actions: requestCalendarAccess, setSystemReminderCompleted, etc.
+    └── actions: requestCalendarAccess, requestRemindersAccess, refreshEventkitData
 ```
 
 **关键依赖关系：**

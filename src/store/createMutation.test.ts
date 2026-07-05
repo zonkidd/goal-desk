@@ -48,7 +48,6 @@ describe('createMutation', () => {
       createArea: vi.fn().mockResolvedValue({ area: { id: 'a1', title: 'Work', goalCount: 0, activeGoalCount: 0, isSystem: false } as AreaWithStats, statusMessage: 'ok' }),
       renameArea: vi.fn().mockResolvedValue({ area: { id: 'a1', title: 'Renamed', goalCount: 0, activeGoalCount: 0, isSystem: false } as AreaWithStats, statusMessage: 'ok' }),
       deleteArea: vi.fn().mockResolvedValue({ success: true, message: 'deleted', statusMessage: 'ok' }),
-      createSystemReminder: vi.fn().mockResolvedValue({ id: 'reminder-id', title: 'Test', done: false }),
       loadGoals: vi.fn().mockResolvedValue([mockGoal]),
       softDeleteTask: vi.fn().mockResolvedValue(undefined),
       restoreTask: vi.fn().mockResolvedValue({ task: mockTask, statusMessage: 'restored' }),

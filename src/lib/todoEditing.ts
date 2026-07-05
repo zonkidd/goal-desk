@@ -22,6 +22,7 @@ export interface TodoEditingDraft {
 export interface TodoEditingSession {
   draft: TodoEditingDraft
   capabilities: {
+    canEditFields: boolean
     canChangeStatus: boolean
     statusActions: TaskStatus[]
   }
@@ -85,16 +86,16 @@ interface CreateTodoEditingSessionInput {
     taskId: string,
     input: {
       title: string
-      plannedStartAt?: Date
-      dueDate?: Date
+      plannedStartAt?: Date | null
+      dueDate?: Date | null
       linkedGoalId?: string
       linkedGoalLabel?: string
       showInTimeline?: boolean
-      systemReminderId?: string
+      systemReminderId?: string | null
     },
-  ) => Promise<void>
-  updateTaskContent: (taskId: string, content: string) => Promise<void>
-  updateTaskStatus: (taskId: string, next: TaskStatus, note?: string) => Promise<void>
+  ) => Promise<Task | null>
+  updateTaskContent: (taskId: string, content: string) => Promise<Task | null>
+  updateTaskStatus: (taskId: string, next: TaskStatus, note?: string) => Promise<Task | null>
   createGoal: (
     input: { title: string; area?: string; description?: string },
     options?: { openGoalWorkspace?: boolean },
@@ -105,18 +106,37 @@ export function createTodoEditingSession(input: CreateTodoEditingSessionInput): 
   const { task, goals, allAreas, createArea, activeArea, defaultGoalArea = '独立开发' } = input
   const baseDraft = buildDraft(task, goals, allAreas, activeArea, defaultGoalArea, input.draft)
   const statusActions = getTaskStatusActions(task.status)
+  const canEditFields = task.status !== 'DONE'
 
   const updateDraft = (patch: Partial<TodoEditingDraft>, sourceDraft = baseDraft): TodoEditingDraft => {
+    if (!canEditFields) return sourceDraft
     const nextDraft = { ...sourceDraft, ...patch }
     return {
       ...nextDraft,
       linkedGoalLabel: resolveLinkedGoalLabel(goals, nextDraft.linkedGoalIdDraft),
     }
   }
+  const buildTaskFieldsInput = (
+    nextDraft: TodoEditingDraft,
+    overrides: { linkedGoalId?: string; linkedGoalLabel?: string; systemReminderId?: string | null } = {},
+  ) => ({
+    title: nextDraft.title.trim(),
+    plannedStartAt: buildDatePatch(nextDraft.plannedStartAtDraft, task.plannedStartAt),
+    dueDate: buildDatePatch(nextDraft.dueDateDraft, task.dueDate),
+    linkedGoalId: overrides.linkedGoalId ?? (
+      nextDraft.linkedGoalIdDraft !== (task.linkedGoalId || '')
+        ? nextDraft.linkedGoalIdDraft
+        : undefined
+    ),
+    linkedGoalLabel: overrides.linkedGoalLabel ?? resolveLinkedGoalLabel(goals, nextDraft.linkedGoalIdDraft),
+    showInTimeline: nextDraft.showInTimelineDraft,
+    ...(overrides.systemReminderId !== undefined ? { systemReminderId: overrides.systemReminderId } : {}),
+  })
 
   return {
     draft: baseDraft,
     capabilities: {
+      canEditFields,
       canChangeStatus: statusActions.length > 0,
       statusActions,
     },
@@ -134,51 +154,35 @@ export function createTodoEditingSession(input: CreateTodoEditingSessionInput): 
       setNewGoalTitle: (value, sourceDraft) => updateDraft({ newGoalTitle: value }, sourceDraft),
       setNewGoalArea: (value, sourceDraft) => updateDraft({ newGoalArea: value }, sourceDraft),
       saveFields: async (nextDraft = baseDraft) => {
-        await input.updateTaskFields(task.id, {
-          title: nextDraft.title.trim(),
-          plannedStartAt: parseDateDraft(nextDraft.plannedStartAtDraft),
-          dueDate: parseDateDraft(nextDraft.dueDateDraft),
-          linkedGoalId: nextDraft.linkedGoalIdDraft !== (task.linkedGoalId || '')
-            ? nextDraft.linkedGoalIdDraft
-            : undefined,
-          linkedGoalLabel: resolveLinkedGoalLabel(goals, nextDraft.linkedGoalIdDraft),
-          showInTimeline: nextDraft.showInTimelineDraft,
-          systemReminderId: task.systemReminderId,
-        })
+        if (!canEditFields) return
+        await input.updateTaskFields(task.id, buildTaskFieldsInput(nextDraft))
       },
       linkGoal: async (goalId) => {
+        if (!canEditFields) return baseDraft
         const nextDraft = updateDraft({
           linkedGoalIdDraft: goalId,
           activeEditor: 'none',
         })
-        await input.updateTaskFields(task.id, {
-          title: nextDraft.title.trim(),
-          plannedStartAt: parseDateDraft(nextDraft.plannedStartAtDraft),
-          dueDate: parseDateDraft(nextDraft.dueDateDraft),
+        await input.updateTaskFields(task.id, buildTaskFieldsInput(nextDraft, {
           linkedGoalId: goalId,
           linkedGoalLabel: resolveLinkedGoalLabel(goals, goalId),
-          showInTimeline: nextDraft.showInTimelineDraft,
-          systemReminderId: task.systemReminderId,
-        })
+        }))
         return nextDraft
       },
       unlinkGoal: async () => {
+        if (!canEditFields) return baseDraft
         const nextDraft = updateDraft({
           linkedGoalIdDraft: '',
           activeEditor: 'none',
         })
-        await input.updateTaskFields(task.id, {
-          title: nextDraft.title.trim(),
-          plannedStartAt: parseDateDraft(nextDraft.plannedStartAtDraft),
-          dueDate: parseDateDraft(nextDraft.dueDateDraft),
+        await input.updateTaskFields(task.id, buildTaskFieldsInput(nextDraft, {
           linkedGoalId: '',
           linkedGoalLabel: '',
-          showInTimeline: nextDraft.showInTimelineDraft,
-          systemReminderId: task.systemReminderId,
-        })
+        }))
         return nextDraft
       },
       createAndLinkGoal: async (nextDraft = baseDraft) => {
+        if (!canEditFields) return { goalId: undefined, draft: nextDraft }
         const result = await input.createGoal(
           { title: nextDraft.newGoalTitle, area: nextDraft.newGoalArea },
           { openGoalWorkspace: false },
@@ -201,21 +205,20 @@ export function createTodoEditingSession(input: CreateTodoEditingSessionInput): 
         )
 
         await input.updateTaskFields(task.id, {
-          title: linkedDraft.title.trim(),
-          plannedStartAt: parseDateDraft(linkedDraft.plannedStartAtDraft),
-          dueDate: parseDateDraft(linkedDraft.dueDateDraft),
-          linkedGoalId: goalId,
-          linkedGoalLabel: resolveLinkedGoalLabel(goals, goalId),
-          showInTimeline: linkedDraft.showInTimelineDraft,
-          systemReminderId: task.systemReminderId,
+          ...buildTaskFieldsInput(linkedDraft, {
+            linkedGoalId: goalId,
+            linkedGoalLabel: result.goal.title ?? resolveLinkedGoalLabel(goals, goalId),
+          }),
         })
 
         return { goalId, draft: linkedDraft }
       },
       submitStatus: async (next, note) => {
+        if (!statusActions.includes(next)) return
         await input.updateTaskStatus(task.id, next, note)
       },
       saveContentIfChanged: async (nextDraft = baseDraft) => {
+        if (!canEditFields) return
         if (nextDraft.content === task.content) return
         await input.updateTaskContent(task.id, nextDraft.content)
       },
@@ -249,7 +252,7 @@ export function useTodoEditingSession(
 
   useEffect(() => {
     setDraft(sessionSeed?.draft)
-  }, [sessionSeed?.draft])
+  }, [task?.id])
 
   const session = useMemo(() => {
     if (!task || !draft) return undefined
@@ -395,6 +398,11 @@ function parseDateDraft(value: string) {
   if (!value) return undefined
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? undefined : date
+}
+
+function buildDatePatch(draftValue: string, currentValue?: Date) {
+  if (!draftValue) return currentValue ? null : undefined
+  return parseDateDraft(draftValue)
 }
 
 function toDatetimeLocal(date: Date) {

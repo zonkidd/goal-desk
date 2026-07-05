@@ -5,12 +5,13 @@ import { DayPicker } from 'react-day-picker'
 import { zhCN } from 'date-fns/locale'
 import { GlassPanel } from '../common/GlassPanel'
 import { useUiStore } from '../../store/uiStore'
-import { useWorkspaceDerived } from '../../hooks/useWorkspaceDerived'
-import { useEventkitStore } from '../../store/eventkitStore'
 import { useTaskStore } from '../../store/taskStore'
+import { useCalendarBoardEventKitRange } from '../../hooks/useEventKitRange'
 import type { TimelineItem } from '../../types/app'
-import { groupByDate, computeRangeTimeline } from '../../lib/workspaceDerivation'
+import { groupByDate } from '../../lib/workspaceDerivation'
 import { formatDateKey } from '../../lib/calendarUtils'
+import { endOfDay } from '../../lib/dateUtils'
+import { computeImportedRangeTimeline } from '../../lib/agendaTimeline'
 
 type ViewMode = 'week' | 'day'
 
@@ -88,9 +89,6 @@ export function CalendarView() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [hideCompleted, setHideCompleted] = useState(false)
 
-  const { today: { timeline: todayTimeline } } = useWorkspaceDerived()
-  const rawCalendarEvents = useEventkitStore((s) => s.rawEventKit.calendarEvents)
-  const rawReminders = useEventkitStore((s) => s.rawEventKit.reminders)
   const tasks = useTaskStore((s) => s.tasks)
   const openDrawer = useUiStore((state) => state.openDrawer)
 
@@ -101,21 +99,27 @@ export function CalendarView() {
     return end
   }, [weekStart])
 
+  const { calendarEvents, reminders } = useCalendarBoardEventKitRange(weekStart, weekEnd)
+
   const weekTimeline = useMemo(() => {
-    const allRawItems = computeRangeTimeline(
-      [...rawCalendarEvents.map(e => ({
-        id: e.id, title: e.title, timeLabel: '', source: 'calendar' as const,
-        readonly: true, done: false, sourceLabel: e.calendarTitle, startsAt: new Date(e.startsAt),
-      })), ...rawReminders.filter(r => r.dueAt).map(r => ({
-        id: r.id, title: r.title, timeLabel: '', source: 'reminder' as const,
-        readonly: false, done: r.done, sourceLabel: r.listTitle, startsAt: new Date(r.dueAt!),
-      }))],
+    return computeImportedRangeTimeline({
+      calendarEvents,
+      reminders,
       tasks,
-      weekStart,
-      weekEnd,
-    )
-    return allRawItems
-  }, [rawCalendarEvents, rawReminders, tasks, weekStart, weekEnd])
+      rangeStart: weekStart,
+      rangeEnd: weekEnd,
+    })
+  }, [calendarEvents, reminders, tasks, weekStart, weekEnd])
+
+  const selectedDateTimeline = useMemo(() => {
+    return computeImportedRangeTimeline({
+      calendarEvents,
+      reminders,
+      tasks,
+      rangeStart: selectedDate,
+      rangeEnd: endOfDay(selectedDate),
+    })
+  }, [calendarEvents, reminders, tasks, selectedDate])
 
   const weekDays = getWeekDays(weekStart)
 
@@ -217,6 +221,7 @@ export function CalendarView() {
             <DayView
               selectedDate={selectedDate}
               onDateSelect={setSelectedDate}
+              timeline={selectedDateTimeline}
               hideCompleted={hideCompleted}
               onEventClick={handleEventClick}
             />
@@ -401,16 +406,17 @@ function WeekEventCard({
 function DayView({
   selectedDate,
   onDateSelect,
+  timeline,
   hideCompleted,
   onEventClick,
 }: {
   selectedDate: Date
   onDateSelect: (date: Date) => void
+  timeline: TimelineItem[]
   hideCompleted: boolean
   onEventClick: (event: TimelineItem) => void
 }) {
-  const { today: { timeline: todayTimeline } } = useWorkspaceDerived()
-  const timelineByDate = groupByDate([...todayTimeline])
+  const timelineByDate = groupByDate([...timeline])
 
   // 获取选中日期的事件
   const selectedDateKey = formatDateKey(selectedDate)

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Local};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int};
+use std::os::raw::c_char;
 use tauri::{AppHandle, Runtime};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,12 +75,6 @@ pub trait SystemAgendaAdapter {
         start: DateTime<Local>,
         end: DateTime<Local>,
     ) -> Result<CalendarRangeData, String>;
-    fn create_reminder(
-        &self,
-        title: &str,
-        due_at: Option<DateTime<Local>>,
-    ) -> Result<SystemReminder, String>;
-    fn set_reminder_completed(&self, id: &str, done: bool) -> Result<SystemReminder, String>;
 }
 
 pub struct EventKitService<A> {
@@ -109,18 +103,6 @@ where
         end: DateTime<Local>,
     ) -> Result<CalendarRangeData, String> {
         self.adapter.load_range(start, end)
-    }
-
-    pub fn create_reminder(
-        &self,
-        title: &str,
-        due_at: Option<DateTime<Local>>,
-    ) -> Result<SystemReminder, String> {
-        self.adapter.create_reminder(title, due_at)
-    }
-
-    pub fn set_reminder_completed(&self, id: &str, done: bool) -> Result<SystemReminder, String> {
-        self.adapter.set_reminder_completed(id, done)
     }
 }
 
@@ -171,42 +153,6 @@ pub fn load_calendar_range<R: Runtime>(
 }
 
 #[cfg(target_os = "macos")]
-pub fn set_system_reminder_completed<R: Runtime>(
-    app: &AppHandle<R>,
-    id: &str,
-    done: bool,
-) -> Result<SystemReminder, String> {
-    EventKitService::new(MacEventKitAdapter::new(app)?).set_reminder_completed(id, done)
-}
-
-#[cfg(target_os = "macos")]
-pub fn create_system_reminder<R: Runtime>(
-    app: &AppHandle<R>,
-    title: &str,
-    due_at: Option<DateTime<Local>>,
-) -> Result<SystemReminder, String> {
-    EventKitService::new(MacEventKitAdapter::new(app)?).create_reminder(title, due_at)
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn set_system_reminder_completed<R: Runtime>(
-    _app: &AppHandle<R>,
-    _id: &str,
-    _done: bool,
-) -> Result<SystemReminder, String> {
-    Err("EventKit is only available on macOS".to_string())
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn create_system_reminder<R: Runtime>(
-    _app: &AppHandle<R>,
-    _title: &str,
-    _due_at: Option<DateTime<Local>>,
-) -> Result<SystemReminder, String> {
-    Err("EventKit is only available on macOS".to_string())
-}
-
-#[cfg(target_os = "macos")]
 #[repr(C)]
 struct NativeEventKitResult {
     json: *mut c_char,
@@ -215,7 +161,10 @@ struct NativeEventKitResult {
 
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
-    fn gd_eventkit_snapshot(start_iso: *const c_char, end_iso: *const c_char) -> NativeEventKitResult;
+    fn gd_eventkit_snapshot(
+        start_iso: *const c_char,
+        end_iso: *const c_char,
+    ) -> NativeEventKitResult;
     fn gd_eventkit_request_calendar_access_async(
         context: *mut std::ffi::c_void,
         callback: unsafe extern "C" fn(*mut std::ffi::c_void, *const c_char),
@@ -224,8 +173,6 @@ unsafe extern "C" {
         context: *mut std::ffi::c_void,
         callback: unsafe extern "C" fn(*mut std::ffi::c_void, *const c_char),
     );
-    fn gd_eventkit_create_reminder(title: *const c_char, due_at_iso: *const c_char) -> NativeEventKitResult;
-    fn gd_eventkit_set_reminder_completed(identifier: *const c_char, done: c_int) -> NativeEventKitResult;
     fn gd_eventkit_free_string(string: *mut c_char);
 }
 
@@ -267,13 +214,9 @@ impl MacEventKitAdapter {
         }
 
         let payload = json.ok_or_else(|| "EventKit bridge returned no payload".to_string())?;
-        eprintln!("🔍 [EventKit] Raw payload from native: {:?}", payload);
-        let result: T = serde_json::from_str(&payload)
-            .map_err(|error| {
-                eprintln!("❌ [EventKit] Deserialization failed: {:?}", error);
-                format!("Unable to decode EventKit bridge response: {error}; payload={payload}")
-            })?;
-        eprintln!("✅ [EventKit] Successfully deserialized");
+        let result: T = serde_json::from_str(&payload).map_err(|error| {
+            format!("Unable to decode EventKit bridge response: {error}; payload={payload}")
+        })?;
         Ok(result)
     }
 }
@@ -287,7 +230,9 @@ impl SystemAgendaAdapter for MacEventKitAdapter {
     ) -> Result<SystemAgendaSnapshot, String> {
         let start_iso = CString::new(start.to_rfc3339()).map_err(|error| error.to_string())?;
         let end_iso = CString::new(end.to_rfc3339()).map_err(|error| error.to_string())?;
-        Self::read_native_result(unsafe { gd_eventkit_snapshot(start_iso.as_ptr(), end_iso.as_ptr()) })
+        Self::read_native_result(unsafe {
+            gd_eventkit_snapshot(start_iso.as_ptr(), end_iso.as_ptr())
+        })
     }
 
     fn load_range(
@@ -297,35 +242,12 @@ impl SystemAgendaAdapter for MacEventKitAdapter {
     ) -> Result<CalendarRangeData, String> {
         let start_iso = CString::new(start.to_rfc3339()).map_err(|error| error.to_string())?;
         let end_iso = CString::new(end.to_rfc3339()).map_err(|error| error.to_string())?;
-        Self::read_native_result(unsafe { gd_eventkit_snapshot(start_iso.as_ptr(), end_iso.as_ptr()) })
-            .map(|snapshot: SystemAgendaSnapshot| CalendarRangeData {
-                events: snapshot.calendar_events,
-                reminders: snapshot.reminders,
-            })
-    }
-
-    fn create_reminder(
-        &self,
-        title: &str,
-        due_at: Option<DateTime<Local>>,
-    ) -> Result<SystemReminder, String> {
-        let title = CString::new(title).map_err(|error| error.to_string())?;
-        let due_at = due_at
-            .map(|value| CString::new(value.to_rfc3339()).map_err(|error| error.to_string()))
-            .transpose()?;
-
         Self::read_native_result(unsafe {
-            gd_eventkit_create_reminder(
-                title.as_ptr(),
-                due_at.as_ref().map(|value| value.as_ptr()).unwrap_or(std::ptr::null()),
-            )
+            gd_eventkit_snapshot(start_iso.as_ptr(), end_iso.as_ptr())
         })
-    }
-
-    fn set_reminder_completed(&self, id: &str, done: bool) -> Result<SystemReminder, String> {
-        let id = CString::new(id).map_err(|error| error.to_string())?;
-        Self::read_native_result(unsafe {
-            gd_eventkit_set_reminder_completed(id.as_ptr(), if done { 1 } else { 0 })
+        .map(|snapshot: SystemAgendaSnapshot| CalendarRangeData {
+            events: snapshot.calendar_events,
+            reminders: snapshot.reminders,
         })
     }
 }
@@ -333,14 +255,13 @@ impl SystemAgendaAdapter for MacEventKitAdapter {
 #[cfg(test)]
 mod tests {
     use super::{
-        AccessStatus, EventKitService, IntegrationStatus, SystemAgendaAdapter, SystemAgendaSnapshot,
-        SystemReminder,
+        AccessStatus, EventKitService, IntegrationStatus, SystemAgendaAdapter,
+        SystemAgendaSnapshot, SystemReminder,
     };
     use chrono::{Local, TimeZone};
 
     struct FakeAdapter {
         snapshot: Option<SystemAgendaSnapshot>,
-        reminder: Option<SystemReminder>,
         fail_with: Option<String>,
     }
 
@@ -368,7 +289,8 @@ mod tests {
                 return Err(error.clone());
             }
 
-            let snapshot = self.snapshot
+            let snapshot = self
+                .snapshot
                 .clone()
                 .ok_or_else(|| "missing snapshot".to_string())?;
 
@@ -376,30 +298,6 @@ mod tests {
                 events: snapshot.calendar_events,
                 reminders: snapshot.reminders,
             })
-        }
-
-        fn create_reminder(
-            &self,
-            _title: &str,
-            _due_at: Option<chrono::DateTime<Local>>,
-        ) -> Result<SystemReminder, String> {
-            if let Some(error) = &self.fail_with {
-                return Err(error.clone());
-            }
-
-            self.reminder
-                .clone()
-                .ok_or_else(|| "missing reminder".to_string())
-        }
-
-        fn set_reminder_completed(&self, _id: &str, _done: bool) -> Result<SystemReminder, String> {
-            if let Some(error) = &self.fail_with {
-                return Err(error.clone());
-            }
-
-            self.reminder
-                .clone()
-                .ok_or_else(|| "missing reminder".to_string())
         }
     }
 
@@ -420,7 +318,6 @@ mod tests {
                     list_title: Some("Work".to_string()),
                 }],
             }),
-            reminder: None,
             fail_with: None,
         });
 
@@ -447,7 +344,6 @@ mod tests {
                 calendar_events: Vec::new(),
                 reminders: Vec::new(),
             }),
-            reminder: None,
             fail_with: None,
         });
 
@@ -464,35 +360,9 @@ mod tests {
     }
 
     #[test]
-    fn eventkit_service_creates_reminder_from_adapter() {
-        let service = EventKitService::new(FakeAdapter {
-            snapshot: None,
-            reminder: Some(SystemReminder {
-                id: "reminder-2".to_string(),
-                title: "Create reminder bridge".to_string(),
-                due_at: Some(Local.with_ymd_and_hms(2026, 6, 10, 18, 0, 0).unwrap()),
-                done: false,
-                list_title: Some("Reminders".to_string()),
-            }),
-            fail_with: None,
-        });
-
-        let reminder = service
-            .create_reminder(
-                "Create reminder bridge",
-                Some(Local.with_ymd_and_hms(2026, 6, 10, 18, 0, 0).unwrap()),
-            )
-            .unwrap();
-
-        assert_eq!(reminder.title, "Create reminder bridge");
-        assert!(!reminder.done);
-    }
-
-    #[test]
     fn eventkit_service_propagates_adapter_failures() {
         let service = EventKitService::new(FakeAdapter {
             snapshot: None,
-            reminder: None,
             fail_with: Some("permission request failed".to_string()),
         });
 
@@ -538,7 +408,6 @@ mod tests {
                     list_title: Some("Tasks".to_string()),
                 }],
             }),
-            reminder: None,
             fail_with: None,
         });
 
@@ -560,7 +429,6 @@ mod tests {
     fn eventkit_service_load_range_propagates_errors() {
         let service = EventKitService::new(FakeAdapter {
             snapshot: None,
-            reminder: None,
             fail_with: Some("Network timeout".to_string()),
         });
 
@@ -612,7 +480,9 @@ pub async fn request_calendar_access_async() -> Result<AccessStatus, String> {
     let tx_boxed = Box::into_raw(Box::new(tx));
 
     unsafe extern "C" fn callback(context: *mut std::ffi::c_void, status_ptr: *const c_char) {
-        let tx = Box::from_raw(context as *mut tokio::sync::oneshot::Sender<Result<AccessStatus, String>>);
+        let tx = Box::from_raw(
+            context as *mut tokio::sync::oneshot::Sender<Result<AccessStatus, String>>,
+        );
         let status_str = if status_ptr.is_null() {
             "error".to_string()
         } else {
@@ -634,7 +504,8 @@ pub async fn request_calendar_access_async() -> Result<AccessStatus, String> {
         gd_eventkit_request_calendar_access_async(tx_boxed as *mut std::ffi::c_void, callback);
     }
 
-    rx.await.map_err(|e| format!("Permission channel closed: {}", e))?
+    rx.await
+        .map_err(|e| format!("Permission channel closed: {}", e))?
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -649,7 +520,9 @@ pub async fn request_reminders_access_async() -> Result<AccessStatus, String> {
     let tx_boxed = Box::into_raw(Box::new(tx));
 
     unsafe extern "C" fn callback(context: *mut std::ffi::c_void, status_ptr: *const c_char) {
-        let tx = Box::from_raw(context as *mut tokio::sync::oneshot::Sender<Result<AccessStatus, String>>);
+        let tx = Box::from_raw(
+            context as *mut tokio::sync::oneshot::Sender<Result<AccessStatus, String>>,
+        );
         let status_str = if status_ptr.is_null() {
             "error".to_string()
         } else {
@@ -671,7 +544,8 @@ pub async fn request_reminders_access_async() -> Result<AccessStatus, String> {
         gd_eventkit_request_reminders_access_async(tx_boxed as *mut std::ffi::c_void, callback);
     }
 
-    rx.await.map_err(|e| format!("Permission channel closed: {}", e))?
+    rx.await
+        .map_err(|e| format!("Permission channel closed: {}", e))?
 }
 
 #[cfg(not(target_os = "macos"))]

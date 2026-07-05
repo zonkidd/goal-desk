@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { computeSnapshot, type AtomicState } from './WorkspaceEngine'
+import * as workspaceDerivation from './workspaceDerivation'
 import type { GoalCard, RawAgendaItem } from '../types/app'
 import type { Task } from '../types/task'
 
@@ -16,6 +17,10 @@ function createMockAtomicState(overrides: Partial<AtomicState> = {}): AtomicStat
 }
 
 describe('computeSnapshot (pure function)', () => {
+  it('keeps workspace snapshot computation out of low-level derivation exports', () => {
+    expect('deriveWorkspaceState' in workspaceDerivation).toBe(false)
+  })
+
   it('returns empty snapshot for empty state', () => {
     const snapshot = computeSnapshot(createMockAtomicState())
     expect(snapshot.goals).toEqual([])
@@ -61,6 +66,45 @@ describe('computeSnapshot (pure function)', () => {
     expect(snapshot.inbox.activeTasks).toHaveLength(1)
     expect(snapshot.inbox.pausedTasks).toHaveLength(1)
     expect(snapshot.inbox.completed.totalCount).toBe(1)
+  })
+
+  it('shows a linked system Reminder through its Todo context instead of as a standalone Reminder', () => {
+    const now = new Date('2026-06-20T10:00:00')
+    const linkedReminderDueAt = new Date('2026-06-20T11:00:00')
+    const tasks: Task[] = [{
+      id: 'todo-1',
+      title: 'Follow up from Reminder',
+      content: '',
+      status: 'TODO',
+      showInTimeline: false,
+      systemReminderId: 'reminder-1',
+      activityLogs: [],
+    }]
+    const baseTimeline: RawAgendaItem[] = [{
+      id: 'reminder-1',
+      title: 'Follow up from Reminder',
+      timeLabel: '11:00',
+      source: 'reminder',
+      readonly: true,
+      done: false,
+      startsAt: linkedReminderDueAt,
+    }]
+
+    const snapshot = computeSnapshot(createMockAtomicState({
+      now,
+      tasks,
+      baseTimeline,
+      systemReminders: [{
+        id: 'reminder-1',
+        title: 'Follow up from Reminder',
+        dueAt: linkedReminderDueAt,
+        done: false,
+      }],
+    }))
+
+    expect(snapshot.today.timeline.some((item) => item.source === 'reminder' && item.id === 'reminder-1')).toBe(false)
+    expect(snapshot.today.attentionGroups.systemReminders).toHaveLength(0)
+    expect(snapshot.today.attentionGroups.ongoing.map((task) => task.id)).toContain('todo-1')
   })
 
   it('includes meta information', () => {

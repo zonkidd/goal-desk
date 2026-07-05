@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { CalendarView } from './CalendarView'
 import { useUiStore } from '../../store/uiStore'
 import { useTaskStore } from '../../store/taskStore'
+import { useEventkitStore } from '../../store/eventkitStore'
 
 vi.mock('../../store/uiStore', () => ({
   useUiStore: vi.fn()
@@ -20,13 +21,15 @@ vi.mock('../../store/goalStore', () => ({
 }))
 
 vi.mock('../../store/eventkitStore', () => ({
-  useEventkitStore: vi.fn((selector?: any) => {
-    const state = {
-      rawEventKit: { calendarEvents: [], reminders: [] },
-      systemReminders: [],
-    }
-    return selector ? selector(state) : state
-  })
+  useEventkitStore: vi.fn()
+}))
+
+const mockEventKitAdapter = vi.hoisted(() => ({
+  loadCalendarRange: vi.fn().mockResolvedValue({ events: [], reminders: [] }),
+}))
+
+vi.mock('../../lib/workspaceMutations', () => ({
+  getEventKitAdapter: () => mockEventKitAdapter,
 }))
 
 vi.mock('../../hooks/useWorkspaceDerived', () => ({
@@ -72,6 +75,8 @@ describe('CalendarView', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 5, 16, 12, 0, 0))
+    mockEventKitAdapter.loadCalendarRange.mockResolvedValue({ events: [], reminders: [] })
+    mockEventKitAdapter.loadCalendarRange.mockClear()
 
     ;(useUiStore as any).mockImplementation((selector: any) => {
       const mockState = {
@@ -87,6 +92,15 @@ describe('CalendarView', () => {
         tasks: [],
       }
       return selector(mockState)
+    })
+
+    ;(useEventkitStore as any).mockImplementation((selector: any) => {
+      const mockState = {
+        rawEventKit: { calendarEvents: [], reminders: [] },
+        mergeEventkitRangeData: vi.fn(),
+        systemReminders: [],
+      }
+      return selector ? selector(mockState) : mockState
     })
   })
 
@@ -120,6 +134,12 @@ describe('CalendarView', () => {
     expect(screen.getByText('日视图')).toBeInTheDocument()
   })
 
+  it('应该加载当前周前后一周的 EventKit 范围数据', async () => {
+    render(<CalendarView />)
+
+    expect(mockEventKitAdapter.loadCalendarRange).toHaveBeenCalledWith('2026-06-08', '2026-06-28')
+  })
+
   it('应该显示隐藏已完成开关', () => {
     render(<CalendarView />)
     expect(screen.getByLabelText('隐藏已完成')).toBeInTheDocument()
@@ -130,5 +150,64 @@ describe('CalendarView', () => {
     const todayElement = screen.getByText('16')
     expect(todayElement).toHaveClass('bg-indigo-500')
     expect(todayElement).toHaveClass('text-white')
+  })
+
+  it('应该在日视图显示选中日期的未来日历事件', () => {
+    ;(useEventkitStore as any).mockImplementation((selector: any) => {
+      const mockState = {
+        rawEventKit: {
+          calendarEvents: [
+            {
+              id: 'future-calendar-event',
+              title: 'Architecture review',
+              startsAt: '2026-06-20T09:30:00.000+08:00',
+              endsAt: '2026-06-20T10:30:00.000+08:00',
+              calendarTitle: 'Work',
+            },
+          ],
+          reminders: [],
+        },
+        mergeEventkitRangeData: vi.fn(),
+        systemReminders: [],
+      }
+      return selector ? selector(mockState) : mockState
+    })
+
+    render(<CalendarView />)
+
+    fireEvent.click(screen.getByRole('button', { name: '日视图' }))
+    fireEvent.click(screen.getByText('20'))
+
+    expect(screen.getByText('Architecture review')).toBeInTheDocument()
+    expect(screen.getByText('09:30 · Work')).toBeInTheDocument()
+  })
+
+  it('应该在日视图默认显示今天的日历事件', () => {
+    ;(useEventkitStore as any).mockImplementation((selector: any) => {
+      const mockState = {
+        rawEventKit: {
+          calendarEvents: [
+            {
+              id: 'today-calendar-event',
+              title: 'Morning planning',
+              startsAt: '2026-06-16T09:30:00.000+08:00',
+              endsAt: '2026-06-16T10:00:00.000+08:00',
+              calendarTitle: 'Work',
+            },
+          ],
+          reminders: [],
+        },
+        mergeEventkitRangeData: vi.fn(),
+        systemReminders: [],
+      }
+      return selector ? selector(mockState) : mockState
+    })
+
+    render(<CalendarView />)
+
+    fireEvent.click(screen.getByRole('button', { name: '日视图' }))
+
+    expect(screen.getByText('Morning planning')).toBeInTheDocument()
+    expect(screen.getByText('09:30 · Work')).toBeInTheDocument()
   })
 })

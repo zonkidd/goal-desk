@@ -28,6 +28,7 @@ export interface RustTask {
     note: string | null
     timestamp: string
   }>
+  deletedAt?: string | null
 }
 
 export interface RustGoalCard {
@@ -61,6 +62,7 @@ export class TaskCodec {
       linkedGoalLabel: rust.linkedGoalLabel ?? undefined,
       bearNoteId: rust.bearNoteId ?? undefined,
       systemReminderId: rust.systemReminderId ?? undefined,
+      deletedAt: rust.deletedAt ? new Date(rust.deletedAt) : undefined,
       activityLogs: rust.activityLogs.map(log => ({
         action: log.action as Task['activityLogs'][0]['action'],
         note: log.note ?? undefined,

@@ -1,4 +1,4 @@
-import type { AreaWithStats, GoalCard, GoalStatus, ReminderItem } from '../types/app'
+import type { AreaWithStats, GoalCard, GoalStatus } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
 
 export interface TaskResult {
@@ -33,15 +33,14 @@ export interface TaskMutation {
     taskId: string,
     input: {
       title: string
-      plannedStartAt?: Date
-      dueDate?: Date
+      plannedStartAt?: Date | null
+      dueDate?: Date | null
       linkedGoalId?: string
       linkedGoalLabel?: string
       showInTimeline?: boolean
-      systemReminderId?: string
+      systemReminderId?: string | null
     },
   ): Promise<TaskResult>
-  createSystemReminder(title: string, dueAt?: Date): Promise<ReminderItem>
   softDeleteTask(taskId: string): Promise<void>
   restoreTask(taskId: string): Promise<TaskResult>
   listDeletedTasks(): Promise<Task[]>

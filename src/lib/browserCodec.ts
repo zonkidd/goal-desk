@@ -18,7 +18,7 @@ export function loadBrowserTasks(): Task[] {
     if (!data) return []
     const tasks: Task[] = JSON.parse(data)
     for (const task of tasks) {
-      deserializeDates(task as any, ['plannedStartAt', 'dueDate', 'createdAt', 'updatedAt'])
+      deserializeDates(task as any, ['plannedStartAt', 'dueDate', 'createdAt', 'updatedAt', 'deletedAt'])
       if (task.activityLogs) {
         for (const log of task.activityLogs) {
           deserializeDates(log as any, ['timestamp'])

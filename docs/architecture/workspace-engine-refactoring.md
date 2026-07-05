@@ -136,11 +136,11 @@ export function useDerivedStateSync() {
 }
 ```
 
-### 3. 标记 `workspaceDerivation.ts` 中的遗留函数
+### 3. 移除 `workspaceDerivation.ts` 中的遗留快照函数
 
 **变化**：
 - 10+ 个纯函数保持不变（被 `WorkspaceEngine` 内部调用）
-- 标记 `deriveWorkspaceState()` 为 `@deprecated`，引导使用 `WorkspaceEngine.computeSnapshot()`
+- 删除 `deriveWorkspaceState()`，工作区快照只通过 `WorkspaceEngine.computeSnapshot()` 计算
 
 ### 4. 创建测试套件
 

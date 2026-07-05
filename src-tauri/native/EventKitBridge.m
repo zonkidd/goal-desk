@@ -56,12 +56,12 @@ static NSString *GDFormatDate(NSDate *date) {
     return date ? [GDISOFormatter() stringFromDate:date] : nil;
 }
 
-static NSString *GDResolvedCalendarStatus(EKEventStore *store) {
+static NSString *GDResolvedCalendarStatus(void) {
     EKAuthorizationStatus status = [EKEventStore authorizationStatusForEntityType:EKEntityTypeEvent];
     return GDResultStatus(status);
 }
 
-static NSString *GDResolvedReminderStatus(EKEventStore *store) {
+static NSString *GDResolvedReminderStatus(void) {
     EKAuthorizationStatus status = [EKEventStore authorizationStatusForEntityType:EKEntityTypeReminder];
     return GDResultStatus(status);
 }
@@ -82,20 +82,6 @@ static NSDictionary *GDReminderPayload(EKReminder *reminder) {
         @"done": @(reminder.isCompleted),
         @"list_title": reminder.calendar.title ?: [NSNull null],
     };
-}
-
-static NSDateComponents *GDDateComponents(NSDate *date) {
-    NSCalendar *calendar = [NSCalendar currentCalendar];
-    NSDateComponents *components = [calendar componentsInTimeZone:calendar.timeZone fromDate:date];
-    NSDateComponents *result = [[NSDateComponents alloc] init];
-    result.calendar = calendar;
-    result.timeZone = calendar.timeZone;
-    result.year = components.year;
-    result.month = components.month;
-    result.day = components.day;
-    result.hour = components.hour;
-    result.minute = components.minute;
-    return result;
 }
 
 static char *GDDupNSString(NSString *value) {
@@ -193,8 +179,8 @@ GDEventKitResult gd_eventkit_snapshot(const char *start_iso, const char *end_iso
         }
 
         EKEventStore *store = [[EKEventStore alloc] init];
-        NSString *calendarStatus = GDResolvedCalendarStatus(store);
-        NSString *reminderStatus = GDResolvedReminderStatus(store);
+        NSString *calendarStatus = GDResolvedCalendarStatus();
+        NSString *reminderStatus = GDResolvedReminderStatus();
 
         NSMutableArray *calendarEvents = [NSMutableArray array];
         if ([calendarStatus isEqualToString:@"granted"]) {
@@ -258,80 +244,6 @@ GDEventKitResult gd_eventkit_snapshot(const char *start_iso, const char *end_iso
         };
 
         return GDJSONResult(payload, nil);
-    }
-}
-
-GDEventKitResult gd_eventkit_create_reminder(const char *title, const char *due_at_iso) {
-    @autoreleasepool {
-        NSString *reminderTitle = title ? [NSString stringWithUTF8String:title] : nil;
-        if (reminderTitle == nil || reminderTitle.length == 0) {
-            return GDJSONResult(nil, GDMakeError(@"Reminder title cannot be empty"));
-        }
-
-        EKEventStore *store = [[EKEventStore alloc] init];
-        NSString *reminderStatus = GDResolvedReminderStatus(store);
-        if (![reminderStatus isEqualToString:@"granted"]) {
-            return GDJSONResult(nil, GDMakeError(@"Reminder access is not granted"));
-        }
-
-        EKCalendar *calendar = [store defaultCalendarForNewReminders];
-        if (calendar == nil) {
-            return GDJSONResult(nil, GDMakeError(@"No default reminders list is available"));
-        }
-
-        EKReminder *reminder = [EKReminder reminderWithEventStore:store];
-        reminder.calendar = calendar;
-        reminder.title = reminderTitle;
-
-        if (due_at_iso != NULL) {
-            NSString *dueAtISO = [NSString stringWithUTF8String:due_at_iso];
-            NSDate *dueDate = GDParseDate(dueAtISO);
-            if (dueDate == nil) {
-                return GDJSONResult(nil, GDMakeError(@"Invalid reminder due date"));
-            }
-            reminder.dueDateComponents = GDDateComponents(dueDate);
-        }
-
-        NSError *saveError = nil;
-        BOOL saved = [store saveReminder:reminder commit:YES error:&saveError];
-        if (!saved) {
-            NSString *message = saveError.localizedDescription ?: @"Unable to create reminder";
-            return GDJSONResult(nil, GDMakeError(message));
-        }
-
-        return GDJSONResult(GDReminderPayload(reminder), nil);
-    }
-}
-
-GDEventKitResult gd_eventkit_set_reminder_completed(const char *identifier, int done) {
-    @autoreleasepool {
-        NSString *reminderIdentifier = identifier ? [NSString stringWithUTF8String:identifier] : nil;
-        if (reminderIdentifier == nil || reminderIdentifier.length == 0) {
-            return GDJSONResult(nil, GDMakeError(@"Reminder identifier cannot be empty"));
-        }
-
-        EKEventStore *store = [[EKEventStore alloc] init];
-        NSString *reminderStatus = GDResolvedReminderStatus(store);
-        if (![reminderStatus isEqualToString:@"granted"]) {
-            return GDJSONResult(nil, GDMakeError(@"Reminder access is not granted"));
-        }
-
-        EKReminder *reminder = (EKReminder *)[store calendarItemWithIdentifier:reminderIdentifier];
-        if (![reminder isKindOfClass:[EKReminder class]]) {
-            return GDJSONResult(nil, GDMakeError([NSString stringWithFormat:@"Reminder not found: %@", reminderIdentifier]));
-        }
-
-        reminder.completed = (done != 0);
-        reminder.completionDate = done ? [NSDate date] : nil;
-
-        NSError *saveError = nil;
-        BOOL saved = [store saveReminder:reminder commit:YES error:&saveError];
-        if (!saved) {
-            NSString *message = saveError.localizedDescription ?: @"Unable to save reminder";
-            return GDJSONResult(nil, GDMakeError(message));
-        }
-
-        return GDJSONResult(GDReminderPayload(reminder), nil);
     }
 }
 

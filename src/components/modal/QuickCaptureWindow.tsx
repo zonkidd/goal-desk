@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { hideCurrentWindow } from '../../lib/runtime'
 import { getWorkspaceMutationAdapter } from '../../lib/workspaceMutations'
-import { QuickCaptureForm, type CreationMode } from './QuickCaptureForm'
+import { runQuickCapture } from '../../lib/quickCaptureFlow'
+import { QuickCaptureForm } from './QuickCaptureForm'
 
 export function QuickCaptureWindow() {
   const [value, setValue] = useState('')
@@ -15,24 +16,22 @@ export function QuickCaptureWindow() {
     }
   }
 
-  async function handleSubmit(mode: CreationMode) {
+  async function handleSubmit() {
     const trimmed = value.trim()
     if (!trimmed) return
 
     try {
       const adapter = getWorkspaceMutationAdapter()
+      const result = await runQuickCapture({
+        input: trimmed,
+        port: {
+          createTask: async (input) => {
+            return (await adapter.createTask(input)).task
+          },
+        },
+      })
 
-      if (mode === 'local') {
-        await adapter.createTask(trimmed)
-        setStatus('已保存到本地收集箱')
-      } else if (mode === 'reminder') {
-        await adapter.createSystemReminder(trimmed)
-        setStatus('已创建系统提醒')
-      } else if (mode === 'both') {
-        await adapter.createTask(trimmed)
-        setStatus('已保存到本地收集箱并创建系统提醒')
-      }
-
+      setStatus(result.statusMessage)
       setValue('')
       await closeWindow()
     } catch (error) {

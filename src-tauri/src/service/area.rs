@@ -17,9 +17,11 @@ impl AreaService {
             return Err("Area title cannot be empty".to_string());
         }
 
-
         let existing = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;
-        if existing.iter().any(|a| a.title.to_lowercase() == trimmed.to_lowercase()) {
+        if existing
+            .iter()
+            .any(|a| a.title.to_lowercase() == trimmed.to_lowercase())
+        {
             return Err(format!("Area '{}' already exists", trimmed));
         }
 
@@ -40,9 +42,11 @@ impl AreaService {
 
         let uuid = Uuid::parse_str(area_id).map_err(|e| e.to_string())?;
 
-
         let existing = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;
-        if existing.iter().any(|a| a.id != uuid && a.title.to_lowercase() == trimmed.to_lowercase()) {
+        if existing
+            .iter()
+            .any(|a| a.id != uuid && a.title.to_lowercase() == trimmed.to_lowercase())
+        {
             return Err(format!("Area '{}' already exists", trimmed));
         }
 
@@ -55,13 +59,8 @@ impl AreaService {
         Ok(area)
     }
 
-    pub fn delete_area(
-        &self,
-        area_id: &str,
-        force: bool,
-    ) -> Result<DeleteAreaResult, String> {
+    pub fn delete_area(&self, area_id: &str, force: bool) -> Result<DeleteAreaResult, String> {
         let uuid = Uuid::parse_str(area_id).map_err(|e| e.to_string())?;
-
 
         let area = AreaRepository::find(&self.repo, uuid)
             .map_err(|e| e.to_string())?
@@ -76,8 +75,8 @@ impl AreaService {
             });
         }
 
-        let affected_goals = GoalRepository::list_by_area(&self.repo, uuid)
-            .map_err(|e| e.to_string())?;
+        let affected_goals =
+            GoalRepository::list_by_area(&self.repo, uuid).map_err(|e| e.to_string())?;
         let affected_goal_count = affected_goals.len();
 
         if affected_goal_count > 0 && !force {
@@ -115,7 +114,6 @@ impl AreaService {
     }
 
     pub fn list_areas_with_stats(&self) -> Result<Vec<crate::domain::AreaWithStats>, String> {
-
         let areas = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;
         let goals = GoalRepository::list(&self.repo).map_err(|e| e.to_string())?;
 
@@ -129,7 +127,9 @@ impl AreaService {
                 let goal_count = goals_in_area.len();
                 let active_goal_count = goals_in_area
                     .iter()
-                    .filter(|g| g.status == GoalStatus::Active)
+                    .filter(|g| {
+                        g.status == GoalStatus::Active || g.status == GoalStatus::ReadyToComplete
+                    })
                     .count();
                 crate::domain::AreaWithStats {
                     id: area.id,
@@ -146,13 +146,13 @@ impl AreaService {
     }
 }
 
-pub fn find_or_create_area(
-    repo: &SqliteRepository,
-    area_title: &str,
-) -> Result<Uuid, String> {
+pub fn find_or_create_area(repo: &SqliteRepository, area_title: &str) -> Result<Uuid, String> {
     repo.initialize().map_err(|e| e.to_string())?;
     let areas = AreaRepository::list(repo).map_err(|e| e.to_string())?;
-    if let Some(existing) = areas.iter().find(|a| a.title.to_lowercase() == area_title.to_lowercase()) {
+    if let Some(existing) = areas
+        .iter()
+        .find(|a| a.title.to_lowercase() == area_title.to_lowercase())
+    {
         return Ok(existing.id);
     }
     let area = Area {

@@ -1,6 +1,6 @@
 use crate::domain::{
-    Area, DeskTask, Goal, GoalStatus, Project, Reminder, TaskActivityAction,
-    TaskActivityLog, TaskStatus, WorkspaceSnapshot, UNCATEGORIZED_AREA_ID,
+    Area, DeskTask, Goal, GoalStatus, Project, Reminder, TaskActivityAction, TaskActivityLog,
+    TaskStatus, WorkspaceSnapshot, UNCATEGORIZED_AREA_ID,
 };
 use chrono::{DateTime, Local};
 use rusqlite::{params, Connection};
@@ -84,10 +84,14 @@ impl SqliteRepository {
     }
 
     fn conn(&self) -> Result<MutexGuard<'_, Option<Connection>>, RepositoryError> {
-        self.conn.lock().map_err(|e| RepositoryError::Data(e.to_string()))
+        self.conn
+            .lock()
+            .map_err(|e| RepositoryError::Data(e.to_string()))
     }
 
-    fn get_connection(&self) -> Result<std::sync::MutexGuard<'_, Option<Connection>>, RepositoryError> {
+    fn get_connection(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, Option<Connection>>, RepositoryError> {
         let mut guard = self.conn()?;
         if guard.is_none() {
             let connection = Connection::open(&self.path)?;
@@ -98,7 +102,9 @@ impl SqliteRepository {
 
     /// Returns a reference to the cached connection, opening it if needed.
     /// Prefer this over Connection::open() in new code.
-    pub fn cached_connection(&self) -> Result<std::sync::MutexGuard<'_, Option<Connection>>, RepositoryError> {
+    pub fn cached_connection(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, Option<Connection>>, RepositoryError> {
         self.get_connection()
     }
 
@@ -167,7 +173,12 @@ impl SqliteRepository {
         Self::ensure_column_exists(conn, "goals", "status", "TEXT NOT NULL DEFAULT 'ACTIVE'")?;
         Self::ensure_column_exists(conn, "desk_tasks", "bear_note_id", "TEXT NULL")?;
         Self::ensure_column_exists(conn, "desk_tasks", "system_reminder_id", "TEXT NULL")?;
-        Self::ensure_column_exists(conn, "desk_tasks", "show_in_timeline", "INTEGER NOT NULL DEFAULT 0")?;
+        Self::ensure_column_exists(
+            conn,
+            "desk_tasks",
+            "show_in_timeline",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
         Self::ensure_column_exists(conn, "desk_tasks", "planned_start_at", "TEXT NULL")?;
         Self::ensure_column_exists(conn, "desk_tasks", "deleted_at", "TEXT NULL")?;
         Self::ensure_column_exists(conn, "goals", "deleted_at", "TEXT NULL")?;
@@ -291,7 +302,8 @@ impl SqliteRepository {
         };
 
         let projects = {
-            let mut statement = connection.prepare("SELECT id, area_id, goal_id, title FROM projects ORDER BY title")?;
+            let mut statement = connection
+                .prepare("SELECT id, area_id, goal_id, title FROM projects ORDER BY title")?;
             let mut rows = statement.query([])?;
             let mut items = Vec::new();
             while let Some(row) = rows.next()? {
@@ -306,7 +318,8 @@ impl SqliteRepository {
         };
 
         let reminders = {
-            let mut statement = connection.prepare("SELECT id, title, due_at, done FROM reminders ORDER BY due_at")?;
+            let mut statement = connection
+                .prepare("SELECT id, title, due_at, done FROM reminders ORDER BY due_at")?;
             let mut rows = statement.query([])?;
             let mut items = Vec::new();
             while let Some(row) = rows.next()? {
@@ -399,7 +412,8 @@ impl SqliteRepository {
             }
         }
 
-        let alter = format!("ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}");
+        let alter =
+            format!("ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}");
         connection.execute(&alter, [])?;
         Ok(())
     }
@@ -460,7 +474,9 @@ fn parse_task_status(value: String) -> Result<TaskStatus, RepositoryError> {
         "IN_PROGRESS" => Ok(TaskStatus::InProgress),
         "PAUSED" => Ok(TaskStatus::Paused),
         "DONE" => Ok(TaskStatus::Done),
-        _ => Err(RepositoryError::Data(format!("unsupported task status: {value}"))),
+        _ => Err(RepositoryError::Data(format!(
+            "unsupported task status: {value}"
+        ))),
     }
 }
 
@@ -485,7 +501,9 @@ fn parse_goal_status(value: String) -> Result<GoalStatus, RepositoryError> {
         "READY_TO_COMPLETE" => Ok(GoalStatus::ReadyToComplete),
         "COMPLETED" => Ok(GoalStatus::Completed),
         "ARCHIVED" => Ok(GoalStatus::Archived),
-        _ => Err(RepositoryError::Data(format!("unsupported goal status: {value}"))),
+        _ => Err(RepositoryError::Data(format!(
+            "unsupported goal status: {value}"
+        ))),
     }
 }
 
@@ -493,7 +511,9 @@ fn parse_datetime(value: String) -> Result<DateTime<Local>, RepositoryError> {
     Ok(DateTime::parse_from_rfc3339(&value)?.with_timezone(&Local))
 }
 
-fn parse_optional_datetime(value: Option<String>) -> Result<Option<DateTime<Local>>, RepositoryError> {
+fn parse_optional_datetime(
+    value: Option<String>,
+) -> Result<Option<DateTime<Local>>, RepositoryError> {
     match value {
         Some(inner) => Ok(Some(parse_datetime(inner)?)),
         None => Ok(None),
@@ -663,10 +683,7 @@ impl GoalRepository for SqliteRepository {
     fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
         let guard = self.cached_connection()?;
         let connection = guard.as_ref().unwrap();
-        connection.execute(
-            "DELETE FROM goals WHERE id = ?1",
-            params![id.to_string()],
-        )?;
+        connection.execute("DELETE FROM goals WHERE id = ?1", params![id.to_string()])?;
         Ok(())
     }
 
@@ -730,6 +747,102 @@ pub trait TaskRepository {
     fn list_deleted(&self) -> Result<Vec<DeskTask>, RepositoryError>;
 }
 
+struct TaskAggregateWriter<'transaction, 'connection> {
+    transaction: &'transaction rusqlite::Transaction<'connection>,
+}
+
+impl<'transaction, 'connection> TaskAggregateWriter<'transaction, 'connection> {
+    fn new(transaction: &'transaction rusqlite::Transaction<'connection>) -> Self {
+        Self { transaction }
+    }
+
+    fn insert(&self, task: &DeskTask) -> Result<(), RepositoryError> {
+        self.insert_task_row(task)?;
+        self.insert_activity_logs(task)?;
+        Ok(())
+    }
+
+    fn replace(&self, task: &DeskTask) -> Result<(), RepositoryError> {
+        let updated_rows = self.update_task_row(task)?;
+        if updated_rows == 0 {
+            return Err(RepositoryError::Data(format!(
+                "task not found: {}",
+                task.id
+            )));
+        }
+
+        self.delete_activity_logs(task.id)?;
+        self.insert_activity_logs(task)?;
+        Ok(())
+    }
+
+    fn insert_task_row(&self, task: &DeskTask) -> Result<(), RepositoryError> {
+        self.transaction.execute(
+            "INSERT INTO desk_tasks (id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                task.id.to_string(),
+                &task.title,
+                &task.content,
+                task_status_as_str(task.status),
+                option_datetime(task.planned_start_at),
+                option_datetime(task.due_at),
+                option_uuid(task.linked_goal_id),
+                task.linked_goal_label.as_deref(),
+                task.bear_note_id.as_deref(),
+                task.system_reminder_id.as_deref(),
+                task.show_in_timeline as i64,
+                option_datetime(task.deleted_at),
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn update_task_row(&self, task: &DeskTask) -> Result<usize, RepositoryError> {
+        let updated_rows = self.transaction.execute(
+            "UPDATE desk_tasks SET title = ?1, content = ?2, status = ?3, planned_start_at = ?4, due_at = ?5, linked_goal_id = ?6, linked_goal_label = ?7, bear_note_id = ?8, system_reminder_id = ?9, show_in_timeline = ?10, deleted_at = ?12 WHERE id = ?11",
+            params![
+                &task.title,
+                &task.content,
+                task_status_as_str(task.status),
+                option_datetime(task.planned_start_at),
+                option_datetime(task.due_at),
+                option_uuid(task.linked_goal_id),
+                task.linked_goal_label.as_deref(),
+                task.bear_note_id.as_deref(),
+                task.system_reminder_id.as_deref(),
+                task.show_in_timeline as i64,
+                task.id.to_string(),
+                option_datetime(task.deleted_at),
+            ],
+        )?;
+        Ok(updated_rows)
+    }
+
+    fn delete_activity_logs(&self, task_id: Uuid) -> Result<(), RepositoryError> {
+        self.transaction.execute(
+            "DELETE FROM desk_task_activity_logs WHERE task_id = ?1",
+            params![task_id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn insert_activity_logs(&self, task: &DeskTask) -> Result<(), RepositoryError> {
+        for log in &task.activity_logs {
+            self.transaction.execute(
+                "INSERT INTO desk_task_activity_logs (id, task_id, action, note, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    log.id.to_string(),
+                    task.id.to_string(),
+                    task_activity_action_as_str(log.action),
+                    log.note.as_deref(),
+                    log.timestamp.to_rfc3339()
+                ],
+            )?;
+        }
+        Ok(())
+    }
+}
+
 impl TaskRepository for SqliteRepository {
     fn find(&self, id: Uuid) -> Result<Option<DeskTask>, RepositoryError> {
         let guard = self.cached_connection()?;
@@ -770,38 +883,7 @@ impl TaskRepository for SqliteRepository {
         let mut guard = self.cached_connection()?;
         let connection = guard.as_mut().unwrap();
         let transaction = connection.transaction()?;
-
-        transaction.execute(
-            "INSERT INTO desk_tasks (id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-            params![
-                task.id.to_string(),
-                &task.title,
-                &task.content,
-                task_status_as_str(task.status),
-                option_datetime(task.planned_start_at),
-                option_datetime(task.due_at),
-                option_uuid(task.linked_goal_id),
-                task.linked_goal_label.as_deref(),
-                task.bear_note_id.as_deref(),
-                task.system_reminder_id.as_deref(),
-                task.show_in_timeline as i64,
-                option_datetime(task.deleted_at),
-            ],
-        )?;
-
-        for log in &task.activity_logs {
-            transaction.execute(
-                "INSERT INTO desk_task_activity_logs (id, task_id, action, note, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![
-                    log.id.to_string(),
-                    task.id.to_string(),
-                    task_activity_action_as_str(log.action),
-                    log.note.as_deref(),
-                    log.timestamp.to_rfc3339()
-                ],
-            )?;
-        }
-
+        TaskAggregateWriter::new(&transaction).insert(task)?;
         transaction.commit()?;
         Ok(())
     }
@@ -810,45 +892,7 @@ impl TaskRepository for SqliteRepository {
         let mut guard = self.cached_connection()?;
         let connection = guard.as_mut().unwrap();
         let transaction = connection.transaction()?;
-
-        transaction.execute(
-            "UPDATE desk_tasks SET title = ?1, content = ?2, status = ?3, planned_start_at = ?4, due_at = ?5, linked_goal_id = ?6, linked_goal_label = ?7, bear_note_id = ?8, system_reminder_id = ?9, show_in_timeline = ?10, deleted_at = ?12 WHERE id = ?11",
-            params![
-                &task.title,
-                &task.content,
-                task_status_as_str(task.status),
-                option_datetime(task.planned_start_at),
-                option_datetime(task.due_at),
-                option_uuid(task.linked_goal_id),
-                task.linked_goal_label.as_deref(),
-                task.bear_note_id.as_deref(),
-                task.system_reminder_id.as_deref(),
-                task.show_in_timeline as i64,
-                task.id.to_string(),
-                option_datetime(task.deleted_at),
-            ],
-        )?;
-
-        // 删除旧的 activity logs
-        transaction.execute(
-            "DELETE FROM desk_task_activity_logs WHERE task_id = ?1",
-            params![task.id.to_string()],
-        )?;
-
-        // 插入新的 activity logs
-        for log in &task.activity_logs {
-            transaction.execute(
-                "INSERT INTO desk_task_activity_logs (id, task_id, action, note, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![
-                    log.id.to_string(),
-                    task.id.to_string(),
-                    task_activity_action_as_str(log.action),
-                    log.note.as_deref(),
-                    log.timestamp.to_rfc3339()
-                ],
-            )?;
-        }
-
+        TaskAggregateWriter::new(&transaction).replace(task)?;
         transaction.commit()?;
         Ok(())
     }
@@ -934,7 +978,13 @@ impl AreaRepository for SqliteRepository {
                 let title: String = row.get(1)?;
                 let id_str: String = row.get(0)?;
                 Ok(Area {
-                    id: Uuid::parse_str(&id_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+                    id: Uuid::parse_str(&id_str).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            0,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })?,
                     title: title.clone(),
                     is_system: title == "未分类",
                 })
@@ -990,10 +1040,7 @@ impl AreaRepository for SqliteRepository {
     fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
         let guard = self.cached_connection()?;
         let connection = guard.as_ref().unwrap();
-        connection.execute(
-            "DELETE FROM areas WHERE id = ?1",
-            params![id.to_string()],
-        )?;
+        connection.execute("DELETE FROM areas WHERE id = ?1", params![id.to_string()])?;
         Ok(())
     }
 }
@@ -1002,59 +1049,108 @@ impl AreaRepository for SqliteRepository {
 // Task loading helpers — eliminates duplication across list/find/filter methods
 // ============================================================================
 
-fn load_all_activity_logs(connection: &Connection) -> Result<HashMap<String, Vec<TaskActivityLog>>, RepositoryError> {
+fn load_activity_logs_for_tasks(
+    connection: &Connection,
+    task_ids: &[String],
+) -> Result<HashMap<String, Vec<TaskActivityLog>>, RepositoryError> {
     let mut logs_by_task_id: HashMap<String, Vec<TaskActivityLog>> = HashMap::new();
-    let mut statement = connection.prepare(
-        "SELECT id, task_id, action, note, timestamp FROM desk_task_activity_logs ORDER BY timestamp DESC",
-    )?;
-    let mut rows = statement.query([])?;
+    if task_ids.is_empty() {
+        return Ok(logs_by_task_id);
+    }
 
-    while let Some(row) = rows.next()? {
-        let log_id: String = row.get(0)?;
-        let task_id: String = row.get(1)?;
-        let log = TaskActivityLog {
-            id: parse_uuid(log_id)?,
-            action: parse_task_activity_action(row.get::<_, String>(2)?)?,
-            note: row.get(3)?,
-            timestamp: parse_datetime(row.get::<_, String>(4)?)?,
-        };
-        logs_by_task_id.entry(task_id).or_default().push(log);
+    for chunk in task_ids.chunks(900) {
+        let placeholders = std::iter::repeat("?")
+            .take(chunk.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "SELECT id, task_id, action, note, timestamp FROM desk_task_activity_logs WHERE task_id IN ({placeholders}) ORDER BY timestamp DESC"
+        );
+        let mut statement = connection.prepare(&sql)?;
+        let params = chunk
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect::<Vec<_>>();
+        let mut rows = statement.query(params.as_slice())?;
+
+        while let Some(row) = rows.next()? {
+            let log_id: String = row.get(0)?;
+            let task_id: String = row.get(1)?;
+            let log = TaskActivityLog {
+                id: parse_uuid(log_id)?,
+                action: parse_task_activity_action(row.get::<_, String>(2)?)?,
+                note: row.get(3)?,
+                timestamp: parse_datetime(row.get::<_, String>(4)?)?,
+            };
+            logs_by_task_id.entry(task_id).or_default().push(log);
+        }
     }
 
     Ok(logs_by_task_id)
 }
 
-fn row_to_task(
-    row: &rusqlite::Row,
-    logs_by_task_id: &mut HashMap<String, Vec<TaskActivityLog>>,
-) -> Result<DeskTask, RepositoryError> {
-    let id = row.get::<_, String>(0)?;
-    Ok(DeskTask {
-        id: parse_uuid(id.clone())?,
-        title: row.get(1)?,
-        content: row.get(2)?,
-        status: parse_task_status(row.get::<_, String>(3)?)?,
-        planned_start_at: parse_optional_datetime(row.get::<_, Option<String>>(4)?)?,
-        due_at: parse_optional_datetime(row.get::<_, Option<String>>(5)?)?,
-        linked_goal_id: parse_optional_uuid(row.get::<_, Option<String>>(6)?)?,
-        linked_goal_label: row.get(7)?,
-        bear_note_id: row.get(8)?,
-        system_reminder_id: row.get(9)?,
-        show_in_timeline: row.get::<_, i64>(10)? != 0,
-        activity_logs: logs_by_task_id.remove(&id).unwrap_or_default(),
-        deleted_at: parse_optional_datetime(row.get::<_, Option<String>>(11)?)?,
-    })
+const TASK_COLUMNS: &str = "id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline, deleted_at";
+
+struct TaskRow {
+    id: String,
+    title: String,
+    content: String,
+    status: String,
+    planned_start_at: Option<String>,
+    due_at: Option<String>,
+    linked_goal_id: Option<String>,
+    linked_goal_label: Option<String>,
+    bear_note_id: Option<String>,
+    system_reminder_id: Option<String>,
+    show_in_timeline: i64,
+    deleted_at: Option<String>,
 }
 
-const TASK_COLUMNS: &str = "id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline, deleted_at";
+impl TaskRow {
+    fn from_row(row: &rusqlite::Row) -> Result<Self, RepositoryError> {
+        Ok(Self {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            content: row.get(2)?,
+            status: row.get(3)?,
+            planned_start_at: row.get(4)?,
+            due_at: row.get(5)?,
+            linked_goal_id: row.get(6)?,
+            linked_goal_label: row.get(7)?,
+            bear_note_id: row.get(8)?,
+            system_reminder_id: row.get(9)?,
+            show_in_timeline: row.get(10)?,
+            deleted_at: row.get(11)?,
+        })
+    }
+
+    fn into_task(
+        self,
+        logs_by_task_id: &mut HashMap<String, Vec<TaskActivityLog>>,
+    ) -> Result<DeskTask, RepositoryError> {
+        Ok(DeskTask {
+            id: parse_uuid(self.id.clone())?,
+            title: self.title,
+            content: self.content,
+            status: parse_task_status(self.status)?,
+            planned_start_at: parse_optional_datetime(self.planned_start_at)?,
+            due_at: parse_optional_datetime(self.due_at)?,
+            linked_goal_id: parse_optional_uuid(self.linked_goal_id)?,
+            linked_goal_label: self.linked_goal_label,
+            bear_note_id: self.bear_note_id,
+            system_reminder_id: self.system_reminder_id,
+            show_in_timeline: self.show_in_timeline != 0,
+            activity_logs: logs_by_task_id.remove(&self.id).unwrap_or_default(),
+            deleted_at: parse_optional_datetime(self.deleted_at)?,
+        })
+    }
+}
 
 fn load_tasks_with_filter(
     connection: &Connection,
     where_clause: &str,
     params: &[&dyn rusqlite::types::ToSql],
 ) -> Result<Vec<DeskTask>, RepositoryError> {
-    let mut logs_by_task_id = load_all_activity_logs(connection)?;
-
     let sql = if where_clause.is_empty() {
         format!("SELECT {TASK_COLUMNS} FROM desk_tasks WHERE deleted_at IS NULL ORDER BY title")
     } else {
@@ -1063,13 +1159,22 @@ fn load_tasks_with_filter(
 
     let mut statement = connection.prepare(&sql)?;
     let mut rows = statement.query(params)?;
-    let mut tasks = Vec::new();
+    let mut task_rows = Vec::new();
 
     while let Some(row) = rows.next()? {
-        tasks.push(row_to_task(row, &mut logs_by_task_id)?);
+        task_rows.push(TaskRow::from_row(row)?);
     }
 
-    Ok(tasks)
+    let task_ids = task_rows
+        .iter()
+        .map(|task| task.id.clone())
+        .collect::<Vec<_>>();
+    let mut logs_by_task_id = load_activity_logs_for_tasks(connection, &task_ids)?;
+
+    task_rows
+        .into_iter()
+        .map(|task| task.into_task(&mut logs_by_task_id))
+        .collect()
 }
 
 #[cfg(test)]
@@ -1095,7 +1200,9 @@ mod tests {
         // 加载 workspace 验证"未分类" area 存在
         let snapshot = repo.load_workspace().unwrap();
 
-        let uncategorized = snapshot.areas.iter()
+        let uncategorized = snapshot
+            .areas
+            .iter()
             .find(|area| area.id.to_string() == UNCATEGORIZED_AREA_ID);
 
         assert!(uncategorized.is_some(), "未分类 area 应该存在");
@@ -1135,18 +1242,22 @@ mod tests {
         // 验证孤儿 goals 的 area_id 被更新为"未分类"
         let connection = Connection::open(repo.path()).unwrap();
 
-        let area_id_1: String = connection.query_row(
-            "SELECT area_id FROM goals WHERE id = ?1",
-            params![orphan_goal_id_1],
-            |row| row.get(0),
-        ).unwrap();
+        let area_id_1: String = connection
+            .query_row(
+                "SELECT area_id FROM goals WHERE id = ?1",
+                params![orphan_goal_id_1],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(area_id_1, UNCATEGORIZED_AREA_ID);
 
-        let area_id_2: String = connection.query_row(
-            "SELECT area_id FROM goals WHERE id = ?1",
-            params![orphan_goal_id_2],
-            |row| row.get(0),
-        ).unwrap();
+        let area_id_2: String = connection
+            .query_row(
+                "SELECT area_id FROM goals WHERE id = ?1",
+                params![orphan_goal_id_2],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(area_id_2, UNCATEGORIZED_AREA_ID);
     }
 
@@ -1157,7 +1268,9 @@ mod tests {
         // 第一次初始化
         repo.initialize().unwrap();
         let snapshot1 = repo.load_workspace().unwrap();
-        let uncategorized_count_1 = snapshot1.areas.iter()
+        let uncategorized_count_1 = snapshot1
+            .areas
+            .iter()
             .filter(|area| area.id.to_string() == UNCATEGORIZED_AREA_ID)
             .count();
 
@@ -1166,11 +1279,16 @@ mod tests {
         // 第二次初始化
         repo.initialize().unwrap();
         let snapshot2 = repo.load_workspace().unwrap();
-        let uncategorized_count_2 = snapshot2.areas.iter()
+        let uncategorized_count_2 = snapshot2
+            .areas
+            .iter()
             .filter(|area| area.id.to_string() == UNCATEGORIZED_AREA_ID)
             .count();
 
-        assert_eq!(uncategorized_count_2, 1, "重复初始化不应该创建重复的未分类 area");
+        assert_eq!(
+            uncategorized_count_2, 1,
+            "重复初始化不应该创建重复的未分类 area"
+        );
     }
 
     #[test]
@@ -1192,12 +1310,16 @@ mod tests {
         // 重新加载并验证
         let loaded_snapshot = repo.load_workspace().unwrap();
 
-        let uncategorized = loaded_snapshot.areas.iter()
+        let uncategorized = loaded_snapshot
+            .areas
+            .iter()
             .find(|area| area.title == "未分类")
             .expect("未分类 area 应该存在");
         assert!(uncategorized.is_system, "未分类 area 应该标记为系统 area");
 
-        let work_area = loaded_snapshot.areas.iter()
+        let work_area = loaded_snapshot
+            .areas
+            .iter()
             .find(|area| area.title == "工作")
             .expect("工作 area 应该存在");
         assert!(!work_area.is_system, "普通 area 不应该标记为系统 area");
@@ -1224,7 +1346,9 @@ mod tests {
         GoalRepository::create(&repo, &goal).unwrap();
 
         // Read - find
-        let found = GoalRepository::find(&repo, goal.id).unwrap().expect("Goal should exist");
+        let found = GoalRepository::find(&repo, goal.id)
+            .unwrap()
+            .expect("Goal should exist");
         assert_eq!(found.title, "Test Goal");
         assert_eq!(found.description, "Test Description");
         assert_eq!(found.status, GoalStatus::Active);
@@ -1235,13 +1359,18 @@ mod tests {
         updated.description = "Updated Description".to_string();
         GoalRepository::update(&repo, &updated).unwrap();
 
-        let found = GoalRepository::find(&repo, goal.id).unwrap().expect("Goal should exist");
+        let found = GoalRepository::find(&repo, goal.id)
+            .unwrap()
+            .expect("Goal should exist");
         assert_eq!(found.title, "Updated Goal");
         assert_eq!(found.description, "Updated Description");
 
         // Delete
         GoalRepository::delete(&repo, goal.id).unwrap();
-        assert!(GoalRepository::find(&repo, goal.id).unwrap().is_none(), "Goal should be deleted");
+        assert!(
+            GoalRepository::find(&repo, goal.id).unwrap().is_none(),
+            "Goal should be deleted"
+        );
     }
 
     #[test]
@@ -1340,10 +1469,15 @@ mod tests {
         // Update only status
         GoalRepository::update_status(&repo, goal.id, GoalStatus::Paused).unwrap();
 
-        let updated = GoalRepository::find(&repo, goal.id).unwrap().expect("Goal should exist");
+        let updated = GoalRepository::find(&repo, goal.id)
+            .unwrap()
+            .expect("Goal should exist");
         assert_eq!(updated.status, GoalStatus::Paused);
         assert_eq!(updated.title, "Test Goal", "Title should not change");
-        assert_eq!(updated.description, "Original Description", "Description should not change");
+        assert_eq!(
+            updated.description, "Original Description",
+            "Description should not change"
+        );
     }
 
     // ============================================================================
@@ -1381,7 +1515,9 @@ mod tests {
         TaskRepository::create(&repo, &task).unwrap();
 
         // Read
-        let found = TaskRepository::find(&repo, task.id).unwrap().expect("Task should exist");
+        let found = TaskRepository::find(&repo, task.id)
+            .unwrap()
+            .expect("Task should exist");
         assert_eq!(found.title, "Test Task");
         assert_eq!(found.content, "Test Content");
         assert_eq!(found.status, TaskStatus::Todo);
@@ -1393,13 +1529,18 @@ mod tests {
         updated.status = TaskStatus::InProgress;
         TaskRepository::update(&repo, &updated).unwrap();
 
-        let found = TaskRepository::find(&repo, task.id).unwrap().expect("Task should exist");
+        let found = TaskRepository::find(&repo, task.id)
+            .unwrap()
+            .expect("Task should exist");
         assert_eq!(found.title, "Updated Task");
         assert_eq!(found.status, TaskStatus::InProgress);
 
         // Delete
         TaskRepository::delete(&repo, task.id).unwrap();
-        assert!(TaskRepository::find(&repo, task.id).unwrap().is_none(), "Task should be deleted");
+        assert!(
+            TaskRepository::find(&repo, task.id).unwrap().is_none(),
+            "Task should be deleted"
+        );
     }
 
     #[test]
@@ -1547,10 +1688,15 @@ mod tests {
         // Update only status
         TaskRepository::update_status(&repo, task.id, TaskStatus::InProgress).unwrap();
 
-        let updated = TaskRepository::find(&repo, task.id).unwrap().expect("Task should exist");
+        let updated = TaskRepository::find(&repo, task.id)
+            .unwrap()
+            .expect("Task should exist");
         assert_eq!(updated.status, TaskStatus::InProgress);
         assert_eq!(updated.title, "Test Task", "Title should not change");
-        assert_eq!(updated.content, "Original Content", "Content should not change");
+        assert_eq!(
+            updated.content, "Original Content",
+            "Content should not change"
+        );
     }
 
     #[test]
@@ -1580,7 +1726,10 @@ mod tests {
 
         // Should not appear in normal list
         let all = TaskRepository::list(&repo).unwrap();
-        assert!(all.iter().all(|t| t.id != task.id), "Soft-deleted task should not appear in list");
+        assert!(
+            all.iter().all(|t| t.id != task.id),
+            "Soft-deleted task should not appear in list"
+        );
 
         // Should appear in deleted list
         let deleted = TaskRepository::list_deleted(&repo).unwrap();
@@ -1593,11 +1742,17 @@ mod tests {
 
         // Should appear in normal list again
         let all = TaskRepository::list(&repo).unwrap();
-        assert!(all.iter().any(|t| t.id == task.id), "Restored task should appear in list");
+        assert!(
+            all.iter().any(|t| t.id == task.id),
+            "Restored task should appear in list"
+        );
 
         // Should not appear in deleted list
         let deleted = TaskRepository::list_deleted(&repo).unwrap();
-        assert!(deleted.is_empty(), "Restored task should not be in deleted list");
+        assert!(
+            deleted.is_empty(),
+            "Restored task should not be in deleted list"
+        );
     }
 
     #[test]
@@ -1620,7 +1775,10 @@ mod tests {
 
         // Should not appear in normal list
         let all = GoalRepository::list(&repo).unwrap();
-        assert!(all.iter().all(|g| g.id != goal.id), "Soft-deleted goal should not appear in list");
+        assert!(
+            all.iter().all(|g| g.id != goal.id),
+            "Soft-deleted goal should not appear in list"
+        );
 
         // Should appear in deleted list
         let deleted = GoalRepository::list_deleted(&repo).unwrap();
@@ -1634,18 +1792,27 @@ mod tests {
 
         // find_any should find it
         let found_any = GoalRepository::find_any(&repo, goal.id).unwrap();
-        assert!(found_any.is_some(), "find_any should return soft-deleted goal");
+        assert!(
+            found_any.is_some(),
+            "find_any should return soft-deleted goal"
+        );
 
         // Restore
         GoalRepository::restore(&repo, goal.id).unwrap();
 
         // Should appear in normal list again
         let all = GoalRepository::list(&repo).unwrap();
-        assert!(all.iter().any(|g| g.id == goal.id), "Restored goal should appear in list");
+        assert!(
+            all.iter().any(|g| g.id == goal.id),
+            "Restored goal should appear in list"
+        );
 
         // Should not appear in deleted list
         let deleted = GoalRepository::list_deleted(&repo).unwrap();
-        assert!(deleted.is_empty(), "Restored goal should not be in deleted list");
+        assert!(
+            deleted.is_empty(),
+            "Restored goal should not be in deleted list"
+        );
     }
 
     // ============================================================================
@@ -1666,7 +1833,9 @@ mod tests {
         AreaRepository::create(&repo, &area).unwrap();
 
         // Read
-        let found = AreaRepository::find(&repo, area.id).unwrap().expect("Area should exist");
+        let found = AreaRepository::find(&repo, area.id)
+            .unwrap()
+            .expect("Area should exist");
         assert_eq!(found.title, "Test Area");
         assert!(!found.is_system);
 
@@ -1675,12 +1844,17 @@ mod tests {
         updated.title = "Updated Area".to_string();
         AreaRepository::update(&repo, &updated).unwrap();
 
-        let found = AreaRepository::find(&repo, area.id).unwrap().expect("Area should exist");
+        let found = AreaRepository::find(&repo, area.id)
+            .unwrap()
+            .expect("Area should exist");
         assert_eq!(found.title, "Updated Area");
 
         // Delete
         AreaRepository::delete(&repo, area.id).unwrap();
-        assert!(AreaRepository::find(&repo, area.id).unwrap().is_none(), "Area should be deleted");
+        assert!(
+            AreaRepository::find(&repo, area.id).unwrap().is_none(),
+            "Area should be deleted"
+        );
     }
 
     #[test]

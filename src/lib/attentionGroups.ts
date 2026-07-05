@@ -26,13 +26,16 @@ export function deriveTodayAttentionGroups(
   linkedReminderIds: Set<string> = new Set(),
 ): TodayAttentionGroups {
   const today = startOfDay(now)
-  const activeTasks = tasks.filter((task) => task.status !== 'DONE')
+  const activeTasks = tasks.filter((task) => task.status === 'TODO' || task.status === 'IN_PROGRESS')
+  const deadlineVisibleTasks = tasks.filter(
+    (task) => task.status === 'TODO' || task.status === 'IN_PROGRESS' || task.status === 'PAUSED',
+  )
 
-  const overdue = activeTasks
+  const overdue = deadlineVisibleTasks
     .filter((task) => task.dueDate && startOfDay(task.dueDate).getTime() < today.getTime())
     .sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0))
 
-  const dueToday = activeTasks
+  const dueToday = deadlineVisibleTasks
     .filter((task) => task.dueDate && isSameDay(task.dueDate, today) && !overdue.includes(task))
     .sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0))
 

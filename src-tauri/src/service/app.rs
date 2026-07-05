@@ -1,5 +1,5 @@
-use crate::repository::SqliteRepository;
 use super::{AreaService, GoalService, TaskService};
+use crate::repository::SqliteRepository;
 
 pub struct AppService {
     pub goal: GoalService,

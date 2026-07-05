@@ -352,23 +352,7 @@ export type GoalStatus =
 
 ### 7.3 自动计算 READY_TO_COMPLETE
 
-```typescript
-// src/lib/workspaceDerivation.ts
-function deriveGoalStatus(goal: GoalCard, tasks: Task[]): GoalStatus {
-  const linkedTasks = tasks.filter(task => task.linkedGoalId === goal.id)
-  
-  // 没有任务，保持原状态
-  if (linkedTasks.length === 0) return goal.status
-  
-  // 所有任务完成，且目标是 ACTIVE
-  const allDone = linkedTasks.every(task => task.status === 'DONE')
-  if (allDone && goal.status === 'ACTIVE') {
-    return 'READY_TO_COMPLETE'
-  }
-  
-  return goal.status
-}
-```
+Goal 的派生状态、进度、任务数量和 nextTodo 由 Rust `GoalSummary` 统一计算。前端 `WorkspaceEngine.computeSnapshot()` 保留这些后端字段，只负责把 Goal 按 Area 过滤并组合进工作区快照。
 
 **设计意图**：
 - 提示用户"目标已就绪，可以标记完成了"

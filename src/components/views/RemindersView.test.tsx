@@ -5,7 +5,6 @@ import { RemindersView } from './RemindersView'
 import { useUiStore } from '../../store/uiStore'
 import { useEventkitStore } from '../../store/eventkitStore'
 
-const mockToggleSystemReminder = vi.fn()
 vi.mock('../../store/uiStore', () => ({
   useUiStore: vi.fn()
 }))
@@ -17,9 +16,6 @@ vi.mock('../../store/goalStore', () => ({
 }))
 vi.mock('../../store/eventkitStore', () => ({
   useEventkitStore: vi.fn()
-}))
-vi.mock('../../store/appStore', () => ({
-  useToggleSystemReminder: () => mockToggleSystemReminder
 }))
 
 describe('RemindersView', () => {
@@ -53,11 +49,9 @@ describe('RemindersView', () => {
     ;(useEventkitStore as any).mockImplementation((selector: any) => {
       const mockState = {
         systemReminders: mockReminderData,
-        toggleSystemReminderDone: vi.fn(),
       }
       return selector(mockState)
     })
-    mockToggleSystemReminder.mockReset()
   })
 
   it('should render "提醒看板" heading', () => {
@@ -123,21 +117,23 @@ describe('RemindersView', () => {
     expect(screen.getByText('整理衣柜')).toBeInTheDocument()
   })
 
-  it('should display unchecked checkboxes for incomplete reminders', () => {
+  it('renders imported system Reminders without completion controls', () => {
     render(<RemindersView />)
 
-    // 获取所有复选框
+    expect(screen.getByText('完成Q2绩效自评')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /完成Q2绩效自评/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /回复客户邮件/ })).not.toBeInTheDocument()
+  })
+
+  it('does not render completion checkboxes for imported reminders', () => {
+    render(<RemindersView />)
+
     const checkboxes = screen.getAllByRole('checkbox')
 
-    // 至少有一些复选框（15 个提醒总共）
-    expect(checkboxes.length).toBeGreaterThanOrEqual(15)
+    expect(checkboxes).toHaveLength(1)
+    expect(screen.getByLabelText('隐藏已完成')).toBe(checkboxes[0])
 
-    // "完成Q2绩效自评" 是未完成的，找到它的复选框
-    const performanceReviewCheckbox = screen.getByText('完成Q2绩效自评')
-      .closest('label')
-      ?.querySelector('input[type="checkbox"]') as HTMLInputElement
-
-    expect(performanceReviewCheckbox).not.toBeChecked()
+    expect(screen.queryByRole('checkbox', { name: /完成Q2绩效自评/ })).not.toBeInTheDocument()
   })
 
   it('should display completed reminders with line-through style and reduced opacity', () => {
@@ -446,7 +442,7 @@ describe('RemindersView', () => {
         return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
-        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
+        return selector({ systemReminders: mockReminders })
       })
 
       render(<RemindersView />)
@@ -473,7 +469,7 @@ describe('RemindersView', () => {
         return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
-        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
+        return selector({ systemReminders: mockReminders })
       })
 
       render(<RemindersView />)
@@ -506,7 +502,7 @@ describe('RemindersView', () => {
         return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
-        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
+        return selector({ systemReminders: mockReminders })
       })
 
       render(<RemindersView />)
@@ -534,7 +530,7 @@ describe('RemindersView', () => {
       }, { timeout: 10000 })
     })
 
-    it('should call toggleSystemReminderDone when checking a reminder', async () => {
+    it('does not render completion controls for imported Reminders', async () => {
       const mockReminders = [
         { id: 'r1', title: '未完成提醒', done: false, listTitle: '工作' },
       ]
@@ -543,23 +539,37 @@ describe('RemindersView', () => {
         return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
-        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
+        return selector({ systemReminders: mockReminders })
       })
 
       render(<RemindersView />)
 
-      // 找到未完成提醒的复选框并点击（需要精确定位到提醒的复选框，而不是"隐藏已完成"的复选框）
-      const checkbox = screen.getByText('未完成提醒')
-        .closest('label')
-        ?.querySelector('input[type="checkbox"]') as HTMLInputElement
-
-      await userEvent.click(checkbox)
-
-      // 验证 toggleSystemReminderDone 被调用，参数为 (reminderId, true)
-      expect(mockToggleSystemReminder).toHaveBeenCalledWith('r1', true)
+      expect(screen.getByText('未完成提醒')).toBeInTheDocument()
+      expect(screen.queryByRole('checkbox', { name: /未完成提醒/ })).not.toBeInTheDocument()
     })
 
-    it('should call toggleSystemReminderDone when unchecking a reminder', async () => {
+    it('does not render completion controls when Reminder access is not granted', async () => {
+      const mockReminders = [
+        { id: 'r1', title: '未完成提醒', done: false, listTitle: '工作' },
+      ]
+
+      ;(useUiStore as any).mockImplementation((selector: any) => {
+        return selector({ currentView: 'reminders', openDrawer: vi.fn() })
+      })
+      ;(useEventkitStore as any).mockImplementation((selector: any) => {
+        return selector({
+          eventkitPermissions: { calendar: 'granted', reminders: 'denied' },
+          systemReminders: mockReminders,
+        })
+      })
+
+      render(<RemindersView />)
+
+      expect(screen.getByText('未完成提醒')).toBeInTheDocument()
+      expect(screen.queryByRole('checkbox', { name: /未完成提醒/ })).not.toBeInTheDocument()
+    })
+
+    it('shows completed imported Reminders as read-only state', async () => {
       const mockReminders = [
         { id: 'r2', title: '已完成提醒', done: true, listTitle: '工作' },
       ]
@@ -568,22 +578,13 @@ describe('RemindersView', () => {
         return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
-        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
+        return selector({ systemReminders: mockReminders })
       })
 
       render(<RemindersView />)
 
-      // 找到已勾选的复选框并点击
-      const checkbox = screen.getByText('已完成提醒')
-        .closest('label')
-        ?.querySelector('input[type="checkbox"]') as HTMLInputElement
-
-      expect(checkbox).toBeChecked()
-
-      await userEvent.click(checkbox)
-
-      // 验证 toggleSystemReminderDone 被调用，参数为 (reminderId, false)
-      expect(mockToggleSystemReminder).toHaveBeenCalledWith('r2', false)
+      expect(screen.getByText('已完成提醒')).toHaveClass('line-through')
+      expect(screen.queryByRole('checkbox', { name: /已完成提醒/ })).not.toBeInTheDocument()
     })
 
     it('should apply visual feedback for completed reminders', () => {
@@ -596,7 +597,7 @@ describe('RemindersView', () => {
         return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
-        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
+        return selector({ systemReminders: mockReminders })
       })
 
       render(<RemindersView />)
@@ -619,7 +620,7 @@ describe('RemindersView', () => {
       expect(incompleteTitle).toHaveClass('text-slate-900')
     })
 
-    it('should sync checkbox state with reminder done status', () => {
+    it('should sync read-only visual state with reminder done status', () => {
       const mockReminders = [
         { id: 'r1', title: '已完成提醒', done: true, listTitle: '工作' },
         { id: 'r2', title: '未完成提醒', done: false, listTitle: '工作' },
@@ -629,25 +630,15 @@ describe('RemindersView', () => {
         return selector({ currentView: 'reminders', openDrawer: vi.fn() })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
-        return selector({ systemReminders: mockReminders, toggleSystemReminderDone: vi.fn() })
+        return selector({ systemReminders: mockReminders })
       })
 
       render(<RemindersView />)
 
-      // 获取所有复选框
-      const checkboxes = screen.getAllByRole('checkbox')
-
-      // 第一个复选框（已完成）应该被勾选
-      const completedCheckbox = screen.getByText('已完成提醒')
-        .closest('label')
-        ?.querySelector('input[type="checkbox"]') as HTMLInputElement
-      expect(completedCheckbox).toBeChecked()
-
-      // 第二个复选框（未完成）应该未勾选
-      const incompleteCheckbox = screen.getByText('未完成提醒')
-        .closest('label')
-        ?.querySelector('input[type="checkbox"]') as HTMLInputElement
-      expect(incompleteCheckbox).not.toBeChecked()
+      expect(screen.getByText('已完成提醒')).toHaveClass('line-through')
+      expect(screen.getByText('未完成提醒')).not.toHaveClass('line-through')
+      expect(screen.queryByRole('checkbox', { name: /已完成提醒/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('checkbox', { name: /未完成提醒/ })).not.toBeInTheDocument()
     })
   })
 
@@ -838,17 +829,16 @@ describe('RemindersView', () => {
 
   describe('Reminder Click Interaction', () => {
     it('should open drawer when clicking reminder item in list view', async () => {
-      const mockOpenReminderDrawer = vi.fn()
+      const mockOpenSystemReminderDrawer = vi.fn()
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openDrawer: mockOpenReminderDrawer })
+        return selector({ currentView: 'reminders', openDrawer: mockOpenSystemReminderDrawer })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({
           systemReminders: [
             { id: '1', title: '完成Q2绩效自评', done: false, listTitle: '工作' },
           ],
-          toggleSystemReminderDone: vi.fn(),
         })
       })
 
@@ -862,21 +852,20 @@ describe('RemindersView', () => {
       await userEvent.click(reminderButton!)
 
       // 验证 openDrawer 被调用，参数为 ('reminder', '1')
-      expect(mockOpenReminderDrawer).toHaveBeenCalledWith('reminder', '1')
+      expect(mockOpenSystemReminderDrawer).toHaveBeenCalledWith('reminder', '1')
     })
 
     it('should open drawer when clicking reminder item in time view', async () => {
-      const mockOpenReminderDrawer = vi.fn()
+      const mockOpenSystemReminderDrawer = vi.fn()
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openDrawer: mockOpenReminderDrawer })
+        return selector({ currentView: 'reminders', openDrawer: mockOpenSystemReminderDrawer })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({
           systemReminders: [
             { id: '2', title: '今天的提醒', done: false, dueAt: new Date() },
           ],
-          toggleSystemReminderDone: vi.fn(),
         })
       })
 
@@ -903,7 +892,7 @@ describe('RemindersView', () => {
       await userEvent.click(reminderButton!)
 
       // 验证 openDrawer 被调用，参数为 ('reminder', '2')
-      expect(mockOpenReminderDrawer).toHaveBeenCalledWith('reminder', '2')
+      expect(mockOpenSystemReminderDrawer).toHaveBeenCalledWith('reminder', '2')
     })
 
     it('should make reminder title clickable', () => {
@@ -915,7 +904,6 @@ describe('RemindersView', () => {
           systemReminders: [
             { id: '1', title: '完成Q2绩效自评', done: false, listTitle: '工作' },
           ],
-          toggleSystemReminderDone: vi.fn(),
         })
       })
 
@@ -930,36 +918,24 @@ describe('RemindersView', () => {
       expect(reminderButton).toHaveAttribute('type', 'button')
     })
 
-    it('should not open drawer when clicking checkbox', async () => {
-      const mockOpenReminderDrawer = vi.fn()
+    it('does not expose a reminder completion checkbox that can bypass the drawer', async () => {
+      const mockOpenSystemReminderDrawer = vi.fn()
 
       ;(useUiStore as any).mockImplementation((selector: any) => {
-        return selector({ currentView: 'reminders', openDrawer: mockOpenReminderDrawer })
+        return selector({ currentView: 'reminders', openDrawer: mockOpenSystemReminderDrawer })
       })
       ;(useEventkitStore as any).mockImplementation((selector: any) => {
         return selector({
           systemReminders: [
             { id: '1', title: '完成Q2绩效自评', done: false, listTitle: '工作' },
           ],
-          toggleSystemReminderDone: vi.fn(),
         })
       })
 
       render(<RemindersView />)
 
-      // 使用和其他测试一样的方式定位复选框
-      const checkbox = screen.getByText('完成Q2绩效自评')
-        .closest('label')
-        ?.querySelector('input[type="checkbox"]') as HTMLInputElement
-
-      // 点击复选框
-      await userEvent.click(checkbox)
-
-      // 验证 toggleSystemReminderDone 被调用
-      expect(mockToggleSystemReminder).toHaveBeenCalledWith('1', true)
-
-      // 验证 openDrawer 没有被调用
-      expect(mockOpenReminderDrawer).not.toHaveBeenCalled()
+      expect(screen.queryByRole('checkbox', { name: /完成Q2绩效自评/ })).not.toBeInTheDocument()
+      expect(mockOpenSystemReminderDrawer).not.toHaveBeenCalled()
     })
   })
 
@@ -1130,4 +1106,3 @@ describe('RemindersView', () => {
     })
   })
 })
-

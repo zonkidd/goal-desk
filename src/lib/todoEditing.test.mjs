@@ -90,7 +90,7 @@ test('paused todo editing session exposes resume and complete actions', () => {
   assert.deepEqual(session.capabilities.statusActions, ['IN_PROGRESS', 'DONE'])
 })
 
-test('done todo editing session exposes no status actions', () => {
+test('done todo editing session is view-only for status actions', () => {
   const { session } = createHarness({
     task: buildTask({ status: 'DONE' }),
     goals: [],
@@ -131,7 +131,6 @@ test('selecting an existing goal links the todo through the editing session acti
         linkedGoalId: 'goal-2',
         linkedGoalLabel: 'Improve architecture',
         showInTimeline: false,
-        systemReminderId: undefined,
       },
     },
   ])
@@ -156,10 +155,27 @@ test('unlinking a goal clears the todo goal association', async () => {
         linkedGoalId: '',
         linkedGoalLabel: '',
         showInTimeline: false,
-        systemReminderId: undefined,
       },
     },
   ])
+})
+
+test('clearing planned and due drafts sends explicit null date patches', async () => {
+  const task = {
+    ...buildTask(),
+    plannedStartAt: new Date('2026-06-20T09:00:00'),
+    dueDate: new Date('2026-06-21T18:00:00'),
+  }
+  const { session, calls } = createHarness({
+    task,
+  })
+
+  let draft = session.actions.setPlannedStartAtDraft('', session.draft)
+  draft = session.actions.setDueDateDraft('', draft)
+  await session.actions.saveFields(draft)
+
+  assert.equal(calls.updateTaskFields[0].input.plannedStartAt, null)
+  assert.equal(calls.updateTaskFields[0].input.dueDate, null)
 })
 
 test('inline goal creation keeps the todo drawer context and links the new goal immediately', async () => {
@@ -195,10 +211,48 @@ test('inline goal creation keeps the todo drawer context and links the new goal 
         linkedGoalId: 'goal-created-inline',
         linkedGoalLabel: undefined,
         showInTimeline: false,
-        systemReminderId: undefined,
       },
     },
   ])
+})
+
+test('inline goal creation submits the new goal title as the todo linked goal label', async () => {
+  const calls = {
+    updateTaskFields: [],
+    updateTaskContent: [],
+    updateTaskStatus: [],
+    createGoal: [],
+  }
+
+  const session = createTodoEditingSession({
+    task: buildTask(),
+    goals: [],
+    activeArea: 'ALL',
+    updateTaskFields: async (taskId, input) => {
+      calls.updateTaskFields.push({ taskId, input })
+    },
+    updateTaskContent: async (taskId, content) => {
+      calls.updateTaskContent.push({ taskId, content })
+    },
+    updateTaskStatus: async (taskId, next, note) => {
+      calls.updateTaskStatus.push({ taskId, next, note })
+    },
+    createGoal: async (input, options) => {
+      calls.createGoal.push({ input, options })
+      return {
+        goal: buildGoal({ id: 'goal-created-inline', title: 'New inline goal' }),
+        openGoalWorkspace: false,
+      }
+    },
+  })
+
+  const draftWithInlineGoal = session.actions.startInlineGoalCreation()
+  const draftWithTitle = session.actions.setNewGoalTitle('New inline goal', draftWithInlineGoal)
+
+  await session.actions.createAndLinkGoal(draftWithTitle)
+
+  assert.equal(calls.updateTaskFields[0].input.linkedGoalId, 'goal-created-inline')
+  assert.equal(calls.updateTaskFields[0].input.linkedGoalLabel, 'New inline goal')
 })
 
 test('inline goal creation failure preserves the todo draft and allows retry', async () => {

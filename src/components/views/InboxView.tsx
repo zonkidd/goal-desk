@@ -44,10 +44,10 @@ export function InboxView() {
                         <AlignLeft className="h-3 w-3" />
                         {getTaskContentBadgeLabel(task.content)}
                       </span>
-                      {task.dueDate ? (
+                      {task.dueDate || task.plannedStartAt ? (
                         <span className="inline-flex items-center gap-1 rounded border border-emerald-100 bg-emerald-50 px-1.5 text-emerald-600">
                           <Calendar className="h-3 w-3" />
-                          {task.dueDate.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          {(task.dueDate || task.plannedStartAt)!.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}
                         </span>
                       ) : (
                         <span>No date</span>

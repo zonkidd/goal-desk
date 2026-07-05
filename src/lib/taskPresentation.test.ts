@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getTaskTimeInfo } from './taskPresentation'
+import { getTaskStatusActions, getTaskTimeInfo } from './taskPresentation'
 import type { Task } from '../types/task'
 
 function makeTask(overrides: Partial<Task> = {}): Task {
@@ -109,5 +109,11 @@ describe('getTaskTimeInfo', () => {
     })
     const result = getTaskTimeInfo(task, now)
     expect(result.daysElapsed).toBe(5)
+  })
+})
+
+describe('getTaskStatusActions', () => {
+  it('should expose Resume and Done as actions for a paused Todo', () => {
+    expect(getTaskStatusActions('PAUSED')).toEqual(['IN_PROGRESS', 'DONE'])
   })
 })

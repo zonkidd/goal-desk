@@ -3,9 +3,8 @@ import { useTaskStore } from '../store/taskStore'
 import { useGoalStore } from '../store/goalStore'
 import { useUiStore } from '../store/uiStore'
 import { useEventkitStore } from '../store/eventkitStore'
-import { computeSnapshot, type WorkspaceSnapshot } from '../lib/WorkspaceEngine'
-import { convertEventKitToRawItems } from '../lib/workspaceDerivation'
-import { createWorkspaceDeriver, type WorkspaceDeriver, type StoreGetters } from './workspaceDeriver'
+import type { WorkspaceSnapshot } from '../lib/WorkspaceEngine'
+import { createWorkspaceDeriver } from './workspaceDeriver'
 
 const emptySnapshot: WorkspaceSnapshot = {
   goals: [],
@@ -28,6 +27,15 @@ const listeners = new Set<() => void>()
 let snapshot = emptySnapshot
 let computing = false
 
+function readEventKitSource() {
+  const eventkitState = useEventkitStore.getState()
+  return {
+    calendarEvents: eventkitState.rawEventKit.calendarEvents,
+    reminders: eventkitState.rawEventKit.reminders,
+    systemReminders: eventkitState.systemReminders,
+  }
+}
+
 function recompute() {
   if (computing) return
   computing = true
@@ -37,9 +45,7 @@ function recompute() {
       getBaseGoals: () => useGoalStore.getState().baseGoals,
       getActiveArea: () => useUiStore.getState().activeArea,
       getShowCompletedTodos: () => useUiStore.getState().showCompletedTodos,
-      getRawCalendarEvents: () => useEventkitStore.getState().rawEventKit.calendarEvents,
-      getRawReminders: () => useEventkitStore.getState().rawEventKit.reminders,
-      getSystemReminders: () => useEventkitStore.getState().systemReminders,
+      getEventKitSource: readEventKitSource,
     })
 
     snapshot = deriver.compute()

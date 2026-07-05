@@ -1,11 +1,14 @@
-use crate::domain::{
-    DeskTask, Goal, GoalStatus, GoalSummary, TaskStatus,
-};
+use crate::domain::{Area, DeskTask, Goal, GoalStatus, GoalSummary, TaskStatus};
 use crate::repository::{AreaRepository, GoalRepository, SqliteRepository, TaskRepository};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-pub fn build_goal_summary(goal: &Goal, area_title: &str, goal_tasks: &[&DeskTask], derived_status: GoalStatus) -> GoalSummary {
+pub fn build_goal_summary(
+    goal: &Goal,
+    area_title: &str,
+    goal_tasks: &[&DeskTask],
+    derived_status: GoalStatus,
+) -> GoalSummary {
     let task_count = goal_tasks.len();
     let done_count = goal_tasks
         .iter()
@@ -34,6 +37,48 @@ pub fn build_goal_summary(goal: &Goal, area_title: &str, goal_tasks: &[&DeskTask
     }
 }
 
+pub struct GoalSummaryAssembler<'a> {
+    area_titles: HashMap<Uuid, String>,
+    tasks_by_goal: HashMap<Uuid, Vec<&'a DeskTask>>,
+    all_tasks: &'a [DeskTask],
+}
+
+impl<'a> GoalSummaryAssembler<'a> {
+    pub fn new(areas: &[Area], tasks: &'a [DeskTask]) -> Self {
+        let area_titles = areas
+            .iter()
+            .map(|area| (area.id, area.title.clone()))
+            .collect();
+        let mut tasks_by_goal: HashMap<Uuid, Vec<&DeskTask>> = HashMap::new();
+        for task in tasks {
+            if let Some(goal_id) = task.linked_goal_id {
+                tasks_by_goal.entry(goal_id).or_default().push(task);
+            }
+        }
+
+        Self {
+            area_titles,
+            tasks_by_goal,
+            all_tasks: tasks,
+        }
+    }
+
+    pub fn summarize(&self, goal: &Goal) -> GoalSummary {
+        let area_title = goal
+            .area_id
+            .and_then(|area_id| self.area_titles.get(&area_id).cloned())
+            .unwrap_or_else(|| "Unsorted".to_string());
+        let goal_tasks = self
+            .tasks_by_goal
+            .get(&goal.id)
+            .map(|tasks| tasks.as_slice())
+            .unwrap_or(&[]);
+        let derived_status = goal.compute_derived_status(self.all_tasks);
+
+        build_goal_summary(goal, &area_title, goal_tasks, derived_status)
+    }
+}
+
 pub struct GoalService {
     pub(crate) repo: SqliteRepository,
 }
@@ -50,6 +95,10 @@ impl GoalService {
         description: &str,
         status: GoalStatus,
     ) -> Result<Goal, String> {
+        if status == GoalStatus::ReadyToComplete {
+            return Err("READY_TO_COMPLETE cannot be set manually".to_string());
+        }
+
         let trimmed_title = title.trim();
         if trimmed_title.is_empty() {
             return Err("Goal title cannot be empty".to_string());
@@ -61,7 +110,6 @@ impl GoalService {
         } else {
             trimmed_area
         };
-
 
         let area_id = super::area::find_or_create_area(&self.repo, area_title)?;
 
@@ -112,11 +160,7 @@ impl GoalService {
         Ok(goal)
     }
 
-    pub fn update_goal_status(
-        &self,
-        goal_id: &str,
-        status: GoalStatus,
-    ) -> Result<Goal, String> {
+    pub fn update_goal_status(&self, goal_id: &str, status: GoalStatus) -> Result<Goal, String> {
         let goal_uuid = Uuid::parse_str(goal_id).map_err(|e| e.to_string())?;
 
         let mut goal = GoalRepository::find(&self.repo, goal_uuid)
@@ -136,62 +180,28 @@ impl GoalService {
     }
 
     pub fn goal_summaries(&self) -> Result<Vec<GoalSummary>, String> {
-
         let goals = GoalRepository::list(&self.repo).map_err(|e| e.to_string())?;
         let areas = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;
         let tasks = TaskRepository::list(&self.repo).map_err(|e| e.to_string())?;
-
-        let area_titles: HashMap<Uuid, String> = areas
-            .iter()
-            .map(|a| (a.id, a.title.clone()))
-            .collect();
-
-        let mut tasks_by_goal: HashMap<Uuid, Vec<&crate::domain::DeskTask>> = HashMap::new();
-        for task in &tasks {
-            if let Some(goal_id) = task.linked_goal_id {
-                tasks_by_goal.entry(goal_id).or_default().push(task);
-            }
-        }
+        let assembler = GoalSummaryAssembler::new(&areas, &tasks);
 
         Ok(goals
             .iter()
-            .map(|goal| {
-                let area_title = goal
-                    .area_id
-                    .and_then(|aid| area_titles.get(&aid).cloned())
-                    .unwrap_or_else(|| "Unsorted".to_string());
-
-                let goal_tasks = tasks_by_goal.get(&goal.id).map(|v| v.as_slice()).unwrap_or(&[]);
-                let all_tasks_vec: Vec<DeskTask> = tasks.iter().cloned().collect();
-                let derived_status = goal.compute_derived_status(&all_tasks_vec);
-                build_goal_summary(goal, &area_title, &goal_tasks, derived_status)
-            })
+            .map(|goal| assembler.summarize(goal))
             .collect())
     }
 
     pub fn get_goal_summary_by_id(&self, goal_id: &str) -> Result<GoalSummary, String> {
         let goal_uuid = Uuid::parse_str(goal_id).map_err(|e| e.to_string())?;
 
-
         let goal = GoalRepository::find(&self.repo, goal_uuid)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Goal not found: {goal_id}"))?;
 
-        let area_title = goal
-            .area_id
-            .and_then(|aid| AreaRepository::find(&self.repo, aid).ok())
-            .flatten()
-            .map(|a| a.title)
-            .unwrap_or_else(|| "Unsorted".to_string());
-
+        let areas = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;
         let all_tasks = TaskRepository::list(&self.repo).map_err(|e| e.to_string())?;
-        let goal_tasks: Vec<_> = all_tasks
-            .iter()
-            .filter(|t| t.linked_goal_id == Some(goal_uuid))
-            .collect();
-
-        let derived_status = goal.compute_derived_status(&all_tasks);
-        Ok(build_goal_summary(&goal, &area_title, &goal_tasks, derived_status))
+        let assembler = GoalSummaryAssembler::new(&areas, &all_tasks);
+        Ok(assembler.summarize(&goal))
     }
 
     pub fn soft_delete_goal(&self, goal_id: &str) -> Result<(), String> {
@@ -209,32 +219,11 @@ impl GoalService {
         let goals = GoalRepository::list_deleted(&self.repo).map_err(|e| e.to_string())?;
         let areas = AreaRepository::list(&self.repo).map_err(|e| e.to_string())?;
         let tasks = TaskRepository::list(&self.repo).map_err(|e| e.to_string())?;
-
-        let area_titles: std::collections::HashMap<Uuid, String> = areas
-            .iter()
-            .map(|a| (a.id, a.title.clone()))
-            .collect();
-
-        let mut tasks_by_goal: std::collections::HashMap<Uuid, Vec<&crate::domain::DeskTask>> = std::collections::HashMap::new();
-        for task in &tasks {
-            if let Some(goal_id) = task.linked_goal_id {
-                tasks_by_goal.entry(goal_id).or_default().push(task);
-            }
-        }
+        let assembler = GoalSummaryAssembler::new(&areas, &tasks);
 
         Ok(goals
             .iter()
-            .map(|goal| {
-                let area_title = goal
-                    .area_id
-                    .and_then(|aid| area_titles.get(&aid).cloned())
-                    .unwrap_or_else(|| "Unsorted".to_string());
-
-                let goal_tasks = tasks_by_goal.get(&goal.id).map(|v| v.as_slice()).unwrap_or(&[]);
-                let all_tasks_vec: Vec<crate::domain::DeskTask> = tasks.iter().cloned().collect();
-                let derived_status = goal.compute_derived_status(&all_tasks_vec);
-                build_goal_summary(goal, &area_title, &goal_tasks, derived_status)
-            })
+            .map(|goal| assembler.summarize(goal))
             .collect())
     }
 }

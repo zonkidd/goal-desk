@@ -130,7 +130,7 @@ test.describe('EventKit Integration', () => {
     }
   })
 
-  test('TaskDrawer 显示系统通知区块', async ({ page }) => {
+  test('TaskDrawer 不提供系统提醒创建入口', async ({ page }) => {
     // 切换到 Inbox 视图
     const inboxButton = page.getByRole('button', { name: /收集箱.*待办/ })
     await inboxButton.click()
@@ -149,21 +149,13 @@ test.describe('EventKit Integration', () => {
       const drawer = page.locator('[role="dialog"], aside.glass-panel').last()
       await expect(drawer).toBeVisible()
 
-      // 验证系统通知区块存在（未关联状态）
+      // 未关联状态不再提供创建或关联系统提醒入口
       const notLinkedCheckbox = page.locator('text=关联系统提醒获得通知')
       const linkedStatus = page.locator('text=已关联')
 
-      // 至少一个应该可见
-      const hasNotification = (await notLinkedCheckbox.isVisible()) || (await linkedStatus.isVisible())
-      expect(hasNotification).toBe(true)
+      await expect(notLinkedCheckbox).not.toBeVisible()
 
-      // 如果是未关联状态，验证复选框存在
-      if (await notLinkedCheckbox.isVisible()) {
-        const checkbox = page.locator('input[type="checkbox"]').filter({ has: page.locator('~ text=关联系统提醒获得通知') })
-        await expect(checkbox).toBeVisible()
-      }
-
-      // 如果是已关联状态，验证绿色状态卡片
+      // 已有关联仍可显示只读关联状态
       if (await linkedStatus.isVisible()) {
         const linkedCard = page.locator('.bg-green-50')
         await expect(linkedCard).toBeVisible()
@@ -174,7 +166,7 @@ test.describe('EventKit Integration', () => {
     }
   })
 
-  test('Quick Capture 显示三种创建模式', async ({ page }) => {
+  test('Quick Capture 仅提供本地捕获', async ({ page }) => {
     // 方式1：点击 Sidebar 底部的全局速记按钮
     const quickCaptureButton = page.locator('button:has-text("全局速记")')
     const hasButton = await quickCaptureButton.isVisible().catch(() => false)
@@ -196,37 +188,10 @@ test.describe('EventKit Integration', () => {
 
     // 验证 Quick Capture 表单显示
     await expect(page.locator('text=Quick Capture')).toBeVisible()
-    await expect(page.locator('text=创建方式')).toBeVisible()
-
-    // 验证三种模式选项存在
-    const localOption = page.locator('label:has-text("本地")')
-    await expect(localOption).toBeVisible()
-    await expect(localOption.locator('text=默认')).toBeVisible()
-
-    const systemOption = page.locator('label:has-text("系统")').filter({ hasNot: page.locator('text=集成') })
-    await expect(systemOption).toBeVisible()
-
-    const bothOption = page.locator('label:has-text("混合")')
-    await expect(bothOption).toBeVisible()
-    await expect(bothOption.locator('text=荐')).toBeVisible()
-
-    // 验证默认选中"本地"
-    const localRadio = localOption.locator('input[type="radio"]')
-    await expect(localRadio).toBeChecked()
-
-    // 验证可以切换模式
-    await systemOption.click()
-    await page.waitForTimeout(200)
-    const systemRadio = systemOption.locator('input[type="radio"]')
-    await expect(systemRadio).toBeChecked()
-
-    await bothOption.click()
-    await page.waitForTimeout(200)
-    const bothRadio = bothOption.locator('input[type="radio"]')
-    await expect(bothRadio).toBeChecked()
-
-    // 验证提示文本存在
-    await expect(page.locator('text=本地=Desk管理')).toBeVisible()
+    await expect(page.locator('[data-testid="quick-capture-input"]')).toBeVisible()
+    await expect(page.locator('text=创建方式')).not.toBeVisible()
+    await expect(page.locator('label:has-text("系统")')).not.toBeVisible()
+    await expect(page.locator('label:has-text("混合")')).not.toBeVisible()
   })
 
   test('Timeline 时间标签和颜色编码完整性', async ({ page }) => {
@@ -236,7 +201,7 @@ test.describe('EventKit Integration', () => {
     await page.waitForTimeout(500)
 
     // 获取所有 timeline 项
-    const timelineItems = page.locator('.timeline-line > div')
+    const timelineItems = page.locator('.timeline-line > div.relative.z-10')
     const itemCount = await timelineItems.count()
 
     if (itemCount > 0) {
@@ -264,8 +229,9 @@ test.describe('EventKit Integration', () => {
   })
 
   test('集成状态卡片显示授权按钮或计数', async ({ page }) => {
+    const integrationCard = page.locator('text=System Integration').locator('..')
     // 查找日历状态行
-    const calendarRow = page.locator('text=日历').locator('..')
+    const calendarRow = integrationCard.locator('span:text-is("日历")').locator('..').locator('..')
 
     // 检查状态：授权按钮、已授权状态、或错误状态之一应该可见
     const hasAuthButton = await calendarRow.locator('button:has-text("授权")').isVisible().catch(() => false)
@@ -283,7 +249,7 @@ test.describe('EventKit Integration', () => {
     }
 
     // 查找提醒状态行
-    const reminderRow = page.locator('text=提醒').locator('..')
+    const reminderRow = integrationCard.locator('span:text-is("提醒")').locator('..').locator('..')
 
     const hasReminderAuthButton = await reminderRow.locator('button:has-text("授权")').isVisible().catch(() => false)
     const hasReminderGrantedStatus = await reminderRow.locator('text=✓ 已授权').isVisible().catch(() => false)

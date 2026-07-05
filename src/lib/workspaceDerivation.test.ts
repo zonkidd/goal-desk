@@ -153,6 +153,45 @@ describe('workspaceDerivation - 今日注意力分组', () => {
     expect(groups.dueToday[0].id).toBe('t1')
   })
 
+  test('暂停 Todo 保留 Due Time 的逾期和今日到期可见性', () => {
+    const tasks: Task[] = [
+      {
+        id: 'paused-overdue',
+        title: '暂停但逾期',
+        status: 'PAUSED',
+        dueDate: new Date('2026-06-13T18:00:00+08:00'),
+        content: '',
+        activityLogs: [],
+        showInTimeline: false,
+      },
+      {
+        id: 'paused-due-today',
+        title: '暂停但今日到期',
+        status: 'PAUSED',
+        dueDate: new Date('2026-06-14T18:00:00+08:00'),
+        content: '',
+        activityLogs: [],
+        showInTimeline: false,
+      },
+      {
+        id: 'paused-ongoing',
+        title: '暂停的持续任务',
+        status: 'PAUSED',
+        plannedStartAt: new Date('2026-06-10T09:00:00+08:00'),
+        dueDate: new Date('2026-06-20T18:00:00+08:00'),
+        content: '',
+        activityLogs: [],
+        showInTimeline: false,
+      },
+    ]
+
+    const groups = deriveTodayAttentionGroups(tasks, now)
+
+    expect(groups.overdue.map((task) => task.id)).toEqual(['paused-overdue'])
+    expect(groups.dueToday.map((task) => task.id)).toEqual(['paused-due-today'])
+    expect(groups.ongoing).toHaveLength(0)
+  })
+
   test('持续推进任务分组（plannedStartAt <= today <= dueAt）', () => {
     const tasks: Task[] = [
       {
@@ -324,8 +363,28 @@ describe('workspaceDerivation - 已推进天数计算', () => {
 })
 
 describe('workspaceDerivation - 多日任务展开', () => {
-  test('跨天任务应在每天生成独立的 timeline item，id 保持纯净，occurrenceDate 标记日期', () => {
+  test('跨天 Todo 不因 dueDate 延展到今日时间线', () => {
     const now = new Date('2026-06-03T10:00:00+08:00')
+    const tasks: Task[] = [
+      {
+        id: 't1',
+        title: '跨天任务',
+        status: 'IN_PROGRESS',
+        plannedStartAt: new Date('2026-06-01T09:00:00+08:00'),
+        dueDate: new Date('2026-06-05T18:00:00+08:00'),
+        content: '',
+        activityLogs: [],
+        showInTimeline: true,
+      },
+    ]
+
+    const agenda = deriveTodayAgenda([], tasks, now)
+
+    expect(agenda).toEqual([])
+  })
+
+  test('有 dueDate 的 Todo 只在 plannedStartAt 当天生成一个 timeline item', () => {
+    const now = new Date('2026-06-01T10:00:00+08:00')
     const tasks: Task[] = [
       {
         id: 't1',
@@ -342,28 +401,10 @@ describe('workspaceDerivation - 多日任务展开', () => {
     const agenda = deriveTodayAgenda([], tasks, now)
     const todoItems = agenda.filter((item) => item.source === 'todo')
 
-    expect(todoItems).toHaveLength(5)
-
-    // id 保持纯净 — 不带 --day-N 后缀
-    for (const item of todoItems) {
-      expect(item.id).toBe('t1')
-    }
-
-    // occurrenceDate 标记每天的日期
-    const dayMs = 24 * 60 * 60 * 1000
-    const startDay = new Date('2026-06-01T00:00:00+08:00')
-    for (let i = 0; i < 5; i++) {
-      const expected = new Date(startDay.getTime() + i * dayMs)
-      const actual = todoItems[i].occurrenceDate as Date
-      expect(actual.getFullYear()).toBe(expected.getFullYear())
-      expect(actual.getMonth()).toBe(expected.getMonth())
-      expect(actual.getDate()).toBe(expected.getDate())
-    }
-
-    // startsAt 保留原始开始时间（用于排序）
-    for (const item of todoItems) {
-      expect((item.startsAt as Date).getTime()).toBe(new Date('2026-06-01T09:00:00+08:00').getTime())
-    }
+    expect(todoItems).toHaveLength(1)
+    expect(todoItems[0].id).toBe('t1')
+    expect(todoItems[0].occurrenceDate).toBeUndefined()
+    expect((todoItems[0].startsAt as Date).getTime()).toBe(new Date('2026-06-01T09:00:00+08:00').getTime())
   })
 
   test('单天任务（dueDate 等于 plannedStartAt）不展开', () => {
@@ -432,8 +473,8 @@ describe('workspaceDerivation - 多日任务展开', () => {
 })
 
 describe('workspaceDerivation - filterAgendaByArea 多日任务', () => {
-  test('跨天任务展开后，filterAgendaByArea 通过纯净 id 正确匹配', () => {
-    const now = new Date('2026-06-03T10:00:00+08:00')
+  test('有 dueDate 的 Todo 在 plannedStartAt 当天通过 id 正确匹配领域', () => {
+    const now = new Date('2026-06-01T10:00:00+08:00')
     const goals: GoalCard[] = [
       { id: 'g1', title: '工作目标', area: '工作', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
     ]
@@ -455,9 +496,9 @@ describe('workspaceDerivation - filterAgendaByArea 多日任务', () => {
     const visibleTasks = tasks.filter((t) => t.linkedGoalId === 'g1')
     const filtered = filterAgendaByArea(agenda, visibleTasks)
 
-    // 5 天展开，全部匹配领域 g1
     const todoItems = filtered.filter((item) => item.source === 'todo')
-    expect(todoItems).toHaveLength(5)
+    expect(todoItems).toHaveLength(1)
+    expect(todoItems[0].id).toBe('t1')
   })
 
   test('跨天任务不在可见列表中时，filterAgendaByArea 正确过滤', () => {
@@ -558,6 +599,7 @@ describe('convertEventKitToRawItems', () => {
     expect(result).toHaveLength(1)
     expect(result[0].source).toBe('reminder')
     expect(result[0].title).toBe('Call mom')
+    expect(result[0].readonly).toBe(true)
   })
 
   test('deduplicates reminders linked to tasks', () => {

@@ -54,7 +54,7 @@ export function RecycleBinView() {
                 <div className="flex-1 cursor-pointer" onClick={() => openDrawer('task', task.id)}>
                   <div className="text-sm font-bold text-slate-900">{task.title}</div>
                   <div className="mt-1 text-xs text-slate-500">
-                    {task.linkedGoalLabel || '独立待办'} · 删除于 {formatDate(task.activityLogs[0]?.timestamp)}
+                    {task.linkedGoalLabel || '独立待办'} · 删除于 {formatDate(task.deletedAt ?? task.activityLogs[0]?.timestamp)}
                   </div>
                 </div>
                 <button

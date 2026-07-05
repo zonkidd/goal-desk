@@ -48,10 +48,6 @@ vi.mock('../drawer/GoalDrawer', () => ({
   GoalDrawer: () => <div>GoalDrawer</div>,
 }))
 
-vi.mock('../drawer/ReminderDrawer', () => ({
-  ReminderDrawer: () => <div>ReminderDrawer</div>,
-}))
-
 vi.mock('../drawer/CalendarEventDrawer', () => ({
   CalendarEventDrawer: () => <div>CalendarEventDrawer</div>,
 }))
@@ -106,7 +102,7 @@ describe('AppShell', () => {
     expect(screen.getByText('RemindersView')).toBeInTheDocument()
   })
 
-  it('应该渲染 SystemReminderDrawer 而不是 ReminderDrawer', () => {
+  it('应该渲染 SystemReminderDrawer', () => {
     vi.mocked(useUiStore).mockImplementation((selector: any) => {
       const state = {
         currentView: 'inbox',
@@ -118,6 +114,5 @@ describe('AppShell', () => {
 
     render(<AppShell />)
     expect(screen.getByText('SystemReminderDrawer')).toBeInTheDocument()
-    expect(screen.queryByText('ReminderDrawer')).not.toBeInTheDocument()
   })
 })

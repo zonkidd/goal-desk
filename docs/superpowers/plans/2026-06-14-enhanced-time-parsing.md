@@ -446,7 +446,8 @@ pub fn capture_task(app: AppHandle, input: String) -> Result<DeskTask, String> {
 
     let mut tasks = load_or_seed_desk_tasks(&app)?;
     
-    // 如果有开始时间或截止时间，创建系统提醒
+    // 旧设想：如果有开始时间或截止时间，创建系统提醒
+    // 当前策略已改为系统提醒只读导入，不在 Goal Desk 中创建系统提醒
     let reminder_time = draft.planned_start_at.or(draft.due_at);
     let system_reminder_id = maybe_create_task_system_reminder(&app, &title, reminder_time);
     
@@ -730,4 +731,3 @@ git commit -m "docs: add time parsing patterns documentation"
    - "今晚8点复盘"
 
 所有测试通过后，功能完成。
-

@@ -1,0 +1,27 @@
+{
+  "TODO": {
+    "allowedTargets": ["IN_PROGRESS", "DONE"],
+    "activityActions": {
+      "IN_PROGRESS": "STARTED",
+      "DONE": "COMPLETED"
+    }
+  },
+  "IN_PROGRESS": {
+    "allowedTargets": ["PAUSED", "DONE"],
+    "activityActions": {
+      "PAUSED": "PAUSED",
+      "DONE": "COMPLETED"
+    }
+  },
+  "PAUSED": {
+    "allowedTargets": ["IN_PROGRESS", "DONE"],
+    "activityActions": {
+      "IN_PROGRESS": "RESUMED",
+      "DONE": "COMPLETED"
+    }
+  },
+  "DONE": {
+    "allowedTargets": [],
+    "activityActions": {}
+  }
+}

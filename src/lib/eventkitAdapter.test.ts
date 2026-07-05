@@ -1,7 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { EventKitAdapter, BrowserEventKitAdapter, AuthorizationStatus, CalendarEvent, Reminder } from './eventkitAdapter'
-import { BrowserEventKitAdapter as BrowserAdapterImpl } from './eventkitAdapter'
-import type { IntegrationStatus, ReminderItem } from '../types/app'
+import { invoke } from '@tauri-apps/api/core'
+import type { EventKitAdapter, BrowserEventKitAdapter, AuthorizationStatus } from './eventkitAdapter'
+import {
+  BrowserEventKitAdapter as BrowserAdapterImpl,
+  TauriEventKitAdapter,
+} from './eventkitAdapter'
+import type { IntegrationStatus } from '../types/app'
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}))
 
 describe('EventKitAdapter interface', () => {
   let adapter: EventKitAdapter
@@ -12,11 +20,6 @@ describe('EventKitAdapter interface', () => {
       requestRemindersAccess: vi.fn().mockResolvedValue('granted'),
       openCalendarEvent: vi.fn().mockResolvedValue(undefined),
       openSystemReminder: vi.fn().mockResolvedValue(undefined),
-      setSystemReminderCompleted: vi.fn().mockResolvedValue({
-        id: 'r1', title: 'Test', dueAt: undefined, done: true, listTitle: undefined,
-      }),
-      fetchCalendarEvents: vi.fn().mockResolvedValue([]),
-      fetchReminders: vi.fn().mockResolvedValue([]),
       loadCalendarRange: vi.fn().mockResolvedValue({ events: [], reminders: [] }),
       loadRawEventKitData: vi.fn().mockResolvedValue({
         calendarEvents: [],
@@ -24,7 +27,7 @@ describe('EventKitAdapter interface', () => {
         systemReminders: [],
         integrationStatus: { calendar: 'not_determined', reminders: 'not_determined' },
       }),
-    } as EventKitAdapter
+    }
   })
 
   it('requestCalendarAccess returns authorization status', async () => {
@@ -45,20 +48,13 @@ describe('EventKitAdapter interface', () => {
     await expect(adapter.openSystemReminder('rem-1')).resolves.toBeUndefined()
   })
 
-  it('setSystemReminderCompleted returns updated reminder', async () => {
-    const result = await adapter.setSystemReminderCompleted('rem-1', true)
-    expect(result).toHaveProperty('id')
-    expect(result).toHaveProperty('done')
+  it('does not expose a system Reminder completion write capability', () => {
+    expect('setSystemReminderCompleted' in adapter).toBe(false)
   })
 
-  it('fetchCalendarEvents returns array', async () => {
-    const events = await adapter.fetchCalendarEvents(new Date(), new Date())
-    expect(Array.isArray(events)).toBe(true)
-  })
-
-  it('fetchReminders returns array', async () => {
-    const reminders = await adapter.fetchReminders()
-    expect(Array.isArray(reminders)).toBe(true)
+  it('does not expose removed per-resource EventKit fetch commands', () => {
+    expect('fetchCalendarEvents' in adapter).toBe(false)
+    expect('fetchReminders' in adapter).toBe(false)
   })
 
   it('loadCalendarRange returns events and reminders', async () => {
@@ -103,22 +99,6 @@ describe('BrowserEventKitAdapter', () => {
     await expect(adapter.openSystemReminder('rem-1')).resolves.toBeUndefined()
   })
 
-  it('setSystemReminderCompleted returns mock reminder', async () => {
-    const result = await adapter.setSystemReminderCompleted('rem-1', true)
-    expect(result.id).toBe('rem-1')
-    expect(result.done).toBe(true)
-  })
-
-  it('fetchCalendarEvents returns empty array', async () => {
-    const events = await adapter.fetchCalendarEvents(new Date(), new Date())
-    expect(events).toEqual([])
-  })
-
-  it('fetchReminders returns empty array', async () => {
-    const reminders = await adapter.fetchReminders()
-    expect(reminders).toEqual([])
-  })
-
   it('loadCalendarRange returns empty events and reminders', async () => {
     const range = await adapter.loadCalendarRange(new Date().toISOString(), new Date().toISOString())
     expect(range.events).toEqual([])
@@ -130,6 +110,27 @@ describe('BrowserEventKitAdapter', () => {
     expect(data.calendarEvents).toEqual([])
     expect(data.reminders).toEqual([])
     expect(data.systemReminders).toEqual([])
-    expect(data.integrationStatus).toEqual({ calendar: 'not_determined', reminders: 'not_determined' })
+    expect(data.integrationStatus).toEqual({ calendar: 'granted', reminders: 'granted' })
+  })
+})
+
+describe('TauriEventKitAdapter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('opens system Reminders through the typed Tauri command', async () => {
+    const adapter = new TauriEventKitAdapter()
+
+    await adapter.openSystemReminder('rem-1')
+
+    expect(invoke).toHaveBeenCalledWith('open_system_reminder', { reminderId: 'rem-1' })
+  })
+
+  it('does not expose a native command wrapper to complete imported Reminders', () => {
+    const adapter = new TauriEventKitAdapter()
+
+    expect('setSystemReminderCompleted' in adapter).toBe(false)
+    expect(invoke).not.toHaveBeenCalled()
   })
 })

@@ -1,7 +1,51 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { deriveWorkspaceState } from './workspaceDerivation.ts'
+import { computeSnapshot } from './WorkspaceEngine.ts'
+
+function isSameLocalDay(left, right) {
+  return (
+    left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate()
+  )
+}
+
+function deriveAreaOptions(goals) {
+  const counts = new Map()
+
+  for (const goal of goals) {
+    const area = goal.area.trim()
+    if (!area) continue
+    counts.set(area, (counts.get(area) ?? 0) + 1)
+  }
+
+  return Array.from(counts, ([area, goalCount]) => ({
+    value: area,
+    label: area,
+    goalCount,
+  }))
+}
+
+function deriveTestWorkspaceState(input) {
+  const snapshot = computeSnapshot({
+    showCompletedTodos: false,
+    ...input,
+  })
+  const today = input.now ?? snapshot.meta.computedAt
+
+  return {
+    ...snapshot,
+    timeline: snapshot.today.timeline.filter((item) => {
+      if (!item.occurrenceDate) return true
+      return isSameLocalDay(item.occurrenceDate, today)
+    }),
+    todayFocusTasks: snapshot.today.focusTasks,
+    todayAttentionGroups: snapshot.today.attentionGroups,
+    todayRelevantGoals: snapshot.today.relevantGoals,
+    areaOptions: deriveAreaOptions(input.baseGoals),
+  }
+}
 
 function buildGoal(overrides = {}) {
   return {
@@ -33,7 +77,7 @@ function buildTask(overrides = {}) {
 }
 
 test('completed todos appear only in the inbox completed group', () => {
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [buildGoal()],
     tasks: [
@@ -50,7 +94,7 @@ test('completed todos appear only in the inbox completed group', () => {
 })
 
 test('paused and completed todos stay out of today focus', () => {
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [buildGoal()],
     tasks: [
@@ -83,10 +127,13 @@ test('paused and completed todos stay out of today focus', () => {
   assert.deepEqual(state.todayFocusTasks.map((task) => task.id), ['task-ongoing'])
 })
 
-test('goal progress and next todo remain correct under area filtering', () => {
-  const state = deriveWorkspaceState({
+test('backend-computed goal progress and next todo are preserved under area filtering', () => {
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
-    baseGoals: [buildGoal(), buildGoal({ id: 'goal-2', title: 'Health goal', area: '健康与运动' })],
+    baseGoals: [
+      buildGoal({ progress: 50, nextTodo: 'Next slice', taskCount: 2 }),
+      buildGoal({ id: 'goal-2', title: 'Health goal', area: '健康与运动', progress: 10, nextTodo: 'Run' }),
+    ],
     tasks: [
       buildTask({ id: 'task-done', status: 'DONE', linkedGoalId: 'goal-1', title: 'Done slice' }),
       buildTask({
@@ -107,7 +154,7 @@ test('goal progress and next todo remain correct under area filtering', () => {
 })
 
 test('today timeline stays aligned with scheduled todos under area filtering', () => {
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [
       { id: 'cal-1', title: 'Daily sync', timeLabel: '09:00', source: 'calendar', readonly: true, done: false },
       { id: 'task-2', title: 'Other area task', timeLabel: '10:00', source: 'todo', readonly: false, done: false },
@@ -139,7 +186,7 @@ test('today timeline stays aligned with scheduled todos under area filtering', (
 })
 
 test('todo with plannedStartAt today appears in timeline, due-only todo does not', () => {
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [{ id: 'stale-todo', title: 'Stale todo', timeLabel: '08:00', source: 'todo', readonly: false, done: false }],
     baseGoals: [],
     tasks: [
@@ -167,7 +214,7 @@ test('todo with plannedStartAt today appears in timeline, due-only todo does not
 })
 
 test('todo with plannedStartAt on different day does not appear in today timeline', () => {
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [],
     tasks: [
@@ -194,7 +241,7 @@ test('todo with plannedStartAt on different day does not appear in today timelin
 })
 
 test('today attention splits into overdue, due-today, and ongoing groups', () => {
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [],
     tasks: [
@@ -227,8 +274,8 @@ test('today attention splits into overdue, due-today, and ongoing groups', () =>
   assert.deepEqual(state.todayAttentionGroups.ongoing.map((t) => t.id), ['task-ongoing'])
 })
 
-test('paused and completed todos excluded from today attention groups', () => {
-  const state = deriveWorkspaceState({
+test('paused todos keep deadline visibility but stay out of ongoing attention', () => {
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [],
     tasks: [
@@ -255,13 +302,13 @@ test('paused and completed todos excluded from today attention groups', () => {
     now: new Date('2026-06-12T10:00:00+08:00'),
   })
 
-  assert.deepEqual(state.todayAttentionGroups.overdue, [])
+  assert.deepEqual(state.todayAttentionGroups.overdue.map((t) => t.id), ['task-paused-overdue'])
   assert.deepEqual(state.todayAttentionGroups.dueToday.map((t) => t.id), ['task-active'])
   assert.deepEqual(state.todayAttentionGroups.ongoing, [])
 })
 
 test('today relevant goals derived only from ongoing todos spanning today', () => {
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [
       buildGoal({ id: 'goal-ongoing', title: 'Goal with ongoing todo' }),
@@ -300,7 +347,7 @@ test('today relevant goals derived only from ongoing todos spanning today', () =
 })
 
 test('area options are derived from all base goals with stable first-seen order', () => {
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [
       buildGoal({ id: 'goal-1', area: '独立开发' }),
@@ -318,8 +365,8 @@ test('area options are derived from all base goals with stable first-seen order'
   ])
 })
 
-test('goal enters ready-to-complete automatically when all linked todos are done', () => {
-  const state = deriveWorkspaceState({
+test('goal status remains backend-computed when all linked todos are done', () => {
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [buildGoal({ id: 'goal-ready', status: 'ACTIVE' })],
     tasks: [
@@ -329,11 +376,11 @@ test('goal enters ready-to-complete automatically when all linked todos are done
     activeArea: 'ALL',
   })
 
-  assert.equal(state.goals[0].status, 'READY_TO_COMPLETE')
+  assert.equal(state.goals[0].status, 'ACTIVE')
 })
 
-test('goal leaves ready-to-complete automatically when linked work reopens', () => {
-  const state = deriveWorkspaceState({
+test('ready-to-complete goal status remains backend-computed when linked work is incomplete', () => {
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [buildGoal({ id: 'goal-active', status: 'READY_TO_COMPLETE' })],
     tasks: [
@@ -343,11 +390,11 @@ test('goal leaves ready-to-complete automatically when linked work reopens', () 
     activeArea: 'ALL',
   })
 
-  assert.equal(state.goals[0].status, 'ACTIVE')
+  assert.equal(state.goals[0].status, 'READY_TO_COMPLETE')
 })
 
 test('paused and archived goals do not become ready-to-complete automatically', () => {
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [
       buildGoal({ id: 'goal-paused', status: 'PAUSED' }),
@@ -364,7 +411,7 @@ test('paused and archived goals do not become ready-to-complete automatically', 
 })
 
 test('completed goal stays completed when all linked todos are done', () => {
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [buildGoal({ id: 'goal-completed', status: 'COMPLETED' })],
     tasks: [
@@ -377,8 +424,8 @@ test('completed goal stays completed when all linked todos are done', () => {
   assert.equal(state.goals[0].status, 'COMPLETED')
 })
 
-test('completed goal returns to active when linked work reopens', () => {
-  const state = deriveWorkspaceState({
+test('completed goal stays completed when linked work is incomplete', () => {
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [buildGoal({ id: 'goal-completed', status: 'COMPLETED' })],
     tasks: [
@@ -388,7 +435,7 @@ test('completed goal returns to active when linked work reopens', () => {
     activeArea: 'ALL',
   })
 
-  assert.equal(state.goals[0].status, 'ACTIVE')
+  assert.equal(state.goals[0].status, 'COMPLETED')
 })
 
 // ========== 今日焦点新增测试 ==========
@@ -398,7 +445,7 @@ test('today focus tasks: only IN_PROGRESS tasks within time range', () => {
   const yesterday = new Date('2026-06-12T14:00:00+08:00')
   const tomorrow = new Date('2026-06-14T14:00:00+08:00')
 
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [],
     tasks: [
@@ -455,16 +502,16 @@ test('today focus tasks: only IN_PROGRESS tasks within time range', () => {
   )
 })
 
-test('today timeline: today-starting tasks show automatically, multi-day tasks need showInTimeline', () => {
+test('today timeline: tasks appear on their planned start day only', () => {
   const today = new Date('2026-06-13T12:00:00+08:00')
   const yesterday = new Date('2026-06-12T14:00:00+08:00')
   const tomorrow = new Date('2026-06-14T14:00:00+08:00')
 
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [],
     tasks: [
-      // 应该包含: 跨天任务 + showInTimeline=true
+      // 应该排除: 昨天开始的 Todo 不因 Due Time 延展到今天
       buildTask({
         id: 'multi-day-with-flag',
         status: 'IN_PROGRESS',
@@ -487,7 +534,7 @@ test('today timeline: today-starting tasks show automatically, multi-day tasks n
         dueDate: new Date('2026-06-13T18:00:00+08:00'),
         showInTimeline: true,
       }),
-      // 应该排除: 跨天任务但 showInTimeline=false
+      // 应该排除: 跨天任务且 showInTimeline=false
       buildTask({
         id: 'multi-day-no-flag',
         status: 'IN_PROGRESS',
@@ -495,7 +542,7 @@ test('today timeline: today-starting tasks show automatically, multi-day tasks n
         dueDate: tomorrow,
         showInTimeline: false,
       }),
-      // 应该排除: TODO 状态
+      // 应该包含: TODO 但有计划开始时间，进入今日时间轴等待开始
       buildTask({
         id: 'todo-timeline-task',
         status: 'TODO',
@@ -518,14 +565,14 @@ test('today timeline: today-starting tasks show automatically, multi-day tasks n
 
   assert.deepEqual(
     state.timeline.map((t) => t.id).sort(),
-    ['multi-day-with-flag', 'today-start-no-flag', 'today-start-with-flag'].sort()
+    ['today-start-no-flag', 'today-start-with-flag', 'todo-timeline-task'].sort()
   )
 })
 
 test('today focus: TODO status tasks are excluded (Issue 020)', () => {
   const today = new Date('2026-06-13T12:00:00+08:00')
 
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [],
     tasks: [
@@ -560,7 +607,7 @@ test('today focus and timeline: no due date tasks handled correctly', () => {
   const yesterday = new Date('2026-06-12T10:00:00+08:00')
   const tomorrow = new Date('2026-06-14T10:00:00+08:00')
 
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [],
     tasks: [
@@ -572,7 +619,7 @@ test('today focus and timeline: no due date tasks handled correctly', () => {
         dueDate: undefined,
         showInTimeline: true,
       }),
-      // 应该包含: 昨天开始，无截止
+      // 今日焦点包含: 昨天开始，无截止
       buildTask({
         id: 'yesterday-no-due',
         status: 'IN_PROGRESS',
@@ -599,10 +646,10 @@ test('today focus and timeline: no due date tasks handled correctly', () => {
     ['today-no-due', 'yesterday-no-due'].sort()
   )
 
-  // 时间轴也应该包含这两个任务
+  // 时间轴只包含 Planned Start Time 在今天的 Todo
   assert.deepEqual(
     state.timeline.map((t) => t.id).sort(),
-    ['today-no-due', 'yesterday-no-due'].sort()
+    ['today-no-due'].sort()
   )
 })
 
@@ -611,7 +658,7 @@ test('ongoing group excludes overdue and due-today tasks', () => {
   const yesterday = new Date('2026-06-12T14:00:00+08:00')
   const tomorrow = new Date('2026-06-14T14:00:00+08:00')
 
-  const state = deriveWorkspaceState({
+  const state = deriveTestWorkspaceState({
     baseTimeline: [],
     baseGoals: [],
     tasks: [

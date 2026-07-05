@@ -32,8 +32,8 @@ test.describe('日历看板 E2E', () => {
     // 点击日视图 Tab
     await page.click('button:has-text("日视图")')
 
-    // 验证日视图内容（应该显示月历组件）
-    await expect(page.locator('text=月历组件')).toBeVisible()
+    // 验证日视图内容（应该显示含有“个日程”的列表容器）
+    await expect(page.locator('text=个日程')).toBeVisible()
 
     // 切换回周视图
     await page.click('button:has-text("周视图")')

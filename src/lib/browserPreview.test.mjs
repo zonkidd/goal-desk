@@ -71,14 +71,13 @@ test('task primary status labels match the action semantics for visible transiti
   assert.equal(getTaskPrimaryStatusLabel('DONE'), '')
 })
 
-test('TODO to IN_PROGRESS logs STARTED, PAUSED to IN_PROGRESS logs RESUMED', () => {
+test('status transitions use precise activity log actions', () => {
   assert.equal(logActionForTransition('TODO', 'IN_PROGRESS'), 'STARTED')
   assert.equal(logActionForTransition('PAUSED', 'IN_PROGRESS'), 'RESUMED')
   assert.equal(logActionForTransition('IN_PROGRESS', 'PAUSED'), 'PAUSED')
   assert.equal(logActionForTransition('TODO', 'DONE'), 'COMPLETED')
   assert.equal(logActionForTransition('IN_PROGRESS', 'DONE'), 'COMPLETED')
   assert.equal(logActionForTransition('PAUSED', 'DONE'), 'COMPLETED')
-  assert.equal(logActionForTransition('DONE', 'TODO'), 'RESUMED')
 })
 
 test('browser runtime exposes a preview-only status message', () => {

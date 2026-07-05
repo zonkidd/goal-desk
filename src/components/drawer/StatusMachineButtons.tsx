@@ -1,4 +1,4 @@
-import { CheckCircle2, PauseCircle, PlayCircle, RotateCcw } from 'lucide-react'
+import { CheckCircle2, PauseCircle, PlayCircle } from 'lucide-react'
 import type { TaskStatus } from '../../types/task'
 import { cn } from '../../lib/cn'
 import { getTaskPrimaryStatusLabel } from '../../lib/taskPresentation'
@@ -47,15 +47,6 @@ export function StatusMachineButtons({ status, statusActions, onAction }: Status
         >
           <CheckCircle2 className="h-5 w-5 transition-transform duration-200" />
           Complete
-        </button>
-      )}
-      {statusActions.includes('TODO') && (
-        <button
-          onClick={() => onAction('TODO')}
-          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300"
-        >
-          <RotateCcw className="h-5 w-5 transition-transform duration-200" />
-          Reopen
         </button>
       )}
     </div>

@@ -12,8 +12,9 @@ import {
   type InboxTaskGroups,
   type TodayAttentionGroups,
   type TodayRelevantGoal,
-} from './workspaceDerivation'
-import { startOfDay, formatTimeLabel } from './dateUtils'
+} from './workspaceDerivation.ts'
+import { computeAgendaTimeline } from './agendaTimeline.ts'
+import { prepareExternalAttention } from './externalAttentionIntake.ts'
 
 export interface WorkspaceSnapshot {
   goals: GoalCard[]
@@ -47,17 +48,19 @@ export function computeSnapshot(state: AtomicState): WorkspaceSnapshot {
   const goals = filterGoalsByArea(state.baseGoals, state.activeArea)
   const filteredTasks = filterTasksByArea(state.tasks, state.baseGoals, state.activeArea)
   const focusFiltered = getTodayFocusTasks(state.tasks, state.baseGoals, state.activeArea, now)
-  const timeline = deriveTodayAgenda(state.baseTimeline, state.tasks, now)
+  const externalAttention = prepareExternalAttention({
+    baseTimeline: state.baseTimeline,
+    tasks: state.tasks,
+    systemReminders: state.systemReminders,
+  })
+  const timeline = deriveTodayAgenda(externalAttention.baseTimeline, state.tasks, now)
   const timelineFiltered = state.activeArea === 'ALL' ? timeline : filterAgendaByArea(timeline, filteredTasks)
 
-  const linkedReminderIds = new Set(
-    state.tasks.filter((t) => t.systemReminderId).map((t) => t.systemReminderId!),
-  )
   const attentionGroups = deriveTodayAttentionGroups(
     state.activeArea === 'ALL' ? state.tasks : filteredTasks,
     now,
-    state.systemReminders ?? [],
-    linkedReminderIds,
+    externalAttention.systemReminders,
+    externalAttention.linkedReminderIds,
   )
   const relevantGoals = deriveTodayRelevantGoals(state.baseGoals, attentionGroups)
   const inbox = getInboxTaskGroups(filteredTasks, state.showCompletedTodos)
@@ -86,65 +89,5 @@ export function computeRangeTimeline(
   rangeStart: Date,
   rangeEnd: Date,
 ): TimelineItem[] {
-  const rangeStartDate = startOfDay(rangeStart)
-  const rangeEndDate = startOfDay(rangeEnd)
-
-  const baseItems = baseTimeline.filter((item) => {
-    if (item.source === 'todo') return false
-    const dateSource = item.startsAt ?? item.occurrenceDate
-    if (!dateSource) return false
-    const d = startOfDay(dateSource instanceof Date ? dateSource : new Date(dateSource))
-    return d.getTime() >= rangeStartDate.getTime() && d.getTime() <= rangeEndDate.getTime()
-  })
-
-  const taskItems: TimelineItem[] = []
-  for (const task of tasks) {
-    if (task.status === 'DONE') continue
-    const taskStartAt = task.plannedStartAt || task.dueDate
-    if (!taskStartAt) continue
-
-    const startDay = startOfDay(taskStartAt)
-    const endDay = task.dueDate ? startOfDay(task.dueDate) : undefined
-    const isMultiDay = endDay && endDay.getTime() > startDay.getTime()
-
-    if (!isMultiDay) {
-      if (startDay.getTime() >= rangeStartDate.getTime() && startDay.getTime() <= rangeEndDate.getTime()) {
-        taskItems.push({
-          id: task.id,
-          title: task.title,
-          timeLabel: formatTimeLabel(taskStartAt),
-          source: 'todo',
-          readonly: false,
-          done: false,
-          sourceLabel: task.linkedGoalLabel || 'Desk Task',
-          startsAt: taskStartAt,
-          linkedGoalId: task.linkedGoalId,
-        })
-      }
-    } else {
-      const dayMs = 24 * 60 * 60 * 1000
-      const totalDays = Math.round((endDay!.getTime() - startDay.getTime()) / dayMs)
-      for (let i = 0; i <= totalDays; i++) {
-        const dayDate = new Date(startDay.getTime() + i * dayMs)
-        if (dayDate.getTime() >= rangeStartDate.getTime() && dayDate.getTime() <= rangeEndDate.getTime()) {
-          taskItems.push({
-            id: task.id,
-            title: task.title,
-            timeLabel: formatTimeLabel(taskStartAt),
-            source: 'todo',
-            readonly: false,
-            done: false,
-            sourceLabel: task.linkedGoalLabel || 'Desk Task',
-            startsAt: taskStartAt,
-            occurrenceDate: dayDate,
-            linkedGoalId: task.linkedGoalId,
-          })
-        }
-      }
-    }
-  }
-
-  return [...baseItems, ...taskItems].sort(
-    (a, b) => (a.timeLabel || '').localeCompare(b.timeLabel || ''),
-  )
+  return computeAgendaTimeline({ baseTimeline, tasks, rangeStart, rangeEnd })
 }

@@ -5,7 +5,6 @@ import { GlassCard } from '../common/GlassCard'
 import { GlassPanel } from '../common/GlassPanel'
 import { useUiStore } from '../../store/uiStore'
 import { useEventkitStore } from '../../store/eventkitStore'
-import { useToggleSystemReminder } from '../../store/appStore'
 import { groupRemindersByList, groupRemindersByTime, formatDueDate } from '../../lib/reminderUtils'
 import { UNCATEGORIZED_AREA_TITLE } from '../../lib/constants'
 import type { ReminderItem } from '../../types/app'
@@ -36,7 +35,6 @@ export function RemindersView() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['overdue', 'today']))
 
   const systemReminders = useEventkitStore((state) => state.systemReminders)
-  const toggleSystemReminderDone = useToggleSystemReminder()
   const openDrawer = useUiStore((state) => state.openDrawer)
 
   const toggleGroup = (groupId: string) => {
@@ -123,10 +121,6 @@ export function RemindersView() {
     },
   ]
 
-  const handleToggleReminder = async (reminderId: string, done: boolean) => {
-    await toggleSystemReminderDone(reminderId, done)
-  }
-
   return (
     <section id="reminders" className="screen active">
       <div className="mb-8 flex items-end justify-between animate-spring">
@@ -191,7 +185,6 @@ export function RemindersView() {
             <ByListView
               lists={reminderLists}
               hideCompleted={hideCompleted}
-              onToggle={handleToggleReminder}
               onReminderClick={(id) => openDrawer('reminder', id)}
             />
           </motion.div>
@@ -208,7 +201,6 @@ export function RemindersView() {
               hideCompleted={hideCompleted}
               expandedGroups={expandedGroups}
               onToggleGroup={toggleGroup}
-              onToggle={handleToggleReminder}
               onReminderClick={(id) => openDrawer('reminder', id)}
             />
           </motion.div>
@@ -222,12 +214,10 @@ export function RemindersView() {
 function ByListView({
   lists,
   hideCompleted,
-  onToggle,
   onReminderClick,
 }: {
   lists: ReminderList[]
   hideCompleted: boolean
-  onToggle: (id: string, done: boolean) => void
   onReminderClick: (id: string) => void
 }) {
   return (
@@ -259,7 +249,6 @@ function ByListView({
                       key={reminder.id}
                       reminder={reminder}
                       index={idx}
-                      onToggle={onToggle}
                       onClick={() => onReminderClick(reminder.id)}
                     />
                   ))}
@@ -289,14 +278,12 @@ function ByTimeView({
   hideCompleted,
   expandedGroups,
   onToggleGroup,
-  onToggle,
   onReminderClick,
 }: {
   groups: TimeGroup[]
   hideCompleted: boolean
   expandedGroups: Set<string>
   onToggleGroup: (groupId: string) => void
-  onToggle: (id: string, done: boolean) => void
   onReminderClick: (id: string) => void
 }) {
   return (
@@ -352,7 +339,6 @@ function ByTimeView({
                         index={idx}
                         bgColor={group.bgColor}
                         borderColor={group.borderColor}
-                        onToggle={onToggle}
                         onClick={() => onReminderClick(reminder.id)}
                       />
                     ))}
@@ -377,12 +363,10 @@ function ByTimeView({
 function ReminderCard({
   reminder,
   index,
-  onToggle,
   onClick,
 }: {
   reminder: ReminderItem
   index: number
-  onToggle: (id: string, done: boolean) => void
   onClick: () => void
 }) {
   return (
@@ -395,14 +379,7 @@ function ReminderCard({
       <GlassCard
         className={`rounded-xl p-3 ${reminder.done ? 'opacity-60' : ''}`}
       >
-        <label className="flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
-            checked={reminder.done}
-            onChange={(e) => onToggle(reminder.id, e.target.checked)}
-            onClick={(e) => e.stopPropagation()}
-            className="mt-1 rounded"
-          />
+        <div className="flex items-start gap-3">
           <button type="button" onClick={onClick} className="flex-1 text-left">
             <div className={`text-sm font-bold ${reminder.done ? 'text-slate-600 line-through' : 'text-slate-900'}`}>
               {reminder.title}
@@ -413,7 +390,7 @@ function ReminderCard({
               </div>
             )}
           </button>
-        </label>
+        </div>
       </GlassCard>
     </motion.div>
   )
@@ -425,14 +402,12 @@ function TimeGroupReminderCard({
   index,
   bgColor,
   borderColor,
-  onToggle,
   onClick,
 }: {
   reminder: ReminderItem
   index: number
   bgColor: string
   borderColor: string
-  onToggle: (id: string, done: boolean) => void
   onClick: () => void
 }) {
   return (
@@ -445,14 +420,7 @@ function TimeGroupReminderCard({
       <GlassCard
         className={`rounded-xl border-l-4 ${borderColor} ${bgColor} p-4 ${reminder.done ? 'opacity-60' : ''}`}
       >
-        <label className="flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
-            checked={reminder.done}
-            onChange={(e) => onToggle(reminder.id, e.target.checked)}
-            onClick={(e) => e.stopPropagation()}
-            className="mt-1 rounded"
-          />
+        <div className="flex items-start gap-3">
           <button type="button" onClick={onClick} className="flex-1 text-left">
             <div className={`text-sm font-bold ${reminder.done ? 'text-slate-600 line-through' : 'text-slate-900'}`}>
               {reminder.title}
@@ -467,7 +435,7 @@ function TimeGroupReminderCard({
               )}
             </div>
           </button>
-        </label>
+        </div>
       </GlassCard>
     </motion.div>
   )

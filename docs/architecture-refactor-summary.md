@@ -262,7 +262,7 @@ After:  两个独立类 → 真实接缝（可测试、可替换）
 
 ### 长期（3-6 月）
 1. **ViewModel 层**: 引入 `useGoalsViewModel()` 等封装 Store 交互
-2. **Task 行为内聚**: 合并 `taskPresentation`、`taskStateMachine`、`todoEditing` 模块
+2. **Task 行为内聚**: 继续收敛 `taskPresentation`、`todoTransition`、`todoEditing` 模块
 3. **CQRS 模式**: 分离读写模型，进一步优化性能
 
 ---

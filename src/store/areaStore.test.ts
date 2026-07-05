@@ -62,6 +62,20 @@ describe('areaStore', () => {
     expect(state.allAreas[0].title).toBe('Renamed')
   })
 
+  it('stores the complete Area returned by renameArea', async () => {
+    const existingArea = { id: '1', title: 'Old', goalCount: 1, activeGoalCount: 1, isSystem: false }
+    const renamedArea = { id: '1', title: 'Renamed', goalCount: 3, activeGoalCount: 2, isSystem: true }
+    useAreaStore.setState({ allAreas: [existingArea] })
+    const { getWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')
+    ;(getWorkspaceMutationAdapter as any).mockReturnValue({
+      renameArea: vi.fn().mockResolvedValue({ area: renamedArea }),
+    })
+
+    await useAreaStore.getState().renameArea('1', 'Renamed')
+
+    expect(useAreaStore.getState().allAreas).toEqual([renamedArea])
+  })
+
   it('should delete area from list', async () => {
     useAreaStore.setState({ allAreas: [{ id: '1', title: 'To Delete', goalCount: 0, activeGoalCount: 0, isSystem: false }] })
     const { getWorkspaceMutationAdapter } = await import('../lib/workspaceMutations')

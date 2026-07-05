@@ -107,7 +107,7 @@
 | Calendar 点击行为    | ✅ 完整实现   | 三种 Drawer                    |
 | Reminders By List    | ✅ 完整实现   | 2-4 列自适应网格               |
 | Reminders By Time    | ✅ 完整实现   | 5 组折叠/展开                  |
-| Reminders Checkbox   | ✅ 完整实现   | `toggleSystemReminderDone`     |
+| Reminders Read-only  | ✅ 完整实现   | 只读展示完成状态，外部打开系统提醒 |
 | Reminders 隐藏已完成 | ✅ 完整实现   | `hideCompleted` 状态           |
 
 **关键缺失**: Calendar Day View 占位未完成

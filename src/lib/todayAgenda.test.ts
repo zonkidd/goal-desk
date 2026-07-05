@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { deriveTodayAgenda } from './todayAgenda'
 import type { Task } from '../types/task'
-import { startOfDay } from './dateUtils'
 
 describe('deriveTodayAgenda - multi-day task filtering', () => {
-  it('should only include today occurrence for multi-day tasks', () => {
+  it('does not expand a Todo from Planned Start Time through Due Time', () => {
     const now = new Date('2026-06-03T10:00:00+08:00')
     const tasks: Task[] = [
       {
@@ -22,17 +21,6 @@ describe('deriveTodayAgenda - multi-day task filtering', () => {
     const agenda = deriveTodayAgenda([], tasks, now)
     const todoItems = agenda.filter((item) => item.source === 'todo')
 
-    // 多日任务展开为 5 天
-    expect(todoItems).toHaveLength(5)
-
-    // 只有 occurrenceDate 等于今天的条目应该被 TodayView 显示
-    const today = startOfDay(now)
-    const todayItems = todoItems.filter((item) => {
-      if (!item.occurrenceDate) return true
-      return startOfDay(item.occurrenceDate).getTime() === today.getTime()
-    })
-
-    expect(todayItems).toHaveLength(1)
-    expect(todayItems[0].title).toBe('跨天任务')
+    expect(todoItems).toEqual([])
   })
 })

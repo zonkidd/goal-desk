@@ -39,7 +39,7 @@
 | `updateTaskStatus` | `tasks` | 更新任务状态 |
 | `updateTaskContent` | `tasks` | 更新任务内容 |
 | `updateTaskFields` | `tasks` | 更新任务字段 |
-| `toggleSystemReminderDone` | `tasks` | 系统提醒完成状态 |
+| `openSystemReminder` | `eventkit` | 只读打开系统提醒 |
 | `createGoal` | `goals` | 创建目标 |
 | `updateGoalFields` | `goals` | 更新目标字段 |
 | `updateGoalStatus` | `goals` | 更新目标状态 |

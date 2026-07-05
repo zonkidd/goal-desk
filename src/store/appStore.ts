@@ -14,7 +14,6 @@ export { useAreaStore } from './areaStore'
 export {
   useAppHydration,
   useReceiveExternalTask,
-  useToggleSystemReminder,
   useReloadWorkspaceAfterAreaChange,
 } from '../hooks/useStoreComposition'
 

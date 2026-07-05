@@ -2,39 +2,29 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useState } from 'react'
 import { useTaskStore } from '../../store/taskStore'
 import { useUiStore } from '../../store/uiStore'
-import { QuickCaptureForm, type CreationMode } from './QuickCaptureForm'
+import { QuickCaptureForm } from './QuickCaptureForm'
+import { runQuickCapture } from '../../lib/quickCaptureFlow'
 
 export function QuickCaptureModal() {
   const isOpen = useUiStore((state) => state.isQuickCaptureOpen)
   const closeQuickCapture = useUiStore((state) => state.closeQuickCapture)
   const addTask = useTaskStore((state) => state.addTask)
-  const createAndLinkReminder = useTaskStore((state) => state.createAndLinkReminder)
-  const openDrawer = useUiStore((state) => state.openDrawer)
   const setView = useUiStore((state) => state.setView)
   const [value, setValue] = useState('')
 
-  const handleSubmit = async (mode: CreationMode) => {
+  const handleSubmit = async () => {
     const trimmed = value.trim()
     if (!trimmed) return
 
-    if (mode === 'local') {
-      // 仅创建本地任务
-      const task = await addTask(trimmed)
-      if (task) {
-        openDrawer('task',task.id)
-        setView('inbox')
-      }
-    } else if (mode === 'reminder') {
-      // 仅创建系统提醒
-      await createAndLinkReminder('', trimmed)
-    } else if (mode === 'both') {
-      // 创建本地任务并关联系统提醒
-      const task = await addTask(trimmed)
-      if (task) {
-        await createAndLinkReminder(task.id, trimmed)
-        openDrawer('task',task.id)
-        setView('inbox')
-      }
+    const result = await runQuickCapture({
+      input: trimmed,
+      port: {
+        createTask: addTask,
+      },
+    })
+
+    if (result.task) {
+      setView('inbox')
     }
 
     setValue('')

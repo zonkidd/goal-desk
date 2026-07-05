@@ -10,7 +10,7 @@ pub enum TimelineSource {
     Calendar,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TaskStatus {
     Todo,
@@ -28,6 +28,21 @@ pub enum TaskActivityAction {
     Resumed,
     Completed,
     NoteAdded,
+}
+
+pub fn task_activity_action_for_transition(
+    from_status: TaskStatus,
+    to_status: TaskStatus,
+) -> TaskActivityAction {
+    match (from_status, to_status) {
+        (TaskStatus::Todo, TaskStatus::InProgress) => TaskActivityAction::Started,
+        (TaskStatus::Todo, TaskStatus::Done) => TaskActivityAction::Completed,
+        (TaskStatus::InProgress, TaskStatus::Paused) => TaskActivityAction::Paused,
+        (TaskStatus::InProgress, TaskStatus::Done) => TaskActivityAction::Completed,
+        (TaskStatus::Paused, TaskStatus::InProgress) => TaskActivityAction::Resumed,
+        (TaskStatus::Paused, TaskStatus::Done) => TaskActivityAction::Completed,
+        _ => TaskActivityAction::NoteAdded,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,7 +128,8 @@ impl Goal {
             return self.status;
         }
 
-        let goal_tasks: Vec<_> = tasks.iter()
+        let goal_tasks: Vec<_> = tasks
+            .iter()
             .filter(|t| t.linked_goal_id == Some(self.id))
             .collect();
 
@@ -274,10 +290,10 @@ impl DeskTask {
             (Todo, InProgress) | (Todo, Done) => true,
             // IN_PROGRESS 可以暂停或完成
             (InProgress, Paused) | (InProgress, Done) => true,
-            // PAUSED 只能恢复（回到 IN_PROGRESS）
-            (Paused, InProgress) => true,
-            // DONE 可以重新打开
-            (Done, Todo) => true,
+            // PAUSED 可以恢复，也可以直接完成
+            (Paused, InProgress) | (Paused, Done) => true,
+            // DONE 是只读终态
+            (Done, _) => false,
             // 其他转换禁止
             _ => false,
         }
@@ -290,11 +306,8 @@ impl DeskTask {
         }
 
         if let Some(planned) = self.planned_start_at {
-            return planned.date_naive() == today;
-        }
-
-        if let Some(due) = self.due_at {
-            return due.date_naive() <= today;
+            let start_day = planned.date_naive();
+            return start_day == today;
         }
 
         false
@@ -324,15 +337,10 @@ impl DeskTask {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Urgency {
     Overdue,
-    High,    // < 24h
-    Medium,  // < 72h
+    High,   // < 24h
+    Medium, // < 72h
     Low,
     None,
-}
-
-pub enum SideEffect {
-    None,
-    ReminderSync(Box<dyn FnOnce(&str, bool) -> Result<(), String>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -373,7 +381,8 @@ impl WorkspaceSnapshot {
 
     /// 根据 ID 查找 Area 的标题
     pub fn area_title(&self, area_id: Uuid) -> Option<String> {
-        self.areas.iter()
+        self.areas
+            .iter()
             .find(|a| a.id == area_id)
             .map(|a| a.title.clone())
     }
@@ -403,7 +412,7 @@ pub fn today_timeline(
                 title: reminder.title.clone(),
                 starts_at: reminder.due_at,
                 source: TimelineSource::Reminder,
-                read_only: false,
+                read_only: true,
                 completed: reminder.done,
                 source_label: None,
             });
@@ -440,7 +449,7 @@ pub fn parse_quick_capture(input: &str, now: DateTime<Local>) -> QuickCaptureDra
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Timelike;
+    use chrono::{TimeZone, Timelike};
 
     #[test]
     fn test_goal_state_transitions() {
@@ -529,28 +538,32 @@ mod tests {
             },
         ];
 
-        assert_eq!(goal.compute_derived_status(&incomplete_tasks), GoalStatus::Active);
+        assert_eq!(
+            goal.compute_derived_status(&incomplete_tasks),
+            GoalStatus::Active
+        );
 
         // 全部完成 -> READY_TO_COMPLETE
-        let complete_tasks = vec![
-            DeskTask {
-                id: Uuid::new_v4(),
-                title: "Task 1".to_string(),
-                content: String::new(),
-                linked_goal_id: Some(goal.id),
-                linked_goal_label: Some(goal.title.clone()),
-                status: TaskStatus::Done,
-                planned_start_at: None,
-                due_at: None,
-                bear_note_id: None,
-                system_reminder_id: None,
-                show_in_timeline: false,
-                activity_logs: vec![],
-                deleted_at: None,
-            },
-        ];
+        let complete_tasks = vec![DeskTask {
+            id: Uuid::new_v4(),
+            title: "Task 1".to_string(),
+            content: String::new(),
+            linked_goal_id: Some(goal.id),
+            linked_goal_label: Some(goal.title.clone()),
+            status: TaskStatus::Done,
+            planned_start_at: None,
+            due_at: None,
+            bear_note_id: None,
+            system_reminder_id: None,
+            show_in_timeline: false,
+            activity_logs: vec![],
+            deleted_at: None,
+        }];
 
-        assert_eq!(goal.compute_derived_status(&complete_tasks), GoalStatus::ReadyToComplete);
+        assert_eq!(
+            goal.compute_derived_status(&complete_tasks),
+            GoalStatus::ReadyToComplete
+        );
     }
 
     #[test]
@@ -568,15 +581,15 @@ mod tests {
         assert!(task.can_transition_to(TaskStatus::Done));
         assert!(!task.can_transition_to(TaskStatus::Todo));
 
-        // PAUSED 只能恢复
+        // PAUSED 可以恢复或完成
         task.status = TaskStatus::Paused;
         assert!(task.can_transition_to(TaskStatus::InProgress));
-        assert!(!task.can_transition_to(TaskStatus::Done));
+        assert!(task.can_transition_to(TaskStatus::Done));
         assert!(!task.can_transition_to(TaskStatus::Todo));
 
-        // DONE 可以重新打开
+        // DONE 是只读终态
         task.status = TaskStatus::Done;
-        assert!(task.can_transition_to(TaskStatus::Todo));
+        assert!(!task.can_transition_to(TaskStatus::Todo));
         assert!(!task.can_transition_to(TaskStatus::InProgress));
 
         // 幂等转换
@@ -630,13 +643,31 @@ mod tests {
         assert!(task.should_show_in_today_timeline(today));
 
         // planned_start_at 不匹配
-        task.planned_start_at = Some(Local::now().with_hour(9).unwrap() + chrono::Duration::days(1));
+        task.planned_start_at =
+            Some(Local::now().with_hour(9).unwrap() + chrono::Duration::days(1));
         assert!(!task.should_show_in_today_timeline(today));
 
-        // due_at 匹配（今天或之前）
+        // planned_start_at does not span through due_at; Due Time is deadline metadata
+        task.planned_start_at =
+            Some(Local::now().with_hour(9).unwrap() - chrono::Duration::days(1));
+        task.due_at = Some(Local::now().with_hour(17).unwrap() + chrono::Duration::days(1));
+        assert!(!task.should_show_in_today_timeline(today));
+
+        // due_at alone drives deadline visibility, not Today Timeline placement
         task.planned_start_at = None;
         task.due_at = Some(Local::now().with_hour(17).unwrap());
-        assert!(task.should_show_in_today_timeline(today));
+        assert!(!task.should_show_in_today_timeline(today));
+    }
+
+    #[test]
+    fn task_timeline_display_does_not_span_until_due_date() {
+        let today = NaiveDate::from_ymd_opt(2026, 6, 14).unwrap();
+        let mut task = DeskTask::new_todo("Test".to_string());
+        task.show_in_timeline = true;
+        task.planned_start_at = Some(Local.with_ymd_and_hms(2026, 6, 13, 9, 0, 0).unwrap());
+        task.due_at = Some(Local.with_ymd_and_hms(2026, 6, 15, 18, 0, 0).unwrap());
+
+        assert!(!task.should_show_in_today_timeline(today));
     }
 
     #[test]

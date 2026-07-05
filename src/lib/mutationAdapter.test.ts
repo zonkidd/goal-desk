@@ -41,7 +41,6 @@ describe('MutationAdapter interface', () => {
       createArea: vi.fn().mockResolvedValue({ area: { id: 'a1', title: 'Work', goalCount: 0, activeGoalCount: 0, isSystem: false } as AreaWithStats, statusMessage: 'ok' }),
       renameArea: vi.fn().mockResolvedValue({ area: { id: 'a1', title: 'Renamed', goalCount: 0, activeGoalCount: 0, isSystem: false } as AreaWithStats, statusMessage: 'ok' }),
       deleteArea: vi.fn().mockResolvedValue({ success: true, message: 'deleted', statusMessage: 'ok' }),
-      createSystemReminder: vi.fn().mockResolvedValue({ id: 'reminder-id', title: 'Test', done: false }),
       loadGoals: vi.fn().mockResolvedValue([mockGoal]),
       softDeleteTask: vi.fn().mockResolvedValue(undefined),
       restoreTask: vi.fn().mockResolvedValue({ task: mockTask, statusMessage: 'restored' }),
@@ -49,7 +48,7 @@ describe('MutationAdapter interface', () => {
       softDeleteGoal: vi.fn().mockResolvedValue(undefined),
       restoreGoal: vi.fn().mockResolvedValue({ goal: mockGoal, statusMessage: 'restored' }),
       listDeletedGoals: vi.fn().mockResolvedValue([]),
-    } as MutationAdapter
+    }
   })
 
   it('createTask returns task and statusMessage', async () => {
@@ -100,10 +99,8 @@ describe('MutationAdapter interface', () => {
     expect(typeof result.success).toBe('boolean')
   })
 
-  it('createSystemReminder returns ReminderItem', async () => {
-    const reminder = await adapter.createSystemReminder('Reminder')
-    expect(reminder).toHaveProperty('id')
-    expect(reminder).toHaveProperty('title')
+  it('does not expose a System Reminder write capability', () => {
+    expect('createSystemReminder' in adapter).toBe(false)
   })
 
   it('updateTaskFields accepts linkedGoalLabel directly', async () => {

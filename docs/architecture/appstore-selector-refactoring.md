@@ -44,7 +44,7 @@
 ### 4. 更新状态同步逻辑
 
 - `hydrateApp` - 移除对 `timeline` 和 `goals` 的设置
-- `toggleSystemReminderDone` - 改为更新 `baseTimeline` 而不是 `timeline`
+- EventKit 导入数据 - 只读刷新 `baseTimeline` 而不是手动写入 `timeline`
 
 ## 收益
 

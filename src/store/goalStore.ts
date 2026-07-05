@@ -18,7 +18,7 @@ export interface GoalStoreState {
   updateGoalFields: (goalId: string, input: { title: string; area: string; description: string }) => Promise<GoalCard | null>
   updateGoalStatus: (goalId: string, status: GoalStatus) => Promise<GoalCard | null>
   softDeleteGoal: (goalId: string) => Promise<void>
-  restoreGoal: (goalId: string) => Promise<void>
+  restoreGoal: (goalId: string) => Promise<GoalCard | null>
   loadDeletedGoals: () => Promise<void>
 }
 
@@ -92,15 +92,17 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
 
   restoreGoal: async (goalId: string) => {
     const adapter = getWorkspaceMutationAdapter()
-    try {
-      const result = await adapter.restoreGoal(goalId)
-      if (result.goal) {
-        set({ baseGoals: [...get().baseGoals, result.goal] })
-      }
-      await get().loadDeletedGoals()
-    } catch (error) {
-      console.error('Failed to restore goal:', error)
-    }
+    const result = await executeMutation(
+      (a) => a.restoreGoal(goalId),
+      adapter,
+      {
+        onSuccess: async ({ goal }) => {
+          if (goal) get().replaceGoal(goal)
+          await get().loadDeletedGoals()
+        },
+      },
+    )
+    return result?.goal ?? null
   },
 
   loadDeletedGoals: async () => {

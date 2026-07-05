@@ -35,7 +35,6 @@ describe('goalStore.refreshGoals', () => {
       createArea: vi.fn(),
       renameArea: vi.fn(),
       deleteArea: vi.fn(),
-      createSystemReminder: vi.fn(),
       loadGoals: vi.fn().mockResolvedValue([mockGoal]),
       softDeleteTask: vi.fn(),
       restoreTask: vi.fn(),
@@ -58,5 +57,26 @@ describe('goalStore.refreshGoals', () => {
     const goals = useGoalStore.getState().baseGoals
     expect(goals).toHaveLength(1)
     expect(goals[0].id).toBe('goal-1')
+  })
+
+  it('restoreGoal returns and replaces a restored Goal that is already loaded', async () => {
+    const existingGoal: GoalCard = {
+      ...mockGoal,
+      title: 'Original Goal',
+    }
+    const restoredGoal: GoalCard = {
+      ...mockGoal,
+      title: 'Restored Goal',
+    }
+    mockAdapter.restoreGoal = vi.fn().mockResolvedValue({ goal: restoredGoal })
+    mockAdapter.listDeletedGoals = vi.fn().mockResolvedValue([])
+    setWorkspaceMutationAdapter(mockAdapter)
+    useGoalStore.setState({ baseGoals: [existingGoal], deletedGoals: [restoredGoal] })
+
+    const result = await useGoalStore.getState().restoreGoal('goal-1')
+
+    expect(result).toEqual(restoredGoal)
+    expect(useGoalStore.getState().baseGoals).toEqual([restoredGoal])
+    expect(useGoalStore.getState().deletedGoals).toEqual([])
   })
 })

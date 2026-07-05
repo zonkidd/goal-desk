@@ -174,7 +174,7 @@
 
 - **日历周视图**：7 列日程，汇集 Calendar、Reminders 和 Desk Tasks，支持日期跨周导航与高亮
 - **日历日视图**：左侧日历时间选择，右侧当日详细日程混合流
-- **提醒按清单**：2-4 列自适应网格排布各清单，支持勾选状态双向同步与隐藏已完成
+- **提醒按清单**：2-4 列自适应网格排布各清单，只读展示 macOS 提醒事项并支持隐藏已完成
 - **提醒按时间**：已过期/今天/未来 7 天/更晚/无日期 5 个分类的折叠与展开分组
 
 **关键文件**：
@@ -207,7 +207,7 @@
 
 **关键文件**：
 
-- `src/lib/taskStateMachine.ts` - 前端状态机逻辑
+- `src/lib/todoTransition.ts` - 前端状态机逻辑
 - `src-tauri/src/domain.rs` - 后端状态机逻辑
 - `src/components/drawer/StatusMachineButtons.tsx` - 状态按钮组件
 
@@ -274,14 +274,15 @@
 
 - 状态定义和语义
 - 状态转换图（允许双向转换）
-- READY_TO_COMPLETE 自动计算逻辑
+- READY_TO_COMPLETE 后端自动计算逻辑
 - Goals View 看板分组规则
 - 前后端一致性保证
 
 **关键文件**：
 
-- `src/lib/workspaceDerivation.ts` - `deriveGoalStatus()`
-- `src-tauri/src/domain.rs` - `Goal::derive_status()`
+- `src-tauri/src/domain.rs` - `Goal::compute_derived_status()`
+- `src-tauri/src/service/goal.rs` - `build_goal_summary()`
+- `src/lib/WorkspaceEngine.ts` - `computeSnapshot()` preserves backend-computed Goal fields
 
 ---
 
@@ -298,7 +299,7 @@
 
 - 请求日历/提醒权限
 - 读取今日日历事件（只读）
-- 读取系统提醒事项（支持完成状态同步）
+- 只读读取系统提醒事项
 - 时间轴数据合并（Calendar / Reminders / Desk Task）
 - 跨平台兼容（非 macOS 返回空数据）
 
@@ -364,7 +365,7 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 
 - 请求日历/提醒权限
 - 读取今日日历事件（只读）
-- 读取系统提醒事项（支持完成状态同步）
+- 只读读取系统提醒事项
 - 时间轴数据合并（Calendar / Reminders / Desk Task）
 - 跨平台兼容（非 macOS 返回空数据）
 
@@ -414,7 +415,7 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 | -------------------- | --- | ---- | ------ |
 | TaskDrawer           | -   | ✅   | 已实现 |
 | GoalDrawer           | -   | ✅   | 已实现 |
-| ReminderDrawer       | -   | ✅   | 已实现 |
+| SystemReminderDrawer | -   | ✅   | 已实现 |
 | 活动日志时间线       | -   | ✅   | 已实现 |
 | 领域选择器           | -   | ✅   | 已实现 |
 | 玻璃拟态组件         | -   | ✅   | 已实现 |
@@ -481,7 +482,7 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 - [x] **领域选择器 Spec** - AreaSelectWithCreate 组件 ✅
 - [x] **玻璃拟态组件 Spec** - GlassCard/GlassPanel 设计 ✅
 - [x] **StatusMachineButtons Spec** - 任务状态按钮组 ✅
-- [x] **ReminderDrawer Spec** - 系统提醒抽屉 ✅
+- [x] **SystemReminderDrawer Spec** - 系统提醒抽屉 ✅
 - [x] **MarkdownContent Spec** - Markdown 渲染组件 ✅
 
 ---
@@ -491,6 +492,7 @@ DerivedStateManager 封装派生状态计算逻辑，支持智能缓存和选择
 ### 设计文档
 
 - [设计理念与架构思想](../design/design-philosophy.md)
+- [未来规划与核心开发方向](../design/future-directions.md)
 - [设计资源索引](../design/README.md)
 - [原型图 v3](../prototype/prototype-3-current-implementation.html)
 

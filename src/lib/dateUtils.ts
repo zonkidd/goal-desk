@@ -2,6 +2,18 @@ export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
+export function endOfDay(date: Date): Date {
+  const end = new Date(date)
+  end.setHours(23, 59, 59, 999)
+  return end
+}
+
+export function addDays(date: Date, days: number): Date {
+  const next = new Date(date)
+  next.setDate(date.getDate() + days)
+  return next
+}
+
 /**
  * Check if a task falls within the active date range:
  * startBoundary (plannedStartAt || createdAt) <= today <= dueDate (if present).
@@ -62,8 +74,8 @@ export function formatDateTimeLabel(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
+    month: 'short',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,

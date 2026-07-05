@@ -1,6 +1,9 @@
+use goal_desk_tauri::domain::DeskTask;
 use goal_desk_tauri::domain::{GoalStatus, TaskStatus};
 use goal_desk_tauri::repository::SqliteRepository;
-use goal_desk_tauri::service::{AppService, AreaService, GoalService, TaskService};
+use goal_desk_tauri::service::{
+    AppService, AreaService, GoalLink, GoalService, NullableFieldPatch, TaskFieldPatch, TaskService,
+};
 use uuid::Uuid;
 
 fn temp_repo(name: &str) -> SqliteRepository {
@@ -9,6 +12,123 @@ fn temp_repo(name: &str) -> SqliteRepository {
     let path = dir.join("test.sqlite");
     let _ = std::fs::remove_file(&path);
     SqliteRepository::new(path)
+}
+
+fn parse_test_datetime(value: &str) -> chrono::DateTime<chrono::Local> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .unwrap()
+        .with_timezone(&chrono::Local)
+}
+
+fn test_task(title: &str) -> DeskTask {
+    DeskTask {
+        id: Uuid::new_v4(),
+        title: title.to_string(),
+        content: "Existing content".to_string(),
+        status: TaskStatus::Todo,
+        planned_start_at: Some(parse_test_datetime("2026-06-15T10:00:00+08:00")),
+        due_at: Some(parse_test_datetime("2026-06-20T18:00:00+08:00")),
+        linked_goal_id: Some(Uuid::new_v4()),
+        linked_goal_label: Some("Existing goal".to_string()),
+        bear_note_id: None,
+        system_reminder_id: Some("reminder-123".to_string()),
+        show_in_timeline: true,
+        activity_logs: vec![],
+        deleted_at: None,
+    }
+}
+
+trait TaskServiceTestPatchExt {
+    fn update_task_fields(
+        &self,
+        task_id: &str,
+        title: &str,
+        planned_start_at: Option<Option<String>>,
+        due_at: Option<Option<String>>,
+        linked_goal_id: Option<String>,
+        linked_goal_label: Option<String>,
+        show_in_timeline: Option<bool>,
+        system_reminder_id: Option<Option<String>>,
+    ) -> Result<DeskTask, String>;
+}
+
+impl TaskServiceTestPatchExt for TaskService {
+    fn update_task_fields(
+        &self,
+        task_id: &str,
+        title: &str,
+        planned_start_at: Option<Option<String>>,
+        due_at: Option<Option<String>>,
+        linked_goal_id: Option<String>,
+        linked_goal_label: Option<String>,
+        show_in_timeline: Option<bool>,
+        system_reminder_id: Option<Option<String>>,
+    ) -> Result<DeskTask, String> {
+        let planned_start_at = match planned_start_at {
+            Some(Some(value)) => NullableFieldPatch::set(parse_test_datetime(&value)),
+            Some(None) => NullableFieldPatch::clear(),
+            None => NullableFieldPatch::preserve(),
+        };
+        let due_at = match due_at {
+            Some(Some(value)) => NullableFieldPatch::set(parse_test_datetime(&value)),
+            Some(None) => NullableFieldPatch::clear(),
+            None => NullableFieldPatch::preserve(),
+        };
+        let linked_goal = match (linked_goal_id, linked_goal_label) {
+            (None, None) => NullableFieldPatch::preserve(),
+            (Some(value), _) if value.trim().is_empty() => NullableFieldPatch::clear(),
+            (Some(value), label) => NullableFieldPatch::set(GoalLink {
+                id: Uuid::parse_str(&value).unwrap(),
+                label,
+            }),
+            (None, Some(_)) => NullableFieldPatch::preserve(),
+        };
+
+        self.update_task_fields_with_patch(
+            task_id,
+            TaskFieldPatch {
+                title: title.to_string(),
+                planned_start_at,
+                due_at,
+                linked_goal,
+                show_in_timeline,
+                system_reminder_id: match system_reminder_id {
+                    Some(Some(value)) => NullableFieldPatch::set(value),
+                    Some(None) => NullableFieldPatch::clear(),
+                    None => NullableFieldPatch::preserve(),
+                },
+            },
+        )
+    }
+}
+
+#[test]
+fn task_field_patch_applies_field_semantics_to_a_todo() {
+    let goal_id = Uuid::new_v4();
+    let mut task = test_task("Original title");
+    let original_due_at = task.due_at;
+
+    TaskFieldPatch {
+        title: "  Updated title  ".to_string(),
+        planned_start_at: NullableFieldPatch::clear(),
+        due_at: NullableFieldPatch::preserve(),
+        linked_goal: NullableFieldPatch::set(GoalLink {
+            id: goal_id,
+            label: Some("   ".to_string()),
+        }),
+        show_in_timeline: Some(false),
+        system_reminder_id: NullableFieldPatch::clear(),
+    }
+    .apply_to(&mut task)
+    .unwrap();
+
+    assert_eq!(task.title, "Updated title");
+    assert!(task.planned_start_at.is_none());
+    assert_eq!(task.due_at, original_due_at);
+    assert_eq!(task.linked_goal_id, Some(goal_id));
+    assert!(task.linked_goal_label.is_none());
+    assert!(!task.show_in_timeline);
+    assert!(task.system_reminder_id.is_none());
 }
 
 // ============================================================================
@@ -36,17 +156,35 @@ fn goal_service_create_validates_whitespace_title() {
 fn goal_service_creates_goal_with_area() {
     let repo = temp_repo("goal_create_area");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("My Goal", "Work", "Description", GoalStatus::Active).unwrap();
+    let goal = service
+        .create_goal("My Goal", "Work", "Description", GoalStatus::Active)
+        .unwrap();
     assert_eq!(goal.title, "My Goal");
     assert_eq!(goal.status, GoalStatus::Active);
     assert!(goal.area_id.is_some());
 }
 
 #[test]
+fn goal_service_rejects_manual_ready_to_complete_creation() {
+    let repo = temp_repo("goal_reject_ready_to_complete_create");
+    let service = GoalService::new(repo);
+    let result = service.create_goal(
+        "My Goal",
+        "Work",
+        "Description",
+        GoalStatus::ReadyToComplete,
+    );
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("READY_TO_COMPLETE"));
+}
+
+#[test]
 fn goal_service_creates_goal_defaults_to_uncategorized() {
     let repo = temp_repo("goal_default_area");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("My Goal", "", "", GoalStatus::Active).unwrap();
+    let goal = service
+        .create_goal("My Goal", "", "", GoalStatus::Active)
+        .unwrap();
     assert!(goal.area_id.is_some());
 }
 
@@ -54,8 +192,12 @@ fn goal_service_creates_goal_defaults_to_uncategorized() {
 fn goal_service_reuses_existing_area() {
     let repo = temp_repo("goal_reuse_area");
     let service = GoalService::new(repo);
-    let g1 = service.create_goal("Goal 1", "Work", "", GoalStatus::Active).unwrap();
-    let g2 = service.create_goal("Goal 2", "Work", "", GoalStatus::Active).unwrap();
+    let g1 = service
+        .create_goal("Goal 1", "Work", "", GoalStatus::Active)
+        .unwrap();
+    let g2 = service
+        .create_goal("Goal 2", "Work", "", GoalStatus::Active)
+        .unwrap();
     assert_eq!(g1.area_id, g2.area_id);
 }
 
@@ -63,7 +205,9 @@ fn goal_service_reuses_existing_area() {
 fn goal_service_update_fields() {
     let repo = temp_repo("goal_update");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("Original", "Work", "desc", GoalStatus::Active).unwrap();
+    let goal = service
+        .create_goal("Original", "Work", "desc", GoalStatus::Active)
+        .unwrap();
     let updated = service
         .update_goal_fields(&goal.id.to_string(), "Updated", "Personal", "new desc")
         .unwrap();
@@ -76,7 +220,9 @@ fn goal_service_update_fields() {
 fn goal_service_update_status_valid() {
     let repo = temp_repo("goal_status_valid");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
+    let goal = service
+        .create_goal("Goal", "Work", "", GoalStatus::Active)
+        .unwrap();
     let updated = service
         .update_goal_status(&goal.id.to_string(), GoalStatus::Paused)
         .unwrap();
@@ -87,7 +233,9 @@ fn goal_service_update_status_valid() {
 fn goal_service_update_status_invalid_transition() {
     let repo = temp_repo("goal_status_invalid");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
+    let goal = service
+        .create_goal("Goal", "Work", "", GoalStatus::Active)
+        .unwrap();
     let result = service.update_goal_status(&goal.id.to_string(), GoalStatus::ReadyToComplete);
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("Invalid"));
@@ -107,9 +255,15 @@ fn goal_service_update_nonexistent_goal() {
 fn area_service_list_areas_with_stats() {
     let repo = temp_repo("goal_areas_stats");
     let goal_service = GoalService::new(repo.clone());
-    goal_service.create_goal("G1", "Work", "", GoalStatus::Active).unwrap();
-    goal_service.create_goal("G2", "Work", "", GoalStatus::Active).unwrap();
-    goal_service.create_goal("G3", "Personal", "", GoalStatus::Active).unwrap();
+    goal_service
+        .create_goal("G1", "Work", "", GoalStatus::Active)
+        .unwrap();
+    goal_service
+        .create_goal("G2", "Work", "", GoalStatus::Active)
+        .unwrap();
+    goal_service
+        .create_goal("G3", "Personal", "", GoalStatus::Active)
+        .unwrap();
 
     let area_service = AreaService::new(repo);
     let areas = area_service.list_areas_with_stats().unwrap();
@@ -117,6 +271,30 @@ fn area_service_list_areas_with_stats() {
     let work = areas.iter().find(|a| a.title == "Work").unwrap();
     assert_eq!(work.goal_count, 2);
     assert_eq!(work.active_goal_count, 2);
+}
+
+#[test]
+fn area_service_counts_ready_to_complete_goals_as_active() {
+    let repo = temp_repo("goal_areas_ready_counts_as_active");
+    let goal_service = GoalService::new(repo.clone());
+    goal_service
+        .create_goal("G1", "Work", "", GoalStatus::Active)
+        .unwrap();
+    goal_service
+        .create_goal("G2", "Work", "", GoalStatus::Paused)
+        .unwrap();
+
+    use goal_desk_tauri::repository::GoalRepository;
+    let mut goals = GoalRepository::list(&repo).unwrap();
+    let ready_goal = goals.iter_mut().find(|goal| goal.title == "G1").unwrap();
+    ready_goal.status = GoalStatus::ReadyToComplete;
+    GoalRepository::update(&repo, ready_goal).unwrap();
+
+    let area_service = AreaService::new(repo);
+    let areas = area_service.list_areas_with_stats().unwrap();
+    let work = areas.iter().find(|a| a.title == "Work").unwrap();
+    assert_eq!(work.goal_count, 2);
+    assert_eq!(work.active_goal_count, 1);
 }
 
 // ============================================================================
@@ -146,7 +324,9 @@ fn task_service_create_for_goal() {
     let goal_service = GoalService::new(repo.clone());
     let task_service = TaskService::new(repo);
 
-    let goal = goal_service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
+    let goal = goal_service
+        .create_goal("Goal", "Work", "", GoalStatus::Active)
+        .unwrap();
     let task = task_service
         .create_task_for_goal(&goal.id.to_string(), "Subtask")
         .unwrap();
@@ -188,6 +368,24 @@ fn task_service_update_status_valid() {
 }
 
 #[test]
+fn task_service_update_status_same_status_is_idempotent() {
+    let repo = temp_repo("task_status_same_status");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Task").unwrap();
+
+    let updated = service
+        .update_task_status(
+            &task.id.to_string(),
+            TaskStatus::Todo,
+            Some("Already there".to_string()),
+        )
+        .unwrap();
+
+    assert_eq!(updated.status, TaskStatus::Todo);
+    assert_eq!(updated.activity_logs, task.activity_logs);
+}
+
+#[test]
 fn task_service_update_status_invalid() {
     let repo = temp_repo("task_status_invalid");
     let service = TaskService::new(repo);
@@ -204,7 +402,10 @@ fn task_service_add_note() {
     let updated = service
         .add_task_note(&task.id.to_string(), "Important note")
         .unwrap();
-    assert!(updated.activity_logs.iter().any(|l| l.note.as_deref() == Some("Important note")));
+    assert!(updated
+        .activity_logs
+        .iter()
+        .any(|l| l.note.as_deref() == Some("Important note")));
 }
 
 #[test]
@@ -234,9 +435,15 @@ fn area_service_find_or_create_area_is_case_insensitive() {
     let goal_service = GoalService::new(repo.clone());
 
     // Create goals with different casing of the same area name
-    let g1 = goal_service.create_goal("Goal 1", "Work", "", GoalStatus::Active).unwrap();
-    let g2 = goal_service.create_goal("Goal 2", "work", "", GoalStatus::Active).unwrap();
-    let g3 = goal_service.create_goal("Goal 3", "WORK", "", GoalStatus::Active).unwrap();
+    let g1 = goal_service
+        .create_goal("Goal 1", "Work", "", GoalStatus::Active)
+        .unwrap();
+    let g2 = goal_service
+        .create_goal("Goal 2", "work", "", GoalStatus::Active)
+        .unwrap();
+    let g3 = goal_service
+        .create_goal("Goal 3", "WORK", "", GoalStatus::Active)
+        .unwrap();
 
     // All goals should share the same area (first created)
     assert_eq!(g1.area_id, g2.area_id);
@@ -244,10 +451,16 @@ fn area_service_find_or_create_area_is_case_insensitive() {
 
     // Should only have one area (not three separate ones)
     let areas = goal_desk_tauri::repository::AreaRepository::list(&repo).unwrap();
-    let work_areas: Vec<_> = areas.iter()
+    let work_areas: Vec<_> = areas
+        .iter()
         .filter(|a| a.title.to_lowercase() == "work")
         .collect();
-    assert_eq!(work_areas.len(), 1, "should have exactly one 'work' area, got {}", work_areas.len());
+    assert_eq!(
+        work_areas.len(),
+        1,
+        "should have exactly one 'work' area, got {}",
+        work_areas.len()
+    );
 }
 
 #[test]
@@ -265,7 +478,9 @@ fn area_service_rename() {
     let repo = temp_repo("area_rename");
     let service = AreaService::new(repo);
     let area = service.create_area("Old Name").unwrap();
-    let renamed = service.rename_area(&area.id.to_string(), "New Name").unwrap();
+    let renamed = service
+        .rename_area(&area.id.to_string(), "New Name")
+        .unwrap();
     assert_eq!(renamed.title, "New Name");
 }
 
@@ -275,9 +490,13 @@ fn area_service_delete_with_goals_force() {
     let goal_service = GoalService::new(repo.clone());
     let area_service = AreaService::new(repo);
 
-    let goal = goal_service.create_goal("G", "ToDelete", "", GoalStatus::Active).unwrap();
+    let goal = goal_service
+        .create_goal("G", "ToDelete", "", GoalStatus::Active)
+        .unwrap();
     let area_id = goal.area_id.unwrap();
-    let result = area_service.delete_area(&area_id.to_string(), true).unwrap();
+    let result = area_service
+        .delete_area(&area_id.to_string(), true)
+        .unwrap();
     assert!(result.success);
     assert_eq!(result.affected_goal_count, 1);
 }
@@ -288,9 +507,13 @@ fn area_service_delete_without_force_fails() {
     let goal_service = GoalService::new(repo.clone());
     let area_service = AreaService::new(repo);
 
-    let goal = goal_service.create_goal("G", "ToDelete", "", GoalStatus::Active).unwrap();
+    let goal = goal_service
+        .create_goal("G", "ToDelete", "", GoalStatus::Active)
+        .unwrap();
     let area_id = goal.area_id.unwrap();
-    let result = area_service.delete_area(&area_id.to_string(), false).unwrap();
+    let result = area_service
+        .delete_area(&area_id.to_string(), false)
+        .unwrap();
     assert!(!result.success);
 }
 
@@ -302,9 +525,14 @@ fn area_service_delete_without_force_fails() {
 fn goal_service_progress_zero_when_no_tasks() {
     let repo = temp_repo("progress_no_tasks");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
+    let goal = service
+        .create_goal("Goal", "Work", "", GoalStatus::Active)
+        .unwrap();
     let summaries = service.goal_summaries().unwrap();
-    let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
+    let s = summaries
+        .iter()
+        .find(|g| g.id == goal.id.to_string())
+        .unwrap();
     assert_eq!(s.progress, 0);
     assert_eq!(s.task_count, 0);
 }
@@ -315,14 +543,25 @@ fn goal_service_progress_50_percent() {
     let goal_service = GoalService::new(repo.clone());
     let task_service = TaskService::new(repo);
 
-    let goal = goal_service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
-    let t1 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 1").unwrap();
-    let _t2 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 2").unwrap();
+    let goal = goal_service
+        .create_goal("Goal", "Work", "", GoalStatus::Active)
+        .unwrap();
+    let t1 = task_service
+        .create_task_for_goal(&goal.id.to_string(), "Task 1")
+        .unwrap();
+    let _t2 = task_service
+        .create_task_for_goal(&goal.id.to_string(), "Task 2")
+        .unwrap();
 
-    task_service.update_task_status(&t1.id.to_string(), TaskStatus::Done, None).unwrap();
+    task_service
+        .update_task_status(&t1.id.to_string(), TaskStatus::Done, None)
+        .unwrap();
 
     let summaries = goal_service.goal_summaries().unwrap();
-    let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
+    let s = summaries
+        .iter()
+        .find(|g| g.id == goal.id.to_string())
+        .unwrap();
     assert_eq!(s.progress, 50);
     assert_eq!(s.task_count, 2);
 }
@@ -333,15 +572,28 @@ fn goal_service_progress_100_percent() {
     let goal_service = GoalService::new(repo.clone());
     let task_service = TaskService::new(repo);
 
-    let goal = goal_service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
-    let t1 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 1").unwrap();
-    let t2 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 2").unwrap();
+    let goal = goal_service
+        .create_goal("Goal", "Work", "", GoalStatus::Active)
+        .unwrap();
+    let t1 = task_service
+        .create_task_for_goal(&goal.id.to_string(), "Task 1")
+        .unwrap();
+    let t2 = task_service
+        .create_task_for_goal(&goal.id.to_string(), "Task 2")
+        .unwrap();
 
-    task_service.update_task_status(&t1.id.to_string(), TaskStatus::Done, None).unwrap();
-    task_service.update_task_status(&t2.id.to_string(), TaskStatus::Done, None).unwrap();
+    task_service
+        .update_task_status(&t1.id.to_string(), TaskStatus::Done, None)
+        .unwrap();
+    task_service
+        .update_task_status(&t2.id.to_string(), TaskStatus::Done, None)
+        .unwrap();
 
     let summaries = goal_service.goal_summaries().unwrap();
-    let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
+    let s = summaries
+        .iter()
+        .find(|g| g.id == goal.id.to_string())
+        .unwrap();
     assert_eq!(s.progress, 100);
 }
 
@@ -371,19 +623,55 @@ fn app_service_shares_repository() {
     let app = AppService::new(repo);
     app.initialize().unwrap();
 
-    let goal = app.goal.create_goal("Shared Goal", "Work", "", GoalStatus::Active).unwrap();
-    let task = app.task.create_task_for_goal(&goal.id.to_string(), "Shared Task").unwrap();
+    let goal = app
+        .goal
+        .create_goal("Shared Goal", "Work", "", GoalStatus::Active)
+        .unwrap();
+    let task = app
+        .task
+        .create_task_for_goal(&goal.id.to_string(), "Shared Task")
+        .unwrap();
 
     let summaries = app.goal.goal_summaries().unwrap();
-    let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
+    let s = summaries
+        .iter()
+        .find(|g| g.id == goal.id.to_string())
+        .unwrap();
     assert_eq!(s.task_count, 1);
     assert_eq!(s.progress, 0);
 
-    app.task.update_task_status(&task.id.to_string(), TaskStatus::Done, None).unwrap();
+    app.task
+        .update_task_status(&task.id.to_string(), TaskStatus::Done, None)
+        .unwrap();
 
     let summaries = app.goal.goal_summaries().unwrap();
-    let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
+    let s = summaries
+        .iter()
+        .find(|g| g.id == goal.id.to_string())
+        .unwrap();
     assert_eq!(s.progress, 100);
+}
+
+#[test]
+fn task_service_update_task_status_keeps_system_reminder_read_only() {
+    let repo = temp_repo("app_service_task_status_read_only");
+    let app = AppService::new(repo);
+    let task = app
+        .task
+        .capture_task("Task with external reminder")
+        .unwrap();
+    let linked_task = app
+        .task
+        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-1".to_string()))
+        .unwrap();
+
+    let updated = app
+        .task
+        .update_task_status(&linked_task.id.to_string(), TaskStatus::Done, None)
+        .unwrap();
+
+    assert_eq!(updated.status, TaskStatus::Done);
+    assert_eq!(updated.system_reminder_id.as_deref(), Some("reminder-1"));
 }
 
 // ============================================================================
@@ -396,18 +684,36 @@ fn goal_summaries_returns_correct_progress() {
     let goal_service = GoalService::new(repo.clone());
     let task_service = TaskService::new(repo);
 
-    let g1 = goal_service.create_goal("G1", "Work", "", GoalStatus::Active).unwrap();
-    let g2 = goal_service.create_goal("G2", "Work", "", GoalStatus::Active).unwrap();
+    let g1 = goal_service
+        .create_goal("G1", "Work", "", GoalStatus::Active)
+        .unwrap();
+    let g2 = goal_service
+        .create_goal("G2", "Work", "", GoalStatus::Active)
+        .unwrap();
 
-    let t1 = task_service.create_task_for_goal(&g1.id.to_string(), "T1").unwrap();
-    let _t2 = task_service.create_task_for_goal(&g1.id.to_string(), "T2").unwrap();
-    let _t3 = task_service.create_task_for_goal(&g2.id.to_string(), "T3").unwrap();
+    let t1 = task_service
+        .create_task_for_goal(&g1.id.to_string(), "T1")
+        .unwrap();
+    let _t2 = task_service
+        .create_task_for_goal(&g1.id.to_string(), "T2")
+        .unwrap();
+    let _t3 = task_service
+        .create_task_for_goal(&g2.id.to_string(), "T3")
+        .unwrap();
 
-    task_service.update_task_status(&t1.id.to_string(), TaskStatus::Done, None).unwrap();
+    task_service
+        .update_task_status(&t1.id.to_string(), TaskStatus::Done, None)
+        .unwrap();
 
     let summaries = goal_service.goal_summaries().unwrap();
-    let s1 = summaries.iter().find(|g| g.id == g1.id.to_string()).unwrap();
-    let s2 = summaries.iter().find(|g| g.id == g2.id.to_string()).unwrap();
+    let s1 = summaries
+        .iter()
+        .find(|g| g.id == g1.id.to_string())
+        .unwrap();
+    let s2 = summaries
+        .iter()
+        .find(|g| g.id == g2.id.to_string())
+        .unwrap();
 
     assert_eq!(s1.task_count, 2);
     assert_eq!(s1.progress, 50);
@@ -419,9 +725,14 @@ fn goal_summaries_returns_correct_progress() {
 fn goal_summaries_includes_area_title() {
     let repo = temp_repo("summaries_area");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("Goal", "Work Area", "", GoalStatus::Active).unwrap();
+    let goal = service
+        .create_goal("Goal", "Work Area", "", GoalStatus::Active)
+        .unwrap();
     let summaries = service.goal_summaries().unwrap();
-    let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
+    let s = summaries
+        .iter()
+        .find(|g| g.id == goal.id.to_string())
+        .unwrap();
     assert_eq!(s.area, "Work Area");
 }
 
@@ -431,74 +742,49 @@ fn goal_summaries_next_todo_picks_first_incomplete() {
     let goal_service = GoalService::new(repo.clone());
     let task_service = TaskService::new(repo);
 
-    let goal = goal_service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
-    let t1 = task_service.create_task_for_goal(&goal.id.to_string(), "First").unwrap();
-    let _t2 = task_service.create_task_for_goal(&goal.id.to_string(), "Second").unwrap();
+    let goal = goal_service
+        .create_goal("Goal", "Work", "", GoalStatus::Active)
+        .unwrap();
+    let t1 = task_service
+        .create_task_for_goal(&goal.id.to_string(), "First")
+        .unwrap();
+    let _t2 = task_service
+        .create_task_for_goal(&goal.id.to_string(), "Second")
+        .unwrap();
 
-    task_service.update_task_status(&t1.id.to_string(), TaskStatus::Done, None).unwrap();
+    task_service
+        .update_task_status(&t1.id.to_string(), TaskStatus::Done, None)
+        .unwrap();
 
     let summaries = goal_service.goal_summaries().unwrap();
-    let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
+    let s = summaries
+        .iter()
+        .find(|g| g.id == goal.id.to_string())
+        .unwrap();
     assert_eq!(s.next_todo, "Second");
 }
 
 #[test]
-fn task_service_update_status_with_sync_calls_callback() {
+fn task_service_update_status_keeps_system_reminder_link_read_only() {
     let repo = temp_repo("task_status_sync");
     let service = TaskService::new(repo);
     let task = service.capture_task("Task").unwrap();
 
-    // Set a system_reminder_id so the sync callback gets called
+    // Set a system_reminder_id so status updates preserve the read-only external link.
     let task_with_reminder = service
         .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-1".to_string()))
         .unwrap();
-    assert_eq!(task_with_reminder.system_reminder_id.as_deref(), Some("reminder-1"));
-
-    // Track sync callback invocations
-    let sync_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let sync_flag = sync_called.clone();
+    assert_eq!(
+        task_with_reminder.system_reminder_id.as_deref(),
+        Some("reminder-1")
+    );
 
     let updated = service
-        .update_task_status_with_sync(
-            &task.id.to_string(),
-            TaskStatus::InProgress,
-            None,
-            Some(Box::new(move |reminder_id: &str, done: bool| {
-                sync_flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                assert_eq!(reminder_id, "reminder-1");
-                assert!(!done);
-                Ok(())
-            })),
-        )
+        .update_task_status(&task.id.to_string(), TaskStatus::InProgress, None)
         .unwrap();
 
     assert_eq!(updated.status, TaskStatus::InProgress);
-    assert!(sync_called.load(std::sync::atomic::Ordering::SeqCst));
-}
-
-#[test]
-fn task_service_update_status_with_sync_skips_when_no_reminder() {
-    let repo = temp_repo("task_status_no_sync");
-    let service = TaskService::new(repo);
-    let task = service.capture_task("Task").unwrap();
-
-    let sync_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let sync_flag = sync_called.clone();
-
-    let updated = service
-        .update_task_status_with_sync(
-            &task.id.to_string(),
-            TaskStatus::InProgress,
-            None,
-            Some(Box::new(move |_reminder_id: &str, _done: bool| {
-                sync_flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                Ok(())
-            })),
-        )
-        .unwrap();
-
-    assert_eq!(updated.status, TaskStatus::InProgress);
-    assert!(!sync_called.load(std::sync::atomic::Ordering::SeqCst));
+    assert_eq!(updated.system_reminder_id.as_deref(), Some("reminder-1"));
 }
 
 #[test]
@@ -526,8 +812,8 @@ fn task_service_find_task_returns_none_for_missing() {
 
 #[test]
 fn build_goal_summary_zero_tasks() {
-    use goal_desk_tauri::service::goal::build_goal_summary;
     use goal_desk_tauri::domain::{Goal, GoalStatus};
+    use goal_desk_tauri::service::goal::build_goal_summary;
 
     let goal = Goal {
         id: Uuid::new_v4(),
@@ -540,7 +826,12 @@ fn build_goal_summary_zero_tasks() {
     let goal_tasks: Vec<&goal_desk_tauri::domain::DeskTask> = vec![];
     let all_tasks: Vec<goal_desk_tauri::domain::DeskTask> = vec![];
 
-    let summary = build_goal_summary(&goal, "Unsorted", &goal_tasks, goal.compute_derived_status(&all_tasks));
+    let summary = build_goal_summary(
+        &goal,
+        "Unsorted",
+        &goal_tasks,
+        goal.compute_derived_status(&all_tasks),
+    );
     assert_eq!(summary.progress, 0);
     assert_eq!(summary.task_count, 0);
     assert_eq!(summary.next_todo, "");
@@ -550,8 +841,8 @@ fn build_goal_summary_zero_tasks() {
 
 #[test]
 fn build_goal_summary_half_done() {
+    use goal_desk_tauri::domain::{DeskTask, Goal, GoalStatus, TaskStatus};
     use goal_desk_tauri::service::goal::build_goal_summary;
-    use goal_desk_tauri::domain::{Goal, GoalStatus, DeskTask, TaskStatus};
 
     let goal = Goal {
         id: Uuid::new_v4(),
@@ -568,7 +859,12 @@ fn build_goal_summary_half_done() {
 
     let goal_tasks: Vec<&DeskTask> = vec![&t1, &t2];
     let all_tasks: Vec<DeskTask> = vec![t1.clone(), t2.clone()];
-    let summary = build_goal_summary(&goal, "Work", &goal_tasks, goal.compute_derived_status(&all_tasks));
+    let summary = build_goal_summary(
+        &goal,
+        "Work",
+        &goal_tasks,
+        goal.compute_derived_status(&all_tasks),
+    );
 
     assert_eq!(summary.progress, 50);
     assert_eq!(summary.task_count, 2);
@@ -577,8 +873,8 @@ fn build_goal_summary_half_done() {
 
 #[test]
 fn build_goal_summary_all_done() {
+    use goal_desk_tauri::domain::{DeskTask, Goal, GoalStatus, TaskStatus};
     use goal_desk_tauri::service::goal::build_goal_summary;
-    use goal_desk_tauri::domain::{Goal, GoalStatus, DeskTask, TaskStatus};
 
     let goal = Goal {
         id: Uuid::new_v4(),
@@ -596,7 +892,12 @@ fn build_goal_summary_all_done() {
 
     let goal_tasks: Vec<&DeskTask> = vec![&t1, &t2];
     let all_tasks: Vec<DeskTask> = vec![t1.clone(), t2.clone()];
-    let summary = build_goal_summary(&goal, "Personal", &goal_tasks, goal.compute_derived_status(&all_tasks));
+    let summary = build_goal_summary(
+        &goal,
+        "Personal",
+        &goal_tasks,
+        goal.compute_derived_status(&all_tasks),
+    );
 
     assert_eq!(summary.progress, 100);
     assert_eq!(summary.task_count, 2);
@@ -604,26 +905,64 @@ fn build_goal_summary_all_done() {
 }
 
 #[test]
-fn task_service_update_status_with_sync_none_callback() {
-    let repo = temp_repo("task_status_no_callback");
-    let service = TaskService::new(repo);
-    let task = service.capture_task("Task").unwrap();
+fn goal_summary_assembler_summarizes_goals_from_one_workspace_context() {
+    use goal_desk_tauri::domain::{Area, Goal};
+    use goal_desk_tauri::service::goal::GoalSummaryAssembler;
 
-    let _task_with_reminder = service
-        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-1".to_string()))
-        .unwrap();
+    let work_area = Area {
+        id: Uuid::new_v4(),
+        title: "Work".to_string(),
+        is_system: false,
+    };
+    let goal = Goal {
+        id: Uuid::new_v4(),
+        area_id: Some(work_area.id),
+        title: "Ship feature".to_string(),
+        description: "Important".to_string(),
+        status: GoalStatus::Active,
+        deleted_at: None,
+    };
+    let done_task = DeskTask {
+        id: Uuid::new_v4(),
+        title: "Done task".to_string(),
+        content: String::new(),
+        status: TaskStatus::Done,
+        planned_start_at: None,
+        due_at: None,
+        linked_goal_id: Some(goal.id),
+        linked_goal_label: Some(goal.title.clone()),
+        bear_note_id: None,
+        system_reminder_id: None,
+        show_in_timeline: false,
+        activity_logs: vec![],
+        deleted_at: None,
+    };
+    let next_task = DeskTask {
+        id: Uuid::new_v4(),
+        title: "Next task".to_string(),
+        content: String::new(),
+        status: TaskStatus::Todo,
+        planned_start_at: None,
+        due_at: None,
+        linked_goal_id: Some(goal.id),
+        linked_goal_label: Some(goal.title.clone()),
+        bear_note_id: None,
+        system_reminder_id: None,
+        show_in_timeline: false,
+        activity_logs: vec![],
+        deleted_at: None,
+    };
 
-    // No callback provided - should not panic
-    let updated = service
-        .update_task_status_with_sync(
-            &task.id.to_string(),
-            TaskStatus::InProgress,
-            None,
-            None,
-        )
-        .unwrap();
+    let areas = vec![work_area];
+    let tasks = vec![done_task, next_task];
+    let assembler = GoalSummaryAssembler::new(&areas, &tasks);
+    let summary = assembler.summarize(&goal);
 
-    assert_eq!(updated.status, TaskStatus::InProgress);
+    assert_eq!(summary.area, "Work");
+    assert_eq!(summary.progress, 50);
+    assert_eq!(summary.task_count, 2);
+    assert_eq!(summary.next_todo, "Next task");
+    assert_eq!(summary.status, GoalStatus::Active);
 }
 
 // ============================================================================
@@ -641,102 +980,10 @@ fn task_service_capture_task_with_reminder_links_reminder_id() {
         .capture_task_with_system_reminder(&task.id.to_string(), "reminder-evt-1".to_string())
         .unwrap();
 
-    assert_eq!(updated.system_reminder_id, Some("reminder-evt-1".to_string()));
-}
-
-#[test]
-fn task_service_update_status_syncs_reminder_done() {
-    let repo = temp_repo("task_status_sync_reminder");
-    let service = TaskService::new(repo);
-    let task = service.capture_task("Task with reminder").unwrap();
-    let _ = service
-        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-sync-1".to_string()))
-        .unwrap();
-
-    // New method: sync system reminder status
-    let updated = service
-        .sync_task_system_reminder(&task.id.to_string(), true)
-        .unwrap();
-
-    assert_eq!(updated.status, TaskStatus::Done);
-}
-
-#[test]
-fn task_service_update_status_syncs_reminder_undone() {
-    let repo = temp_repo("task_status_sync_reminder_undone");
-    let service = TaskService::new(repo);
-    let task = service.capture_task("Task with reminder").unwrap();
-    let _ = service
-        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-sync-2".to_string()))
-        .unwrap();
-    let _ = service
-        .update_task_status(&task.id.to_string(), TaskStatus::Done, None)
-        .unwrap();
-
-    // Sync back to not done
-    let updated = service
-        .sync_task_system_reminder(&task.id.to_string(), false)
-        .unwrap();
-
-    assert_eq!(updated.status, TaskStatus::Todo);
-}
-
-#[test]
-fn task_service_update_status_with_reminder_sync_calls_callback() {
-    let repo = temp_repo("task_status_reminder_sync_callback");
-    let service = TaskService::new(repo);
-    let task = service.capture_task("Task with reminder").unwrap();
-    let _ = service
-        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-cb-1".to_string()))
-        .unwrap();
-
-    let callback_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let flag = callback_called.clone();
-
-    let updated = service
-        .update_task_status_with_reminder_sync(
-            &task.id.to_string(),
-            TaskStatus::Done,
-            None,
-            Some(Box::new(move |reminder_id, done| {
-                assert_eq!(reminder_id, "reminder-cb-1");
-                assert!(done);
-                flag.store(true, std::sync::atomic::Ordering::Relaxed);
-                Ok(())
-            })),
-        )
-        .unwrap();
-
-    assert!(callback_called.load(std::sync::atomic::Ordering::Relaxed));
-    assert_eq!(updated.status, TaskStatus::Done);
-}
-
-#[test]
-fn task_service_update_status_with_reminder_sync_skips_callback_on_invalid_transition() {
-    let repo = temp_repo("task_status_reminder_sync_invalid");
-    let service = TaskService::new(repo);
-    let task = service.capture_task("Task with reminder").unwrap();
-    let _ = service
-        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-invalid-1".to_string()))
-        .unwrap();
-
-    let callback_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let flag = callback_called.clone();
-
-    // IN_PROGRESS is not a valid transition from TODO (TODO can only go to IN_PROGRESS or DONE)
-    // Actually, TODO -> IN_PROGRESS IS valid. Let's use PAUSED which is NOT valid from TODO.
-    let result = service.update_task_status_with_reminder_sync(
-        &task.id.to_string(),
-        TaskStatus::Paused,
-        None,
-        Some(Box::new(move |_reminder_id, _done| {
-            flag.store(true, std::sync::atomic::Ordering::Relaxed);
-            Ok(())
-        })),
+    assert_eq!(
+        updated.system_reminder_id,
+        Some("reminder-evt-1".to_string())
     );
-
-    assert!(result.is_err());
-    assert!(!callback_called.load(std::sync::atomic::Ordering::Relaxed), "callback should not be called for invalid transition");
 }
 
 #[test]
@@ -746,35 +993,204 @@ fn task_service_update_fields_preserves_other_fields_when_not_passed() {
 
     // Create a task with all fields set
     let task = service.capture_task("Full task").unwrap();
-    let updated = service.update_task_fields(
-        &task.id.to_string(),
-        "Full task",
-        Some("2026-06-15T10:00:00+08:00".to_string()),
-        Some("2026-06-20T18:00:00+08:00".to_string()),
-        None, None,
-        Some(true),
-        Some("reminder-abc".to_string()),
-    ).unwrap();
+    let updated = service
+        .update_task_fields(
+            &task.id.to_string(),
+            "Full task",
+            Some(Some("2026-06-15T10:00:00+08:00".to_string())),
+            Some(Some("2026-06-20T18:00:00+08:00".to_string())),
+            None,
+            None,
+            Some(true),
+            Some(Some("reminder-abc".to_string())),
+        )
+        .unwrap();
 
-    assert!(updated.planned_start_at.is_some(), "planned_start_at should be set");
+    assert!(
+        updated.planned_start_at.is_some(),
+        "planned_start_at should be set"
+    );
     assert!(updated.due_at.is_some(), "due_at should be set");
     assert!(updated.show_in_timeline, "show_in_timeline should be true");
     assert_eq!(updated.system_reminder_id.as_deref(), Some("reminder-abc"));
 
     // Now update only title and system_reminder_id — other fields should be preserved
-    let updated2 = service.update_task_fields(
-        &task.id.to_string(),
-        "Updated title",
-        None, None, None, None,
-        None,
-        Some("reminder-xyz".to_string()),
-    ).unwrap();
+    let updated2 = service
+        .update_task_fields(
+            &task.id.to_string(),
+            "Updated title",
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(Some("reminder-xyz".to_string())),
+        )
+        .unwrap();
 
     assert_eq!(updated2.title, "Updated title");
-    assert!(updated2.planned_start_at.is_some(), "planned_start_at should be preserved when None is passed");
-    assert!(updated2.due_at.is_some(), "due_at should be preserved when None is passed");
-    assert!(updated2.show_in_timeline, "show_in_timeline should be preserved when None is passed");
+    assert!(
+        updated2.planned_start_at.is_some(),
+        "planned_start_at should be preserved when None is passed"
+    );
+    assert!(
+        updated2.due_at.is_some(),
+        "due_at should be preserved when None is passed"
+    );
+    assert!(
+        updated2.show_in_timeline,
+        "show_in_timeline should be preserved when None is passed"
+    );
     assert_eq!(updated2.system_reminder_id.as_deref(), Some("reminder-xyz"));
+}
+
+#[test]
+fn task_service_update_fields_accepts_a_coherent_patch_object() {
+    let repo = temp_repo("task_fields_patch_object");
+    let service = TaskService::new(repo.clone());
+
+    let task = service.capture_task("Patch task").unwrap();
+    let scheduled = service
+        .update_task_fields_with_patch(
+            &task.id.to_string(),
+            TaskFieldPatch {
+                title: "Patch task".to_string(),
+                planned_start_at: NullableFieldPatch::set(parse_test_datetime(
+                    "2026-06-15T10:00:00+08:00",
+                )),
+                due_at: NullableFieldPatch::set(parse_test_datetime("2026-06-20T18:00:00+08:00")),
+                linked_goal: NullableFieldPatch::preserve(),
+                show_in_timeline: Some(true),
+                system_reminder_id: NullableFieldPatch::set("reminder-123".to_string()),
+            },
+        )
+        .unwrap();
+
+    assert!(scheduled.planned_start_at.is_some());
+    assert!(scheduled.due_at.is_some());
+    assert!(scheduled.show_in_timeline);
+    assert_eq!(
+        scheduled.system_reminder_id.as_deref(),
+        Some("reminder-123")
+    );
+
+    let goal = GoalService::new(repo)
+        .create_goal("Linked goal", "Work", "", GoalStatus::Active)
+        .unwrap();
+    let linked = service
+        .update_task_fields_with_patch(
+            &task.id.to_string(),
+            TaskFieldPatch {
+                title: "Patch task".to_string(),
+                planned_start_at: NullableFieldPatch::preserve(),
+                due_at: NullableFieldPatch::preserve(),
+                linked_goal: NullableFieldPatch::set(GoalLink {
+                    id: goal.id,
+                    label: Some(goal.title.clone()),
+                }),
+                show_in_timeline: Some(true),
+                system_reminder_id: NullableFieldPatch::set("reminder-123".to_string()),
+            },
+        )
+        .unwrap();
+
+    assert_eq!(linked.linked_goal_id, Some(goal.id));
+    assert_eq!(linked.linked_goal_label.as_deref(), Some("Linked goal"));
+
+    let patched = service
+        .update_task_fields_with_patch(
+            &task.id.to_string(),
+            TaskFieldPatch {
+                title: "Patched title".to_string(),
+                planned_start_at: NullableFieldPatch::clear(),
+                due_at: NullableFieldPatch::preserve(),
+                linked_goal: NullableFieldPatch::preserve(),
+                show_in_timeline: None,
+                system_reminder_id: NullableFieldPatch::preserve(),
+            },
+        )
+        .unwrap();
+
+    assert_eq!(patched.title, "Patched title");
+    assert!(
+        patched.planned_start_at.is_none(),
+        "explicit clear should remove planned_start_at"
+    );
+    assert!(
+        patched.due_at.is_some(),
+        "omitted due_at should preserve the existing value"
+    );
+    assert!(
+        patched.show_in_timeline,
+        "omitted show_in_timeline should preserve the existing value"
+    );
+    assert_eq!(patched.linked_goal_id, Some(goal.id));
+    assert_eq!(patched.linked_goal_label.as_deref(), Some("Linked goal"));
+    assert_eq!(patched.system_reminder_id.as_deref(), Some("reminder-123"));
+
+    let cleared = service
+        .update_task_fields_with_patch(
+            &task.id.to_string(),
+            TaskFieldPatch {
+                title: "Cleared link".to_string(),
+                planned_start_at: NullableFieldPatch::preserve(),
+                due_at: NullableFieldPatch::preserve(),
+                linked_goal: NullableFieldPatch::clear(),
+                show_in_timeline: None,
+                system_reminder_id: NullableFieldPatch::clear(),
+            },
+        )
+        .unwrap();
+
+    assert_eq!(cleared.title, "Cleared link");
+    assert!(cleared.linked_goal_id.is_none());
+    assert!(cleared.linked_goal_label.is_none());
+    assert!(cleared.system_reminder_id.is_none());
+}
+
+#[test]
+fn task_service_update_fields_clears_planned_and_due_times() {
+    let repo = temp_repo("task_fields_clear_dates");
+    let service = TaskService::new(repo);
+
+    let task = service.capture_task("Scheduled task").unwrap();
+    let scheduled = service
+        .update_task_fields(
+            &task.id.to_string(),
+            "Scheduled task",
+            Some(Some("2026-06-15T10:00:00+08:00".to_string())),
+            Some(Some("2026-06-20T18:00:00+08:00".to_string())),
+            None,
+            None,
+            Some(true),
+            None,
+        )
+        .unwrap();
+
+    assert!(scheduled.planned_start_at.is_some());
+    assert!(scheduled.due_at.is_some());
+
+    let cleared = service
+        .update_task_fields(
+            &task.id.to_string(),
+            "Scheduled task",
+            Some(None),
+            Some(None),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+    assert!(
+        cleared.planned_start_at.is_none(),
+        "planned_start_at should clear when Some(None) is passed"
+    );
+    assert!(
+        cleared.due_at.is_none(),
+        "due_at should clear when Some(None) is passed"
+    );
 }
 
 #[test]
@@ -783,15 +1199,62 @@ fn task_service_update_fields_sets_system_reminder_id() {
     let service = TaskService::new(repo);
 
     let task = service.capture_task("Reminder task").unwrap();
-    assert!(task.system_reminder_id.is_none(), "new task should have no system_reminder_id");
+    assert!(
+        task.system_reminder_id.is_none(),
+        "new task should have no system_reminder_id"
+    );
 
-    let updated = service.update_task_fields(
-        &task.id.to_string(),
-        "Reminder task",
-        None, None, None, None,
-        None,
-        Some("reminder-123".to_string()),
-    ).unwrap();
+    let updated = service
+        .update_task_fields(
+            &task.id.to_string(),
+            "Reminder task",
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(Some("reminder-123".to_string())),
+        )
+        .unwrap();
+    assert_eq!(updated.system_reminder_id.as_deref(), Some("reminder-123"));
+}
+
+#[test]
+fn task_service_update_fields_preserves_system_reminder_id_when_omitted() {
+    let repo = temp_repo("task_fields_preserve_reminder");
+    let service = TaskService::new(repo);
+
+    let task = service.capture_task("Reminder task").unwrap();
+    let with_reminder = service
+        .update_task_fields(
+            &task.id.to_string(),
+            "Reminder task",
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(Some("reminder-123".to_string())),
+        )
+        .unwrap();
+    assert_eq!(
+        with_reminder.system_reminder_id.as_deref(),
+        Some("reminder-123")
+    );
+
+    let updated = service
+        .update_task_fields(
+            &task.id.to_string(),
+            "Renamed reminder task",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
     assert_eq!(updated.system_reminder_id.as_deref(), Some("reminder-123"));
 }
 
@@ -801,23 +1264,39 @@ fn task_service_update_fields_clears_system_reminder_id() {
     let service = TaskService::new(repo);
 
     let task = service.capture_task("Reminder task").unwrap();
-    let with_reminder = service.update_task_fields(
-        &task.id.to_string(),
-        "Reminder task",
-        None, None, None, None,
-        None,
-        Some("reminder-123".to_string()),
-    ).unwrap();
-    assert_eq!(with_reminder.system_reminder_id.as_deref(), Some("reminder-123"));
+    let with_reminder = service
+        .update_task_fields(
+            &task.id.to_string(),
+            "Reminder task",
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(Some("reminder-123".to_string())),
+        )
+        .unwrap();
+    assert_eq!(
+        with_reminder.system_reminder_id.as_deref(),
+        Some("reminder-123")
+    );
 
-    let cleared = service.update_task_fields(
-        &task.id.to_string(),
-        "Reminder task",
-        None, None, None, None,
-        None,
-        None,
-    ).unwrap();
-    assert!(cleared.system_reminder_id.is_none(), "system_reminder_id should be cleared when None is passed");
+    let cleared = service
+        .update_task_fields(
+            &task.id.to_string(),
+            "Reminder task",
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(None),
+        )
+        .unwrap();
+    assert!(
+        cleared.system_reminder_id.is_none(),
+        "system_reminder_id should be cleared when Some(None) is passed"
+    );
 }
 
 #[test]
@@ -829,76 +1308,41 @@ fn task_service_update_fields_preserves_show_in_timeline_when_none() {
     assert!(!task.show_in_timeline, "new task should default to false");
 
     // Explicitly set show_in_timeline to true
-    let updated = service.update_task_fields(
-        &task.id.to_string(),
-        "Timeline task",
-        None, None, None, None,
-        Some(true),
-        None,
-    ).unwrap();
-    assert!(updated.show_in_timeline, "should be true after explicit set");
+    let updated = service
+        .update_task_fields(
+            &task.id.to_string(),
+            "Timeline task",
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            None,
+        )
+        .unwrap();
+    assert!(
+        updated.show_in_timeline,
+        "should be true after explicit set"
+    );
 
     // Update title without passing show_in_timeline (None) — should preserve true
-    let updated2 = service.update_task_fields(
-        &task.id.to_string(),
-        "Updated title",
-        None, None, None, None,
-        None,
-        None,
-    ).unwrap();
-    assert!(updated2.show_in_timeline, "should preserve true when show_in_timeline is None");
+    let updated2 = service
+        .update_task_fields(
+            &task.id.to_string(),
+            "Updated title",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(
+        updated2.show_in_timeline,
+        "should preserve true when show_in_timeline is None"
+    );
     assert_eq!(updated2.title, "Updated title");
-}
-
-#[test]
-fn task_sync_linked_tasks_respects_state_machine_paused_cannot_go_to_done() {
-    let repo = temp_repo("sync_respects_state_machine");
-    let service = TaskService::new(repo.clone());
-
-    // Create a task, pause it, set a system_reminder_id
-    let task = service.capture_task("Synced task").unwrap();
-    service.update_task_status(&task.id.to_string(), TaskStatus::InProgress, None).unwrap();
-    service.update_task_status(&task.id.to_string(), TaskStatus::Paused, None).unwrap();
-
-    // Set system_reminder_id via repository directly (not exposed in service API)
-    use goal_desk_tauri::repository::TaskRepository;
-    let mut task_ref = TaskRepository::find(&repo, task.id).unwrap().unwrap();
-    let reminder_id = uuid::Uuid::new_v4().to_string();
-    task_ref.system_reminder_id = Some(reminder_id.clone());
-    TaskRepository::update(&repo, &task_ref).unwrap();
-
-    // Now try to sync as done — PAUSED → DONE is invalid per state machine
-    service.sync_linked_tasks_for_system_reminder(&reminder_id, true).unwrap();
-
-    // The task should remain PAUSED since the transition is invalid
-    let task_after = service.find_task(&task.id.to_string()).unwrap().unwrap();
-    assert_eq!(task_after.status, TaskStatus::Paused,
-        "PAUSED task should not be set to DONE by sync — bypasses state machine");
-}
-
-#[test]
-fn task_sync_task_system_reminder_does_not_double_write_activity_log() {
-    let repo = temp_repo("sync_no_double_log");
-    let service = TaskService::new(repo.clone());
-
-    // Create a task and set system_reminder_id
-    let task = service.capture_task("Double log test").unwrap();
-    let reminder_id = uuid::Uuid::new_v4().to_string();
-    use goal_desk_tauri::repository::TaskRepository;
-    let mut task_ref = TaskRepository::find(&repo, task.id).unwrap().unwrap();
-    task_ref.system_reminder_id = Some(reminder_id.clone());
-    TaskRepository::update(&repo, &task_ref).unwrap();
-
-    // Sync as done
-    let updated = service.sync_task_system_reminder(&task.id.to_string(), true).unwrap();
-
-    // Should have exactly ONE Completed activity log (plus the initial Created)
-    let completed_logs: Vec<_> = updated.activity_logs.iter()
-        .filter(|log| log.action == goal_desk_tauri::domain::TaskActivityAction::Completed)
-        .collect();
-    assert_eq!(completed_logs.len(), 1,
-        "sync_task_system_reminder should produce exactly one Completed log, got {}",
-        completed_logs.len());
 }
 
 // ============================================================================
@@ -906,7 +1350,7 @@ fn task_sync_task_system_reminder_does_not_double_write_activity_log() {
 // ============================================================================
 
 #[test]
-fn eventkit_create_system_reminder_returns_system_reminder_with_id() {
+fn eventkit_system_reminder_payload_exposes_identifier() {
     use goal_desk_tauri::eventkit::SystemReminder;
 
     let reminder = SystemReminder {
@@ -943,130 +1387,42 @@ fn repository_auto_initializes_on_construction() {
     assert!(found.is_some());
 }
 
-// ============================================================================
-// TaskService - update_task_status_with_effects (unified method)
-// ============================================================================
-
-#[test]
-fn task_update_status_with_effects_none_callback() {
-    let repo = temp_repo("effects_none");
-    let service = TaskService::new(repo);
-    let task = service.capture_task("Task").unwrap();
-
-    let updated = service
-        .update_task_status_with_effects(
-            &task.id.to_string(),
-            TaskStatus::InProgress,
-            None,
-            goal_desk_tauri::domain::SideEffect::None,
-        )
-        .unwrap();
-
-    assert_eq!(updated.status, TaskStatus::InProgress);
-}
-
-#[test]
-fn task_update_status_with_effects_reminder_sync_calls_callback() {
-    let repo = temp_repo("effects_reminder_sync");
-    let service = TaskService::new(repo);
-    let task = service.capture_task("Task").unwrap();
-    let _ = service
-        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-1".to_string()))
-        .unwrap();
-
-    let callback_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let flag = callback_called.clone();
-
-    let updated = service
-        .update_task_status_with_effects(
-            &task.id.to_string(),
-            TaskStatus::Done,
-            None,
-            goal_desk_tauri::domain::SideEffect::ReminderSync(Box::new(move |reminder_id, done| {
-                assert_eq!(reminder_id, "reminder-1");
-                assert!(done);
-                flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                Ok(())
-            })),
-        )
-        .unwrap();
-
-    assert_eq!(updated.status, TaskStatus::Done);
-    assert!(callback_called.load(std::sync::atomic::Ordering::SeqCst));
-}
-
-#[test]
-fn task_update_status_with_effects_reminder_skips_callback_when_no_reminder() {
-    let repo = temp_repo("effects_no_reminder");
-    let service = TaskService::new(repo);
-    let task = service.capture_task("Task").unwrap();
-
-    let callback_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let flag = callback_called.clone();
-
-    let updated = service
-        .update_task_status_with_effects(
-            &task.id.to_string(),
-            TaskStatus::InProgress,
-            None,
-            goal_desk_tauri::domain::SideEffect::ReminderSync(Box::new(move |_id, _done| {
-                flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                Ok(())
-            })),
-        )
-        .unwrap();
-
-    assert_eq!(updated.status, TaskStatus::InProgress);
-    assert!(!callback_called.load(std::sync::atomic::Ordering::SeqCst));
-}
-
-#[test]
-fn task_update_status_with_effects_skips_callback_on_invalid_transition() {
-    let repo = temp_repo("effects_invalid_transition");
-    let service = TaskService::new(repo);
-    let task = service.capture_task("Task").unwrap();
-    let _ = service
-        .update_task_system_reminder_id(&task.id.to_string(), Some("reminder-1".to_string()))
-        .unwrap();
-
-    let callback_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let flag = callback_called.clone();
-
-    // TODO -> PAUSED is invalid
-    let result = service.update_task_status_with_effects(
-        &task.id.to_string(),
-        TaskStatus::Paused,
-        None,
-        goal_desk_tauri::domain::SideEffect::ReminderSync(Box::new(move |_id, _done| {
-            flag.store(true, std::sync::atomic::Ordering::SeqCst);
-            Ok(())
-        })),
-    );
-
-    assert!(result.is_err());
-    assert!(!callback_called.load(std::sync::atomic::Ordering::SeqCst));
-}
-
 #[test]
 fn goal_summaries_shows_derived_status_when_all_tasks_done() {
     let repo = temp_repo("goal_summaries_derived_status");
     let goal_service = GoalService::new(repo.clone());
     let task_service = TaskService::new(repo);
 
-    let goal = goal_service.create_goal("Goal", "Work", "", GoalStatus::Active).unwrap();
-    let t1 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 1").unwrap();
-    let t2 = task_service.create_task_for_goal(&goal.id.to_string(), "Task 2").unwrap();
+    let goal = goal_service
+        .create_goal("Goal", "Work", "", GoalStatus::Active)
+        .unwrap();
+    let t1 = task_service
+        .create_task_for_goal(&goal.id.to_string(), "Task 1")
+        .unwrap();
+    let t2 = task_service
+        .create_task_for_goal(&goal.id.to_string(), "Task 2")
+        .unwrap();
 
     // Complete all tasks
-    task_service.update_task_status(&t1.id.to_string(), TaskStatus::Done, None).unwrap();
-    task_service.update_task_status(&t2.id.to_string(), TaskStatus::Done, None).unwrap();
+    task_service
+        .update_task_status(&t1.id.to_string(), TaskStatus::Done, None)
+        .unwrap();
+    task_service
+        .update_task_status(&t2.id.to_string(), TaskStatus::Done, None)
+        .unwrap();
 
     // Goal status in DB is still ACTIVE, but summary should show READY_TO_COMPLETE
     let summaries = goal_service.goal_summaries().unwrap();
-    let s = summaries.iter().find(|g| g.id == goal.id.to_string()).unwrap();
+    let s = summaries
+        .iter()
+        .find(|g| g.id == goal.id.to_string())
+        .unwrap();
     assert_eq!(s.progress, 100);
-    assert_eq!(s.status, goal_desk_tauri::domain::GoalStatus::ReadyToComplete,
-        "goal_summaries should return derived status ReadyToComplete when all tasks are done");
+    assert_eq!(
+        s.status,
+        goal_desk_tauri::domain::GoalStatus::ReadyToComplete,
+        "goal_summaries should return derived status ReadyToComplete when all tasks are done"
+    );
 }
 
 #[test]
@@ -1104,7 +1460,9 @@ fn task_service_soft_delete_and_restore() {
 fn goal_service_soft_delete_and_restore() {
     let repo = temp_repo("goal_soft_delete");
     let service = GoalService::new(repo);
-    let goal = service.create_goal("Test Goal", "Work", "desc", GoalStatus::Active).unwrap();
+    let goal = service
+        .create_goal("Test Goal", "Work", "desc", GoalStatus::Active)
+        .unwrap();
     let goal_id = goal.id.to_string();
 
     // Soft delete

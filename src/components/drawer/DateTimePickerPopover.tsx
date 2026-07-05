@@ -12,12 +12,14 @@ export function DateTimePickerPopover({
   onChange,
   onClose,
   onApply,
+  title,
 }: {
   value: string
   defaultTime: string
   onChange: (value: string) => void
   onClose: () => void
   onApply?: (value: string) => void
+  title?: string
 }) {
   const parsed = parseDatetimeLocal(value)
   const current = parsed || new Date()
@@ -52,6 +54,11 @@ export function DateTimePickerPopover({
         transition={{ type: 'spring', stiffness: 360, damping: 28 }}
         className="absolute left-0 top-full z-[80] mt-3 w-[330px] rounded-3xl border border-white/80 bg-white/90 p-4 shadow-2xl shadow-slate-900/10 backdrop-blur-md"
       >
+        {title && (
+          <div className="mb-3 px-1 text-xs font-bold text-slate-400 uppercase tracking-widest">
+            {title}
+          </div>
+        )}
         <div className="relative z-10 mb-3 grid grid-cols-2 gap-2">
           <DateShortcutButton label="今天" day={today} selectedDay={selectedDay} onSelect={selectDay} />
           <DateShortcutButton label="明天" day={tomorrow} selectedDay={selectedDay} onSelect={selectDay} />

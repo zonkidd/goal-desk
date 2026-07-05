@@ -28,5 +28,6 @@ export interface Task {
   systemReminderId?: string
   createdAt?: Date
   updatedAt?: Date
+  deletedAt?: Date
   activityLogs: TaskActivityLog[]
 }

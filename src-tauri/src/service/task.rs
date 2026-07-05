@@ -1,6 +1,92 @@
-use crate::domain::{DeskTask, SideEffect, TaskStatus};
+use crate::domain::{DeskTask, TaskStatus};
 use crate::repository::{GoalRepository, SqliteRepository, TaskRepository};
+use chrono::{DateTime, Local};
 use uuid::Uuid;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NullableFieldPatch<T> {
+    Preserve,
+    Set(Option<T>),
+}
+
+impl<T> NullableFieldPatch<T> {
+    pub fn preserve() -> Self {
+        Self::Preserve
+    }
+
+    pub fn set(value: T) -> Self {
+        Self::Set(Some(value))
+    }
+
+    pub fn clear() -> Self {
+        Self::Set(None)
+    }
+
+    pub(crate) fn from_optional_patch(value: Option<Option<T>>) -> Self {
+        match value {
+            Some(next_value) => Self::Set(next_value),
+            None => Self::Preserve,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalLink {
+    pub id: Uuid,
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskFieldPatch {
+    pub title: String,
+    pub planned_start_at: NullableFieldPatch<DateTime<Local>>,
+    pub due_at: NullableFieldPatch<DateTime<Local>>,
+    pub linked_goal: NullableFieldPatch<GoalLink>,
+    pub show_in_timeline: Option<bool>,
+    pub system_reminder_id: NullableFieldPatch<String>,
+}
+
+impl TaskFieldPatch {
+    pub fn apply_to(self, task: &mut DeskTask) -> Result<(), String> {
+        let trimmed_title = self.title.trim();
+        if trimmed_title.is_empty() {
+            return Err("Task title cannot be empty".to_string());
+        }
+
+        task.title = trimmed_title.to_string();
+        if let NullableFieldPatch::Set(next_planned_start_at) = self.planned_start_at {
+            task.planned_start_at = next_planned_start_at;
+        }
+        if let NullableFieldPatch::Set(next_due_at) = self.due_at {
+            task.due_at = next_due_at;
+        }
+        if let NullableFieldPatch::Set(next_linked_goal) = self.linked_goal {
+            match next_linked_goal {
+                Some(goal_link) => {
+                    task.linked_goal_id = Some(goal_link.id);
+                    task.linked_goal_label = goal_link.label.and_then(|v| {
+                        let trimmed = v.trim().to_string();
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            Some(trimmed)
+                        }
+                    });
+                }
+                None => {
+                    task.linked_goal_id = None;
+                    task.linked_goal_label = None;
+                }
+            }
+        }
+        task.show_in_timeline = self.show_in_timeline.unwrap_or(task.show_in_timeline);
+        if let NullableFieldPatch::Set(next_system_reminder_id) = self.system_reminder_id {
+            task.system_reminder_id = next_system_reminder_id;
+        }
+
+        Ok(())
+    }
+}
 
 pub struct TaskService {
     pub(crate) repo: SqliteRepository,
@@ -31,7 +117,7 @@ impl TaskService {
             linked_goal_label: None,
             bear_note_id: None,
             system_reminder_id: None,
-            show_in_timeline: parsed.planned_start_at.is_some() || parsed.due_at.is_some(),
+            show_in_timeline: parsed.planned_start_at.is_some(),
             activity_logs: vec![crate::domain::TaskActivityLog {
                 id: uuid::Uuid::new_v4(),
                 action: crate::domain::TaskActivityAction::Created,
@@ -45,11 +131,7 @@ impl TaskService {
         Ok(task)
     }
 
-    pub fn create_task_for_goal(
-        &self,
-        goal_id: &str,
-        title: &str,
-    ) -> Result<DeskTask, String> {
+    pub fn create_task_for_goal(&self, goal_id: &str, title: &str) -> Result<DeskTask, String> {
         let trimmed_title = title.trim();
         if trimmed_title.is_empty() {
             return Err("Task title cannot be empty".to_string());
@@ -66,11 +148,7 @@ impl TaskService {
         Ok(task)
     }
 
-    pub fn update_task_content(
-        &self,
-        task_id: &str,
-        content: &str,
-    ) -> Result<DeskTask, String> {
+    pub fn update_task_content(&self, task_id: &str, content: &str) -> Result<DeskTask, String> {
         let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
 
         let mut task = TaskRepository::find(&self.repo, task_uuid)
@@ -94,6 +172,10 @@ impl TaskService {
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Task not found: {task_id}"))?;
 
+        if task.status == status {
+            return Ok(task);
+        }
+
         if !task.can_transition_to(status) {
             return Err(format!(
                 "Invalid status transition from {:?} to {:?}",
@@ -101,34 +183,20 @@ impl TaskService {
             ));
         }
 
-        use crate::domain::TaskActivityAction;
         let previous_status = task.status;
         task.status = status;
         task.activity_logs.insert(
             0,
             crate::domain::TaskActivityLog {
                 id: Uuid::new_v4(),
-                action: match status {
-                    TaskStatus::Paused => TaskActivityAction::Paused,
-                    TaskStatus::Done => TaskActivityAction::Completed,
-                    TaskStatus::InProgress => {
-                        if previous_status == TaskStatus::Paused {
-                            TaskActivityAction::Resumed
-                        } else {
-                            TaskActivityAction::Started
-                        }
-                    }
-                    TaskStatus::Todo => {
-                        if previous_status == TaskStatus::Done {
-                            TaskActivityAction::Resumed
-                        } else {
-                            TaskActivityAction::NoteAdded
-                        }
-                    }
-                },
+                action: crate::domain::task_activity_action_for_transition(previous_status, status),
                 note: note.and_then(|n| {
                     let trimmed = n.trim().to_string();
-                    if trimmed.is_empty() { None } else { Some(trimmed) }
+                    if trimmed.is_empty() {
+                        None
+                    } else {
+                        Some(trimmed)
+                    }
                 }),
                 timestamp: chrono::Local::now(),
             },
@@ -138,55 +206,7 @@ impl TaskService {
         Ok(task)
     }
 
-    pub fn update_task_status_with_effects(
-        &self,
-        task_id: &str,
-        status: TaskStatus,
-        note: Option<String>,
-        side_effect: SideEffect,
-    ) -> Result<DeskTask, String> {
-        let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
-
-        let task = TaskRepository::find(&self.repo, task_uuid)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("Task not found: {task_id}"))?;
-
-        if !task.can_transition_to(status) {
-            return Err(format!(
-                "Invalid status transition from {:?} to {:?}",
-                task.status, status
-            ));
-        }
-
-        if let SideEffect::ReminderSync(callback) = side_effect {
-            if let Some(ref reminder_id) = task.system_reminder_id {
-                let done = matches!(status, TaskStatus::Done);
-                callback(reminder_id, done)?;
-            }
-        }
-
-        self.update_task_status(task_id, status, note)
-    }
-
-    pub fn update_task_status_with_sync(
-        &self,
-        task_id: &str,
-        status: TaskStatus,
-        note: Option<String>,
-        sync_callback: Option<Box<dyn FnOnce(&str, bool) -> Result<(), String>>>,
-    ) -> Result<DeskTask, String> {
-        let side_effect = match sync_callback {
-            Some(cb) => SideEffect::ReminderSync(cb),
-            None => SideEffect::None,
-        };
-        self.update_task_status_with_effects(task_id, status, note, side_effect)
-    }
-
-    pub fn add_task_note(
-        &self,
-        task_id: &str,
-        note: &str,
-    ) -> Result<DeskTask, String> {
+    pub fn add_task_note(&self, task_id: &str, note: &str) -> Result<DeskTask, String> {
         let trimmed = note.trim();
         if trimmed.is_empty() {
             return Err("Task note cannot be empty".to_string());
@@ -212,59 +232,24 @@ impl TaskService {
         Ok(task)
     }
 
-    pub fn update_task_fields(
+    pub fn update_task_fields_with_patch(
         &self,
         task_id: &str,
-        title: &str,
-        planned_start_at: Option<String>,
-        due_at: Option<String>,
-        linked_goal_id: Option<String>,
-        linked_goal_label: Option<String>,
-        show_in_timeline: Option<bool>,
-        system_reminder_id: Option<String>,
+        patch: TaskFieldPatch,
     ) -> Result<DeskTask, String> {
-        let trimmed_title = title.trim();
-        if trimmed_title.is_empty() {
-            return Err("Task title cannot be empty".to_string());
-        }
-
         let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
 
         let mut task = TaskRepository::find(&self.repo, task_uuid)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Task not found: {task_id}"))?;
 
-        task.title = trimmed_title.to_string();
-        if let Some(v) = planned_start_at {
-            task.planned_start_at = Some(chrono::DateTime::parse_from_rfc3339(&v)
-                .map(|p| p.with_timezone(&chrono::Local))
-                .map_err(|e| e.to_string())?);
-        }
-        if let Some(v) = due_at {
-            task.due_at = Some(chrono::DateTime::parse_from_rfc3339(&v)
-                .map(|p| p.with_timezone(&chrono::Local))
-                .map_err(|e| e.to_string())?);
-        }
-        if let Some(v) = linked_goal_id {
-            if v.is_empty() {
-                task.linked_goal_id = None;
-            } else {
-                task.linked_goal_id = Some(Uuid::parse_str(&v).map_err(|e| e.to_string())?);
-            }
-        }
-        task.linked_goal_label = linked_goal_label.and_then(|v| {
-            let trimmed = v.trim().to_string();
-            if trimmed.is_empty() { None } else { Some(trimmed) }
-        });
-        task.show_in_timeline = show_in_timeline.unwrap_or(task.show_in_timeline);
-        task.system_reminder_id = system_reminder_id;
+        patch.apply_to(&mut task)?;
 
         TaskRepository::update(&self.repo, &task).map_err(|e| e.to_string())?;
         Ok(task)
     }
 
     pub fn list_tasks(&self) -> Result<Vec<DeskTask>, String> {
-
         TaskRepository::list(&self.repo).map_err(|e| e.to_string())
     }
 
@@ -290,106 +275,12 @@ impl TaskService {
         Ok(task)
     }
 
-    pub fn sync_linked_tasks_for_system_reminder(
-        &self,
-        reminder_id: &str,
-        done: bool,
-    ) -> Result<(), String> {
-        let tasks = TaskRepository::list(&self.repo).map_err(|e| e.to_string())?;
-
-        for task in tasks
-            .iter()
-            .filter(|t| t.system_reminder_id.as_deref() == Some(reminder_id))
-        {
-            let next_status = if done {
-                TaskStatus::Done
-            } else {
-                TaskStatus::Todo
-            };
-            if task.status == next_status {
-                continue;
-            }
-            if !task.can_transition_to(next_status) {
-                continue;
-            }
-
-            let mut updated = task.clone();
-            updated.status = next_status;
-            updated.activity_logs.insert(
-                0,
-                crate::domain::TaskActivityLog {
-                    id: Uuid::new_v4(),
-                    action: if done {
-                        crate::domain::TaskActivityAction::Completed
-                    } else {
-                        crate::domain::TaskActivityAction::Resumed
-                    },
-                    note: Some("Synced from Apple Reminders.".to_string()),
-                    timestamp: chrono::Local::now(),
-                },
-            );
-            TaskRepository::update(&self.repo, &updated).map_err(|e| e.to_string())?;
-        }
-
-        Ok(())
-    }
-
     pub fn capture_task_with_system_reminder(
         &self,
         task_id: &str,
         reminder_id: String,
     ) -> Result<DeskTask, String> {
         self.update_task_system_reminder_id(task_id, Some(reminder_id))
-    }
-
-    pub fn sync_task_system_reminder(
-        &self,
-        task_id: &str,
-        done: bool,
-    ) -> Result<DeskTask, String> {
-        let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
-        let task = TaskRepository::find(&self.repo, task_uuid)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("Task not found: {task_id}"))?;
-
-        let next_status = if done { TaskStatus::Done } else { TaskStatus::Todo };
-
-        // If task has a system_reminder_id, sync_linked_tasks_for_system_reminder
-        // already handles the status update and activity log. Skip the second update.
-        if task.system_reminder_id.is_some() && task.can_transition_to(next_status) {
-            self.sync_linked_tasks_for_system_reminder(
-                task.system_reminder_id.as_ref().unwrap(),
-                done,
-            )?;
-            // Re-read the task to return the updated version
-            return TaskRepository::find(&self.repo, task_uuid)
-                .map_err(|e| e.to_string())?
-                .ok_or_else(|| format!("Task not found: {task_id}"));
-        }
-
-        self.update_task_status(task_id, next_status, None)
-    }
-
-    pub fn sync_task_system_reminder_by_reminder_id(
-        &self,
-        reminder_id: &str,
-        done: bool,
-    ) -> Result<(), String> {
-        self.sync_linked_tasks_for_system_reminder(reminder_id, done)
-    }
-
-    pub fn update_task_status_with_reminder_sync(
-        &self,
-        task_id: &str,
-        status: TaskStatus,
-        note: Option<String>,
-        reminder_sync: Option<Box<dyn FnOnce(&str, bool) -> Result<(), String>>>,
-    ) -> Result<DeskTask, String> {
-        let side_effect = match reminder_sync {
-            Some(cb) => SideEffect::ReminderSync(cb),
-            None => SideEffect::None,
-        };
-        self.update_task_status_with_effects(task_id, status, note, side_effect)
     }
 
     pub fn soft_delete_task(&self, task_id: &str) -> Result<(), String> {

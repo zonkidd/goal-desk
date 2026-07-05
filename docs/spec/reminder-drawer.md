@@ -1,4 +1,4 @@
-# ReminderDrawer 组件 Spec
+# SystemReminderDrawer 组件 Spec
 
 **文档版本**: v1.0  
 **创建日期**: 2026-06-14  
@@ -10,11 +10,11 @@
 
 ### 1.1 组件定位
 
-ReminderDrawer 是 Apple Reminders（系统提醒事项）的独立抽屉组件，展示从 EventKit 读取的系统提醒，支持完成状态同步到系统。
+SystemReminderDrawer 是 Apple Reminders（系统提醒事项）的只读详情抽屉组件，展示从 EventKit 读取的系统提醒，并提供跳转到系统提醒事项 App 的入口。
 
 **设计原则**：
-- **只读为主**：优先展示提醒，不支持创建/编辑（由系统提醒 App 负责）
-- **双向同步**：支持标记完成/重新打开，同步到 macOS 提醒事项
+- **只读外部源**：展示提醒，不支持创建、编辑或标记完成（由系统提醒事项 App 负责）
+- **外部编辑入口**：需要修改标题、时间或完成状态时打开系统提醒事项 App
 - **权限透明**：清晰展示 Calendar 和 Reminders 权限状态
 - **时间范围**：默认显示未来 7 天内的提醒
 
@@ -24,8 +24,8 @@ ReminderDrawer 是 Apple Reminders（系统提醒事项）的独立抽屉组件�
 
 ### 2.1 文件路径
 
-- **组件文件**: `src/components/drawer/ReminderDrawer.tsx` (~120 行)
-- **依赖图标**: `lucide-react` - Bell, CheckCircle2, Circle, Clock3, ShieldAlert, X
+- **组件文件**: `src/components/drawer/SystemReminderDrawer.tsx`
+- **依赖图标**: `lucide-react` - Bell, Clock3, ExternalLink, ShieldAlert, X
 - **状态管理**: `useAppStore` - 提醒数据、权限状态、抽屉开关
 - **后端集成**: EventKit API（通过 `src-tauri/src/eventkit.rs`）
 
@@ -75,12 +75,12 @@ type AccessStatus =
 │  ┌────────────────────────────────┐ │
 │  │ 工作                           │ │
 │  │ 完成季度报告                   │ │
-│  │ 🕐 06/15 14:00      [Complete] │ │
+│  │ 🕐 06/15 14:00          [打开] │ │
 │  └────────────────────────────────┘ │
 │  ┌────────────────────────────────┐ │
 │  │ 购物清单                       │ │
 │  │ 买牛奶                         │ │
-│  │ 🕐 06/16 10:00      [Complete] │ │
+│  │ 🕐 06/16 10:00          [打开] │ │
 │  └────────────────────────────────┘ │
 └──────────────────────────────────────┘
 ```
@@ -88,18 +88,18 @@ type AccessStatus =
 ### 3.2 位置和尺寸
 
 ```typescript
-className="glass-panel fixed bottom-4 right-[620px] top-20 z-40 w-[360px] rounded-3xl"
+className="glass-panel fixed bottom-4 right-4 top-4 z-50 w-[600px] rounded-3xl"
 ```
 
 **定位**：
 - `fixed` - 固定定位
-- `right-[620px]` - 距离右侧 620px（TaskDrawer 是 600px，留 20px 间距）
-- `top-20` - 距离顶部 80px
+- `right-4` - 与 TaskDrawer、CalendarEventDrawer 保持同侧详情抽屉位置
+- `top-4` - 距离顶部 16px
 - `bottom-4` - 距离底部 16px
-- `w-[360px]` - 固定宽度 360px
+- `w-[600px]` - 固定宽度 600px
 
 **层级**：
-- `z-40` - 低于 TaskDrawer（z-50）
+- `z-50` - 与其他详情抽屉一致
 
 ### 3.3 动画效果
 
@@ -237,18 +237,14 @@ const accessLabel = {
       </div>
     </div>
     
-    {/* 右侧按钮 */}
+    {/* 右侧按钮：只打开 Apple Reminders，不写回提醒状态 */}
     <button
       type="button"
-      onClick={() => void toggleSystemReminderDone(reminder.id, !reminder.done)}
-      className={`inline-flex h-9 items-center gap-1 rounded-full px-3 text-xs font-bold ${
-        reminder.done
-          ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          : 'bg-indigo-600 text-white hover:bg-indigo-700'
-      }`}
+      onClick={() => void openSystemReminder(reminder.id)}
+      className="inline-flex h-9 items-center gap-1 rounded-full bg-slate-100 px-3 text-xs font-bold text-slate-700 hover:bg-slate-200"
     >
-      {reminder.done ? <Circle /> : <CheckCircle2 />}
-      {reminder.done ? 'Reopen' : 'Complete'}
+      打开
+      <ExternalLink className="h-3.5 w-3.5" />
     </button>
   </div>
 </div>
@@ -274,38 +270,28 @@ const dueLabel = reminder.dueAt
 
 ## 六、交互逻辑
 
-### 6.1 完成/重新打开提醒
+### 6.1 打开系统提醒事项
 
 ```typescript
-const toggleSystemReminderDone = useAppStore((state) => state.toggleSystemReminderDone)
+const openSystemReminder = useAppStore((state) => state.openSystemReminder)
 
 <button
-  onClick={() => void toggleSystemReminderDone(reminder.id, !reminder.done)}
+  onClick={() => void openSystemReminder(reminder.id)}
 >
-  {reminder.done ? 'Reopen' : 'Complete'}
+  打开系统提醒事项
 </button>
 ```
 
 **流程**：
 ```
-1. 用户点击 "Complete" 按钮
+1. 用户点击 "打开系统提醒事项" 按钮
    ↓
-2. 调用 toggleSystemReminderDone(reminderId, true)
+2. 调用 openSystemReminder(reminderId)
    ↓
-3. appStore action:
-   - 调用 Tauri command: toggle_system_reminder_done(reminderId, true)
+3. EventKit adapter:
+   - 通过系统 URL 打开系统提醒事项 App
    ↓
-4. 后端 EventKit:
-   - 通过 EventKit API 标记系统提醒为已完成
-   - 返回更新后的提醒状态
-   ↓
-5. 前端状态更新:
-   - systemReminders 中对应项 done = true
-   ↓
-6. UI 更新:
-   - 标题添加删除线（line-through）
-   - 按钮文案变为 "Reopen"
-   - 按钮样式变为灰色
+4. 用户在系统提醒事项 App 中查看或编辑外部提醒
 ```
 
 ### 6.2 选中提醒
@@ -379,28 +365,16 @@ pub fn eventkit_snapshot(start_iso: &str, end_iso: &str) -> EventKitSnapshot {
 3. 后续调用返回实际权限状态
 4. 前端根据 `integration_status` 显示权限卡片
 
-### 7.3 完成状态同步
+### 7.3 只读提醒操作
 
 ```rust
-// src-tauri/src/lib.rs
-#[tauri::command]
-async fn toggle_system_reminder_done(reminder_id: String, done: bool) -> Result<ReminderItem, String> {
-    // 调用 EventKit API
-    let updated_reminder = eventkit::toggle_reminder_done(&reminder_id, done)?;
-    Ok(updated_reminder)
-}
+// 当前策略：不提供 toggle_system_reminder_done / create_system_reminder 等写入命令。
+// 前端只通过 openSystemReminder 打开系统提醒事项 App。
 ```
 
 **Objective-C 层**：
 ```objc
-// src-tauri/native/eventkit_bridge.m
-- (void)toggleReminderDone:(NSString *)reminderId done:(BOOL)done {
-    EKReminder *reminder = [eventStore calendarItemWithIdentifier:reminderId];
-    reminder.completed = done;
-    
-    NSError *error;
-    [eventStore saveReminder:reminder commit:YES error:&error];
-}
+// 当前策略：EventKitBridge 不保存 EKReminder。
 ```
 
 ---
@@ -409,7 +383,7 @@ async fn toggle_system_reminder_done(reminder_id: String, done: bool) -> Result<
 
 ### ADR-001: 独立抽屉而非嵌入 Today
 
-**决策**: ReminderDrawer 是独立抽屉，而非嵌入 Today 时间轴
+**决策**: SystemReminderDrawer 是独立抽屉，而非嵌入 Today 时间轴
 
 **理由**：
 - ✅ 权限状态需要专门展示区域
@@ -418,15 +392,15 @@ async fn toggle_system_reminder_done(reminder_id: String, done: bool) -> Result<
 
 **代价**：
 - ❌ 用户需要额外点击打开抽屉
-- 接受：Today 视图可以快速访问系统提醒，ReminderDrawer 用于详细管理
+- 接受：Today 视图可以快速访问系统提醒，SystemReminderDrawer 用于只读详情和外部打开
 
-### ADR-002: 只读为主，不支持创建/编辑
+### ADR-002: 系统提醒作为只读外部源
 
-**决策**: ReminderDrawer 只支持标记完成，不支持创建/编辑提醒
+**决策**: SystemReminderDrawer 不支持创建、编辑或标记完成系统提醒，只展示导入数据并打开系统提醒事项 App
 
 **理由**：
 - ✅ 避免与系统提醒 App 功能重复
-- ✅ 降低开发复杂度（EventKit 写操作需要更多权限和校验）
+- ✅ 避免 EventKit 写操作和双向同步冲突
 - ✅ 保持 Goal Desk 核心定位（任务管理，而非日历替代）
 
 **代价**：
@@ -446,13 +420,13 @@ async fn toggle_system_reminder_done(reminder_id: String, done: bool) -> Result<
 - ❌ 无法查看 7 天后的提醒
 - 接受：用户可以在系统提醒 App 查看全部提醒
 
-### ADR-004: 固定宽度 360px
+### ADR-004: 固定宽度 600px
 
-**决策**: ReminderDrawer 固定宽度 360px，无法调整
+**决策**: SystemReminderDrawer 固定宽度 600px，无法调整
 
 **理由**：
-- ✅ 提醒卡片内容简单，360px 足够
-- ✅ 避免与 TaskDrawer (600px) 重叠
+- ✅ 与 TaskDrawer、CalendarEventDrawer 的详情抽屉尺寸一致
+- ✅ 只读状态、权限状态和外部打开说明有足够展示空间
 - ✅ 固定宽度简化布局计算
 
 **代价**：
@@ -511,9 +485,9 @@ export async function loadWorkspace(): Promise<HydratePayload> {
 ### 10.1 单元测试
 
 ```typescript
-// ReminderDrawer.test.tsx
+// SystemReminderDrawer.test.tsx
 import { render, screen } from '@testing-library/react'
-import { ReminderDrawer } from './ReminderDrawer'
+import { SystemReminderDrawer } from './SystemReminderDrawer'
 
 test('renders permission cards', () => {
   // Mock useAppStore
@@ -525,7 +499,7 @@ test('renders permission cards', () => {
     }),
   }))
   
-  render(<ReminderDrawer />)
+  render(<SystemReminderDrawer />)
   
   expect(screen.getByText('Calendar')).toBeInTheDocument()
   expect(screen.getByText('Reminders')).toBeInTheDocument()
@@ -541,7 +515,7 @@ test('renders warning when reminders permission is not granted', () => {
     }),
   }))
   
-  render(<ReminderDrawer />)
+  render(<SystemReminderDrawer />)
   
   expect(screen.getByText(/提醒事项权限未就绪/)).toBeInTheDocument()
 })
@@ -555,7 +529,7 @@ test('renders empty state when no reminders', () => {
     }),
   }))
   
-  render(<ReminderDrawer />)
+  render(<SystemReminderDrawer />)
   
   expect(screen.getByText(/当前 7 天内没有可展示的系统提醒/)).toBeInTheDocument()
 })
@@ -574,7 +548,7 @@ test('renders reminder list', () => {
     }),
   }))
   
-  render(<ReminderDrawer />)
+  render(<SystemReminderDrawer />)
   
   expect(screen.getByText('买牛奶')).toBeInTheDocument()
   expect(screen.getByText('完成报告')).toBeInTheDocument()
@@ -588,11 +562,9 @@ test('renders reminder list', () => {
 1. 首次打开 Goal Desk，触发 EventKit 授权弹窗
 2. 选择"允许"，验证权限卡片显示 "Granted"
 3. 在系统提醒 App 创建一个提醒（未来 7 天内）
-4. 重新加载 Goal Desk，验证提醒出现在 ReminderDrawer
-5. 点击 "Complete" 按钮，验证提醒标题添加删除线
-6. 打开系统提醒 App，验证提醒已标记为完成
-7. 在 ReminderDrawer 点击 "Reopen"，验证提醒恢复未完成状态
-8. 在系统提醒 App 验证提醒已恢复
+4. 重新加载 Goal Desk，验证提醒出现在 SystemReminderDrawer
+5. 点击“打开系统提醒事项”，验证系统提醒事项 App 被打开
+6. 在系统提醒事项 App 修改完成状态后刷新 Goal Desk，验证只读状态更新
 
 ---
 
@@ -606,13 +578,13 @@ test('renders reminder list', () => {
 
 ### 11.2 中期迭代（1-2 月）
 
-- [ ] **批量操作**：批量标记完成
+- [ ] **批量打开/筛选**：批量定位或筛选提醒
 - [ ] **时间范围调整**：支持切换 7 天 / 30 天 / 全部
-- [ ] **提醒创建**：快速创建系统提醒（需要写权限）
+- [ ] **提醒创建**：仅在未来明确调整只读策略并记录 ADR 后考虑
 
 ### 11.3 长期愿景（3-6 月）
 
-- [ ] **双向同步**：Goal Desk 任务自动创建系统提醒
+- [ ] **外部变更观察**：只读监听系统提醒变化并刷新本地展示
 - [ ] **Siri 集成**：通过 Siri 快捷指令创建任务
 - [ ] **Apple Watch 集成**：手表查看和完成提醒
 
@@ -625,7 +597,7 @@ test('renders reminder list', () => {
 - [Today View PRD](../prd/today-view.md)
 
 ### 代码
-- [`src/components/drawer/ReminderDrawer.tsx`](../../src/components/drawer/ReminderDrawer.tsx)
+- [`src/components/drawer/SystemReminderDrawer.tsx`](../../src/components/drawer/SystemReminderDrawer.tsx)
 - [`src-tauri/src/eventkit.rs`](../../src-tauri/src/eventkit.rs)
 - [`src-tauri/native/eventkit_bridge.m`](../../src-tauri/native/eventkit_bridge.m)
 

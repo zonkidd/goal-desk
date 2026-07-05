@@ -1,16 +1,20 @@
-import type { AreaFilter, GoalCard, RawAgendaItem, ReminderItem, TodayAgenda } from '../types/app'
+import type { AreaFilter, GoalCard, ReminderItem } from '../types/app'
 import type { Task } from '../types/task'
 import { computeSnapshot, type WorkspaceSnapshot } from '../lib/WorkspaceEngine'
 import { convertEventKitToRawItems } from '../lib/workspaceDerivation'
+
+export interface EventKitSource {
+  calendarEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
+  reminders: Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
+  systemReminders: ReminderItem[]
+}
 
 export interface StoreGetters {
   getTasks: () => Task[]
   getBaseGoals: () => GoalCard[]
   getActiveArea: () => AreaFilter
   getShowCompletedTodos: () => boolean
-  getRawCalendarEvents: () => Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
-  getRawReminders: () => Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
-  getSystemReminders: () => ReminderItem[]
+  getEventKitSource: () => EventKitSource
 }
 
 export interface WorkspaceDeriver {
@@ -24,13 +28,22 @@ export function createWorkspaceDeriver(getters: StoreGetters): WorkspaceDeriver 
       const baseGoals = getters.getBaseGoals()
       const activeArea = getters.getActiveArea()
       const showCompletedTodos = getters.getShowCompletedTodos()
-      const rawCalendarEvents = getters.getRawCalendarEvents()
-      const rawReminders = getters.getRawReminders()
-      const systemReminders = getters.getSystemReminders()
+      const eventKitSource = getters.getEventKitSource()
 
-      const baseTimeline = convertEventKitToRawItems(rawCalendarEvents, rawReminders, tasks)
+      const baseTimeline = convertEventKitToRawItems(
+        eventKitSource.calendarEvents,
+        eventKitSource.reminders,
+        tasks,
+      )
 
-      return computeSnapshot({ tasks, baseGoals, baseTimeline, activeArea, showCompletedTodos, systemReminders })
+      return computeSnapshot({
+        tasks,
+        baseGoals,
+        baseTimeline,
+        activeArea,
+        showCompletedTodos,
+        systemReminders: eventKitSource.systemReminders,
+      })
     },
   }
 }

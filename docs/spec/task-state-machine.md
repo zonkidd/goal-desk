@@ -112,23 +112,12 @@ pub enum TaskStatus {
 #### TypeScript 实现（前端）
 
 ```typescript
-// src/lib/taskStateMachine.ts
-export function getValidTransitions(status: TaskStatus): TaskStatus[] {
-  switch (status) {
-    case 'TODO':
-      return ['IN_PROGRESS', 'DONE']
-    case 'IN_PROGRESS':
-      return ['PAUSED', 'DONE']
-    case 'PAUSED':
-      return ['IN_PROGRESS', 'DONE']
-    case 'DONE':
-      return []  // 终态
-    default:
-      return []
-  }
+// src/lib/todoTransition.ts
+export function getAllowedTodoStatusActions(status: TaskStatus): TaskStatus[] {
+  return [...TODO_TRANSITION_CONTRACT[status].allowedTargets]
 }
 
-export function getTransitionAction(
+export function logActionForTodoTransition(
   fromStatus: TaskStatus, 
   toStatus: TaskStatus
 ): TaskActivityAction {
@@ -277,26 +266,13 @@ export function StatusMachineButtons({ status, statusActions, onAction }: Status
 ```typescript
 // 根据当前状态动态生成可用按钮
 const statusActions = useMemo(() => {
-  const validTransitions = getValidTransitions(task.status)
+  const validTransitions = getAllowedTodoStatusActions(task.status)
   return validTransitions.map((toStatus) => ({
     toStatus,
-    label: getTransitionLabel(toStatus),
+    label: getTodoStatusActionLabel(toStatus),
     icon: getTransitionIcon(toStatus)
   }))
 }, [task.status])
-
-function getTransitionLabel(toStatus: TaskStatus): string {
-  switch (toStatus) {
-    case 'IN_PROGRESS':
-      return task.status === 'PAUSED' ? 'Resume' : 'Start'
-    case 'PAUSED':
-      return 'Pause'
-    case 'DONE':
-      return 'Complete'
-    default:
-      return ''
-  }
-}
 
 function getTransitionIcon(toStatus: TaskStatus): LucideIcon {
   switch (toStatus) {
@@ -415,7 +391,7 @@ function getTransitionIcon(toStatus: TaskStatus): LucideIcon {
 | 实现位置 | 函数 | 职责 |
 |---------|-----|------|
 | Rust domain | `DeskTask::can_transition_to()` | 后端校验转换合法性 |
-| TypeScript | `getValidTransitions()` | 前端生成可用按钮 |
+| TypeScript | `getAllowedTodoStatusActions()` | 前端生成可用按钮 |
 | 单元测试 | `src-tauri/src/domain.rs` | 验证 Rust 状态机规则 |
 
 **保证机制**:
@@ -457,7 +433,7 @@ function getTransitionIcon(toStatus: TaskStatus): LucideIcon {
 - [活动日志时间线 Spec](./activity-log-timeline.md)（待创建）
 
 ### 代码
-- [`src/lib/taskStateMachine.ts`](../../src/lib/taskStateMachine.ts)
+- [`src/lib/todoTransition.ts`](../../src/lib/todoTransition.ts)
 - [`src-tauri/src/domain.rs`](../../src-tauri/src/domain.rs) - `DeskTask::can_transition_to()`
 - [`src/components/drawer/StatusMachineButtons.tsx`](../../src/components/drawer/StatusMachineButtons.tsx)
 

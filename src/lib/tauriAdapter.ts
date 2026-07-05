@@ -4,7 +4,6 @@ import {
   createArea as persistCreateArea,
   createGoal as persistGoal,
   createTaskForGoal as persistTaskForGoal,
-  createSystemReminder as persistCreateSystemReminder,
   deleteArea as persistDeleteArea,
   listAreas as persistListAreas,
   loadGoalList as persistLoadGoalList,
@@ -21,7 +20,7 @@ import {
   restoreGoal as persistRestoreGoal,
   listDeletedGoals as persistListDeletedGoals,
 } from './tauriCommands'
-import type { GoalCard, GoalStatus, AreaWithStats, ReminderItem } from '../types/app'
+import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
 import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
 import { validateTaskTitle, validateGoalInput, validateAreaTitle } from './validation'
@@ -107,12 +106,12 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
     taskId: string,
     input: {
       title: string
-      plannedStartAt?: Date
-      dueDate?: Date
+      plannedStartAt?: Date | null
+      dueDate?: Date | null
       linkedGoalId?: string
       linkedGoalLabel?: string
       showInTimeline?: boolean
-      systemReminderId?: string
+      systemReminderId?: string | null
     },
   ): Promise<TaskResult> {
     const validatedTitle = validateTaskTitle(input.title)
@@ -169,10 +168,6 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
       message: result.message,
       statusMessage: result.success ? 'Area deleted' : result.message,
     }
-  }
-
-  async createSystemReminder(title: string, dueAt?: Date): Promise<ReminderItem> {
-    return persistCreateSystemReminder(title, dueAt)
   }
 
   async loadGoals(): Promise<GoalCard[]> {

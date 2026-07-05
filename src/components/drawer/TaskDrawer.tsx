@@ -1,9 +1,10 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlignLeft, Bell, BookOpen, Calendar, CheckCircle, Clock, Folder, Send, Trash2, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { AlignLeft, BookOpen, Calendar, CheckCircle, Clock, ExternalLink, Folder, Send, Trash2, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { getRuntimeAdapter } from '../../lib/runtimeAdapter'
 import { openTaskInBear } from '../../lib/tauriCommands'
+import { getEventKitAdapter } from '../../lib/workspaceMutations'
 import { useTodoEditingSession } from '../../lib/todoEditing'
 import { formatDateTimeLabel } from '../../lib/dateUtils'
 import { ActivityLogTimeline } from './ActivityLogTimeline'
@@ -30,7 +31,6 @@ function useTaskDrawerData() {
   const updateTaskContent = useTaskStore((s) => s.updateTaskContent)
   const rawUpdateTaskFields = useTaskStore((s) => s.updateTaskFields)
   const addTaskNote = useTaskStore((s) => s.addTaskNote)
-  const createAndLinkReminder = useTaskStore((s) => s.createAndLinkReminder)
   const unlinkTaskFromReminder = useTaskStore((s) => s.unlinkTaskFromReminder)
   const softDeleteTask = useTaskStore((s) => s.softDeleteTask)
   const createGoal = useGoalStore((s) => s.createGoal)
@@ -48,7 +48,7 @@ function useTaskDrawerData() {
   return {
     task, isOpen, closeDrawer, activeArea,
     updateTaskStatus, updateTaskContent, updateTaskFields, addTaskNote,
-    createAndLinkReminder, unlinkTaskFromReminder, softDeleteTask,
+    unlinkTaskFromReminder, softDeleteTask,
     createGoal, goals, allAreas, createArea, systemReminders,
   }
 }
@@ -59,7 +59,7 @@ export function TaskDrawer() {
   const {
     task, isOpen, closeDrawer, activeArea,
     updateTaskStatus, updateTaskContent, updateTaskFields, addTaskNote,
-    createAndLinkReminder, unlinkTaskFromReminder, softDeleteTask,
+    unlinkTaskFromReminder, softDeleteTask,
     createGoal, goals, allAreas, createArea, systemReminders,
   } = useTaskDrawerData()
   const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null)
@@ -67,6 +67,14 @@ export function TaskDrawer() {
   const [logNote, setLogNote] = useState('')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false)
+
+  useEffect(() => {
+    setPendingStatus(null)
+    setStatusNote('')
+    setLogNote('')
+    setDeleteConfirmOpen(false)
+    setUnlinkConfirmOpen(false)
+  }, [isOpen, task?.id])
 
   const promptText = useMemo(() => {
     if (pendingStatus === 'PAUSED') return '记录一下暂停原因'
@@ -89,11 +97,17 @@ export function TaskDrawer() {
   const draft = editingSession?.draft
 
   const canChangeStatus = editingSession?.capabilities.canChangeStatus ?? false
+  const canEditFields = editingSession?.capabilities.canEditFields ?? false
   const statusActions = editingSession?.capabilities.statusActions ?? []
 
   const linkedReminder = task?.systemReminderId
     ? systemReminders.find((r) => r.id === task.systemReminderId)
     : undefined
+
+  const handleOpenLinkedReminder = () => {
+    if (!task?.systemReminderId) return
+    void getEventKitAdapter().openSystemReminder(task.systemReminderId)
+  }
 
   const formatReminderDate = (date?: Date) => {
     if (!date) return ''
@@ -155,13 +169,15 @@ export function TaskDrawer() {
             <header className="flex shrink-0 items-center justify-between rounded-t-3xl border-b border-slate-100 bg-slate-50/50 p-6">
               <StatusMachineButtons status={task.status} statusActions={statusActions} onAction={setPendingStatus} />
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-red-50 hover:border-red-300 hover:text-red-600"
-                  title="删除"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {canEditFields && (
+                  <button
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+                    title="删除"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
                 <button
                   onClick={closeDrawer}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:border-slate-300"
@@ -205,95 +221,121 @@ export function TaskDrawer() {
 
             <div className="flex-1 overflow-y-auto">
               <div className="p-8 pb-4">
-                  <input
-                    type="text"
-                    value={draft.title}
-                    onChange={(event) => editingSession.actions.setTitle(event.target.value)}
-                    onBlur={() => void editingSession.actions.saveFields()}
-                    className="mb-4 w-full border-none bg-transparent p-0 text-2xl font-black text-slate-900 outline-none focus:ring-0"
-                  />
+                  {canEditFields ? (
+                    <input
+                      type="text"
+                      value={draft.title}
+                      onChange={(event) => editingSession.actions.setTitle(event.target.value)}
+                      onBlur={() => void editingSession.actions.saveFields()}
+                      className="mb-4 w-full border-none bg-transparent p-0 text-2xl font-black text-slate-900 outline-none focus:ring-0"
+                    />
+                  ) : (
+                    <h2 className="mb-4 text-2xl font-black text-slate-900">{draft.title}</h2>
+                  )}
 
                   <div className="space-y-3 text-sm font-medium">
-                    <div className="flex flex-wrap gap-4">
-                      <div className="relative">
-                        <InlineTimeField
-                          icon={<Clock className="h-3.5 w-3.5" />}
-                          value={draft.plannedStartAtDraft}
-                          isActive={draft.activeEditor === 'plannedStartAt'}
-                          onToggle={() => editingSession.actions.setActiveEditor('plannedStartAt')}
-                          placeholder="计划开始"
-                        />
-                        {draft.activeEditor === 'plannedStartAt' && (
-                          <DateTimePickerPopover
-                            value={draft.plannedStartAtDraft}
-                            defaultTime="09:00"
-                            onChange={(value) => editingSession.actions.setPlannedStartAtDraft(value)}
-                            onClose={() => editingSession.actions.setActiveEditor('none')}
-                            onApply={(value) => {
-                              editingSession.actions.setActiveEditor('none')
-                              editingSession.actions.setPlannedStartAtDraft(value, { ...draft, activeEditor: 'none' })
-                            }}
+                    {canEditFields ? (
+                      <>
+                        <div className="flex flex-wrap gap-4">
+                          <div className="relative">
+                            <InlineTimeField
+                              icon={<Clock className="h-3.5 w-3.5" />}
+                              value={draft.plannedStartAtDraft}
+                              isActive={draft.activeEditor === 'plannedStartAt'}
+                              onToggle={() => editingSession.actions.setActiveEditor('plannedStartAt')}
+                              placeholder="计划开始"
+                              ariaLabel="编辑计划开始时间"
+                              prefix="开始 "
+                            />
+                            {draft.activeEditor === 'plannedStartAt' && (
+                              <DateTimePickerPopover
+                                value={draft.plannedStartAtDraft}
+                                defaultTime="09:00"
+                                onChange={(value) => editingSession.actions.setPlannedStartAtDraft(value)}
+                                onClose={() => editingSession.actions.setActiveEditor('none')}
+                                title="计划开始"
+                                onApply={(value) => {
+                                  editingSession.actions.setActiveEditor('none')
+                                  editingSession.actions.setPlannedStartAtDraft(value, { ...draft, activeEditor: 'none' })
+                                }}
+                              />
+                            )}
+                          </div>
+                          <div className="relative">
+                            <InlineTimeField
+                              icon={<Calendar className="h-3.5 w-3.5" />}
+                              value={draft.dueDateDraft}
+                              isActive={draft.activeEditor === 'dueDate'}
+                              onToggle={() => editingSession.actions.setActiveEditor('dueDate')}
+                              placeholder="添加截止"
+                              ariaLabel="编辑截止时间"
+                              prefix="截止 "
+                            />
+                            {draft.activeEditor === 'dueDate' && (
+                              <DateTimePickerPopover
+                                value={draft.dueDateDraft}
+                                defaultTime="18:00"
+                                onChange={(value) => editingSession.actions.setDueDateDraft(value)}
+                                onClose={() => editingSession.actions.setActiveEditor('none')}
+                                title="截止时间"
+                                onApply={(value) => {
+                                  editingSession.actions.setActiveEditor('none')
+                                  editingSession.actions.setDueDateDraft(value, { ...draft, activeEditor: 'none' })
+                                }}
+                              />
+                            )}
+                          </div>
+                          <div className="relative">
+                            <InlineGoalField
+                              draft={draft}
+                              goals={goals}
+                              editingSession={editingSession}
+                            />
+                            {draft.activeEditor === 'linkedGoal' && (
+                              <GoalPickerPopover
+                                draft={draft}
+                                goals={goals}
+                                editingSession={editingSession}
+                                createArea={createArea}
+                                onClose={() => editingSession.actions.setActiveEditor('none')}
+                              />
+                            )}
+                          </div>
+                        </div>
+                        <label
+                          className={`inline-flex w-fit cursor-pointer items-center gap-2 rounded-full px-3 py-2 text-xs font-bold transition-all ${
+                            draft.showInTimelineDraft
+                              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15'
+                              : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={draft.showInTimelineDraft}
+                            onChange={(event) => editingSession.actions.setShowInTimelineDraft(event.target.checked)}
+                            className="sr-only"
                           />
+                          <span
+                            className={`h-2 w-2 rounded-full transition-colors ${
+                              draft.showInTimelineDraft ? 'bg-indigo-200' : 'bg-slate-300'
+                            }`}
+                          />
+                          <span>在时间轴显示</span>
+                        </label>
+                      </>
+                    ) : (
+                      <div className="flex flex-wrap gap-4 text-slate-500">
+                        {draft.plannedStartAtDraft && (
+                          <ReadOnlyFact icon={<Clock className="h-3.5 w-3.5" />} text={`开始 ${formatDateTimeLabel(draft.plannedStartAtDraft)}`} />
+                        )}
+                        {draft.dueDateDraft && (
+                          <ReadOnlyFact icon={<Calendar className="h-3.5 w-3.5" />} text={`截止 ${formatDateTimeLabel(draft.dueDateDraft)}`} />
+                        )}
+                        {draft.linkedGoalLabel && (
+                          <ReadOnlyFact icon={<Folder className="h-4 w-4" />} text={draft.linkedGoalLabel} />
                         )}
                       </div>
-                      <div className="relative">
-                      <InlineTimeField
-                        icon={<Calendar className="h-3.5 w-3.5" />}
-                        value={draft.dueDateDraft}
-                        isActive={draft.activeEditor === 'dueDate'}
-                        onToggle={() => editingSession.actions.setActiveEditor('dueDate')}
-                        placeholder="截止时间"
-                      />
-                      {draft.activeEditor === 'dueDate' && (
-                        <DateTimePickerPopover
-                          value={draft.dueDateDraft}
-                          defaultTime="18:00"
-                          onChange={(value) => editingSession.actions.setDueDateDraft(value)}
-                          onClose={() => editingSession.actions.setActiveEditor('none')}
-                          onApply={(value) => {
-                            editingSession.actions.setActiveEditor('none')
-                            editingSession.actions.setDueDateDraft(value, { ...draft, activeEditor: 'none' })
-                          }}
-                        />
-                      )}
-                    </div>
-                    <div className="relative">
-                      <InlineGoalField
-                        draft={draft}
-                        goals={goals}
-                        editingSession={editingSession}
-                      />
-                      {draft.activeEditor === 'linkedGoal' && (
-                        <GoalPickerPopover
-                          draft={draft}
-                          goals={goals}
-                          editingSession={editingSession}
-                          createArea={createArea}
-                          onClose={() => editingSession.actions.setActiveEditor('none')}
-                        />
-                      )}
-                      </div>
-                    </div>
-                    <label
-                      className={`inline-flex w-fit cursor-pointer items-center gap-2 rounded-full px-3 py-2 text-xs font-bold transition-all ${
-                        draft.showInTimelineDraft
-                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15'
-                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={draft.showInTimelineDraft}
-                        onChange={(event) => editingSession.actions.setShowInTimelineDraft(event.target.checked)}
-                        className="sr-only"
-                      />
-                      <span
-                        className={`h-2 w-2 rounded-full transition-colors ${
-                          draft.showInTimelineDraft ? 'bg-indigo-200' : 'bg-slate-300'
-                        }`}
-                      />
-                      <span>在时间轴显示</span>
-                    </label>
+                    )}
                   </div>
                   {task.bearNoteId && getRuntimeAdapter().isTauri() && (
                     <button
@@ -310,21 +352,6 @@ export function TaskDrawer() {
               <div className="mx-8 my-2 h-px bg-slate-100" />
 
               <div className="px-8 py-4">
-                {!task.systemReminderId && (
-                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:text-indigo-600 transition-colors">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                      onChange={() => {
-                        if (task) {
-                          void createAndLinkReminder(task.id, task.title, task.dueDate)
-                        }
-                      }}
-                    />
-                    <Bell className="h-4 w-4 text-slate-400" />
-                    <span className="font-medium text-slate-700">关联系统提醒获得通知</span>
-                  </label>
-                )}
                 {task.systemReminderId && (
                   <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2">
                     <div className="flex items-center gap-2">
@@ -340,12 +367,25 @@ export function TaskDrawer() {
                         )}
                       </div>
                     </div>
-                    <button
-                      className="text-xs font-semibold text-slate-500 hover:text-slate-700 underline"
-                      onClick={() => setUnlinkConfirmOpen(true)}
-                    >
-                      解除
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 underline hover:text-green-900"
+                        onClick={handleOpenLinkedReminder}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        打开
+                      </button>
+                      {canEditFields && (
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-slate-500 underline hover:text-slate-700"
+                          onClick={() => setUnlinkConfirmOpen(true)}
+                        >
+                          解除关联
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -358,29 +398,31 @@ export function TaskDrawer() {
                       <AlignLeft className="h-4 w-4" />
                       Notes (Markdown)
                     </h3>
-                    <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-0.5">
-                      {([
-                        ['preview', '预览'],
-                        ['edit', '编辑'],
-                        ['split', '分屏'],
-                      ] as const).map(([mode, label]) => {
-                        const isActive = draft.markdownMode === mode
-                        return (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => editingSession.actions.setMarkdownMode(mode)}
-                            className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
-                              isActive ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    {canEditFields && (
+                      <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-0.5">
+                        {([
+                          ['preview', '预览'],
+                          ['edit', '编辑'],
+                          ['split', '分屏'],
+                        ] as const).map(([mode, label]) => {
+                          const isActive = draft.markdownMode === mode
+                          return (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => editingSession.actions.setMarkdownMode(mode)}
+                              className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                                isActive ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                  {draft.markdownMode === 'preview' ? (
+                  {!canEditFields || draft.markdownMode === 'preview' ? (
                     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm min-h-[280px]">
                       {draft.content.trim() ? (
                         <MarkdownContent content={draft.content} />
@@ -389,13 +431,15 @@ export function TaskDrawer() {
                           <AlignLeft className="mb-3 h-8 w-8 text-slate-300" />
                           <p className="text-sm font-medium text-slate-400">还没有笔记</p>
                           <p className="mt-1 text-xs text-slate-400">点击「编辑」开始记录想法、步骤或参考链接</p>
-                          <button
-                            type="button"
-                            onClick={() => editingSession.actions.setMarkdownMode('edit')}
-                            className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 transition-colors"
-                          >
-                            开始写笔记
-                          </button>
+                          {canEditFields && (
+                            <button
+                              type="button"
+                              onClick={() => editingSession.actions.setMarkdownMode('edit')}
+                              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 transition-colors"
+                            >
+                              开始写笔记
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -429,30 +473,32 @@ export function TaskDrawer() {
                   </h3>
                   <ActivityLogTimeline logs={task.activityLogs} />
 
-                  <div className="mt-4 border-t border-slate-200 pt-4">
-                    <div className="flex gap-2">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600">Me</div>
-                      <div className="relative flex-1">
-                        <textarea
-                          rows={2}
-                          value={logNote}
-                          onChange={(event) => setLogNote(event.target.value)}
-                          className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                          placeholder="添加进度记录..."
-                        />
-                        <button
-                          onClick={() => {
-                            if (!logNote.trim()) return
-                            void addTaskNote(task.id, logNote)
-                            setLogNote('')
-                          }}
-                          className="absolute bottom-2 right-2 text-slate-300 transition-colors hover:text-indigo-500"
-                        >
-                          <Send className="h-3.5 w-3.5" />
-                        </button>
+                  {canEditFields && (
+                    <div className="mt-4 border-t border-slate-200 pt-4">
+                      <div className="flex gap-2">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600">Me</div>
+                        <div className="relative flex-1">
+                          <textarea
+                            rows={2}
+                            value={logNote}
+                            onChange={(event) => setLogNote(event.target.value)}
+                            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                            placeholder="添加进度记录..."
+                          />
+                          <button
+                            onClick={() => {
+                              if (!logNote.trim()) return
+                              void addTaskNote(task.id, logNote)
+                              setLogNote('')
+                            }}
+                            className="absolute bottom-2 right-2 text-slate-300 transition-colors hover:text-indigo-500"
+                          >
+                            <Send className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -470,24 +516,44 @@ function InlineTimeField({
   isActive,
   onToggle,
   placeholder,
+  ariaLabel,
+  prefix,
 }: {
   icon: React.ReactNode
   value: string
   isActive: boolean
   onToggle: () => void
   placeholder: string
+  ariaLabel?: string
+  prefix?: string
 }) {
   return (
     <button
       type="button"
+      aria-label={ariaLabel}
       onClick={onToggle}
       className={`flex items-center gap-2 transition-colors ${
         isActive ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'
       }`}
     >
       <span>{icon}</span>
-      <span>{value ? formatDateTimeLabel(value) : placeholder}</span>
+      <span>{value ? `${prefix || ''}${formatDateTimeLabel(value)}` : placeholder}</span>
     </button>
+  )
+}
+
+function ReadOnlyFact({
+  icon,
+  text,
+}: {
+  icon: React.ReactNode
+  text: string
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span>{icon}</span>
+      <span>{text}</span>
+    </div>
   )
 }
 
@@ -506,6 +572,7 @@ function InlineGoalField({
   return (
     <button
       type="button"
+      aria-label="编辑所属目标"
       onClick={() => editingSession.actions.setActiveEditor(draft.activeEditor === 'linkedGoal' ? 'none' : 'linkedGoal')}
       className={`flex items-center gap-2 transition-colors ${
         draft.activeEditor === 'linkedGoal' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'

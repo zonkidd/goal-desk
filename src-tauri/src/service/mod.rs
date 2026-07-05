@@ -6,4 +6,4 @@ mod task;
 pub use app::AppService;
 pub use area::AreaService;
 pub use goal::GoalService;
-pub use task::TaskService;
+pub use task::{GoalLink, NullableFieldPatch, TaskFieldPatch, TaskService};

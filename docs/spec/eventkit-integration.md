@@ -13,7 +13,7 @@
 EventKit 集成系统桥接 macOS 原生 EventKit 框架，读取日历事件（Calendar Events）和提醒事项（Reminders），合并到 Goal Desk 的 Today 时间轴，实现跨应用统一时间管理。
 
 **设计原则**：
-- **只读为主**：日历事件只读，提醒事项支持完成状态同步
+- **只读外部源**：日历事件和提醒事项均只读导入；提醒完成状态在系统提醒事项 App 中修改后由 Goal Desk 刷新读取
 - **权限透明**：清晰展示日历/提醒权限状态，引导用户授权
 - **原生桥接**：通过 Objective-C 调用 EventKit，Rust FFI 封装
 - **跨平台兼容**：非 macOS 平台返回空数据，不影响核心功能
@@ -39,8 +39,8 @@ macOS EventKit
      ↓
 Objective-C (native/eventkit.m)
   - gd_eventkit_snapshot()
-  - gd_eventkit_create_reminder()
-  - gd_eventkit_set_reminder_completed()
+  - gd_eventkit_request_calendar_access_async()
+  - gd_eventkit_request_reminders_access_async()
      ↓ JSON string
 Rust FFI (src-tauri/src/eventkit.rs)
   - read_native_result<T>()
@@ -48,20 +48,18 @@ Rust FFI (src-tauri/src/eventkit.rs)
      ↓ Rust struct
 EventKitService
   - snapshot()
-  - create_reminder()
-  - set_reminder_completed()
      ↓
 Tauri Command (src-tauri/src/lib.rs)
   - load_desktop_snapshot()
-  - toggle_system_reminder_done()
+  - open_system_reminder()
      ↓ invoke('load_desktop_snapshot')
 TypeScript (src/lib/desktopApi.ts)
   - loadDesktopSnapshot()
-  - setSystemReminderCompleted()
+  - openSystemReminder()
      ↓
 React Store (src/store/appStore.ts)
   - hydrateApp()
-  - toggleSystemReminderDone()
+  - openDrawer()
 ```
 
 ---
@@ -199,8 +197,8 @@ typedef struct {
 } GDEventKitResult;
 
 GDEventKitResult gd_eventkit_snapshot(const char *start_iso, const char *end_iso);
-GDEventKitResult gd_eventkit_create_reminder(const char *title, const char *due_at_iso);
-GDEventKitResult gd_eventkit_set_reminder_completed(const char *identifier, int done);
+void gd_eventkit_request_calendar_access_async(void *context, void (*callback)(void *, const char *));
+void gd_eventkit_request_reminders_access_async(void *context, void (*callback)(void *, const char *));
 void gd_eventkit_free_string(char *string);
 ```
 
@@ -270,21 +268,11 @@ NSPredicate *predicate = [eventStore predicateForRemindersInCalendars:nil];
 }];
 ```
 
-### 4.6 提醒完成状态修改
+### 4.6 提醒只读导入
 
 ```objective-c
-EKReminder *reminder = [eventStore calendarItemWithIdentifier:identifier];
-if (!reminder) {
-    return GDEventKitResult{ .json = NULL, .error = "Reminder not found" };
-}
-
-reminder.completed = (done != 0);
-NSError *error = nil;
-[eventStore saveReminder:reminder commit:YES error:&error];
-
-if (error) {
-    return GDEventKitResult{ .json = NULL, .error = error.localizedDescription };
-}
+// 当前策略：不保存 EKReminder。
+// Goal Desk 只读取提醒事项并可打开系统提醒事项 App。
 ```
 
 ---
@@ -308,16 +296,15 @@ unsafe extern "C" {
         start_iso: *const c_char, 
         end_iso: *const c_char
     ) -> NativeEventKitResult;
-    
-    fn gd_eventkit_create_reminder(
-        title: *const c_char, 
-        due_at_iso: *const c_char
-    ) -> NativeEventKitResult;
-    
-    fn gd_eventkit_set_reminder_completed(
-        identifier: *const c_char, 
-        done: c_int
-    ) -> NativeEventKitResult;
+    fn gd_eventkit_request_calendar_access_async(
+        context: *mut std::ffi::c_void,
+        callback: unsafe extern "C" fn(*mut std::ffi::c_void, *const c_char),
+    );
+
+    fn gd_eventkit_request_reminders_access_async(
+        context: *mut std::ffi::c_void,
+        callback: unsafe extern "C" fn(*mut std::ffi::c_void, *const c_char),
+    );
     
     fn gd_eventkit_free_string(string: *mut c_char);
 }
@@ -373,18 +360,6 @@ pub trait SystemAgendaAdapter {
         start: DateTime<Local>,
         end: DateTime<Local>,
     ) -> Result<SystemAgendaSnapshot, String>;
-    
-    fn create_reminder(
-        &self,
-        title: &str,
-        due_at: Option<DateTime<Local>>,
-    ) -> Result<SystemReminder, String>;
-    
-    fn set_reminder_completed(
-        &self, 
-        id: &str, 
-        done: bool
-    ) -> Result<SystemReminder, String>;
 }
 ```
 
@@ -407,20 +382,6 @@ impl SystemAgendaAdapter for MacEventKitAdapter {
         
         Self::read_native_result(unsafe {
             gd_eventkit_snapshot(start_iso.as_ptr(), end_iso.as_ptr())
-        })
-    }
-    
-    fn set_reminder_completed(
-        &self, 
-        id: &str, 
-        done: bool
-    ) -> Result<SystemReminder, String> {
-        let id = CString::new(id).map_err(|e| e.to_string())?;
-        Self::read_native_result(unsafe {
-            gd_eventkit_set_reminder_completed(
-                id.as_ptr(), 
-                if done { 1 } else { 0 }
-            )
         })
     }
 }
@@ -451,14 +412,6 @@ where
         end: DateTime<Local>,
     ) -> Result<SystemAgendaSnapshot, String> {
         self.adapter.snapshot(start, end)
-    }
-    
-    pub fn set_reminder_completed(
-        &self, 
-        id: &str, 
-        done: bool
-    ) -> Result<SystemReminder, String> {
-        self.adapter.set_reminder_completed(id, done)
     }
 }
 ```
@@ -532,16 +485,12 @@ async fn load_desktop_snapshot(app: AppHandle) -> Result<DesktopSnapshot, String
 }
 ```
 
-### 7.2 toggle_system_reminder_done
+### 7.2 open_system_reminder
 
 ```rust
 #[tauri::command]
-async fn toggle_system_reminder_done(
-    app: AppHandle,
-    reminder_id: String,
-    done: bool,
-) -> Result<SystemReminder, String> {
-    eventkit::set_system_reminder_completed(&app, &reminder_id, done)
+async fn open_system_reminder(reminder_id: String) -> Result<(), String> {
+    eventkit::open_system_reminder(&reminder_id)
 }
 ```
 
@@ -570,15 +519,8 @@ export async function loadDesktopSnapshot() {
   }
 }
 
-export async function setSystemReminderCompleted(
-  reminderId: string,
-  done: boolean
-) {
-  const reminder = await invoke<SystemReminder>(
-    'toggle_system_reminder_done',
-    { reminderId, done }
-  )
-  return normalizeReminder(reminder)
+export async function openSystemReminder(reminderId: string) {
+  await invoke('open_system_reminder', { reminderId })
 }
 ```
 
@@ -604,7 +546,7 @@ function mergeTimeline(
     sourceLabel: event.calendarTitle || 'Calendar Event',
   })))
   
-  // 2. System Reminders (可标记完成)
+  // 2. System Reminders (只读)
   items.push(...systemReminders
     .filter(r => r.dueAt)
     .map(reminder => ({
@@ -612,19 +554,19 @@ function mergeTimeline(
       title: reminder.title,
       timeLabel: formatTime(reminder.dueAt!),
       source: 'reminder' as const,
-      readonly: false,
+      readonly: true,
       done: reminder.done,
       sourceLabel: reminder.listTitle || 'Apple Reminders',
     }))
   )
   
-  // 3. Desk Tasks (showInTimeline = true)
+  // 3. Desk Tasks (plannedStartAt 驱动时间轴)
   items.push(...deskTasks
-    .filter(task => task.showInTimeline && task.dueDate)
+    .filter(task => task.plannedStartAt && task.status !== 'DONE')
     .map(task => ({
       id: task.id,
       title: task.title,
-      timeLabel: formatTime(task.dueDate!),
+      timeLabel: formatTime(task.plannedStartAt!),
       source: 'todo' as const,
       readonly: false,
       done: task.status === 'DONE',
@@ -700,18 +642,18 @@ function mergeTimeline(
 - ❌ 无法在 Goal Desk 中管理日历
 - 接受: 定位为"查看日历"而非"管理日历"
 
-### ADR-002: 提醒事项只同步完成状态
+### ADR-002: 提醒事项只读导入
 
-**决策**: System Reminders 支持标记完成，但不支持创建/编辑标题/时间
+**决策**: System Reminders 不支持在 Goal Desk 中创建、编辑或标记完成；Goal Desk 只展示导入数据并打开系统提醒事项 App
 
 **理由**:
-- ✅ 完成状态同步是最常见需求
 - ✅ 避免复杂的双向同步逻辑
-- ✅ 减少权限敏感操作
+- ✅ 减少权限敏感操作和 EventKit 写入风险
 
 **代价**:
 - ❌ 无法在 Goal Desk 中创建提醒
-- 缓解: 用户可以在系统提醒中创建，Goal Desk 自动同步
+- ❌ 无法在 Goal Desk 中标记系统提醒完成
+- 缓解: 用户可以在系统提醒事项 App 中修改，Goal Desk 刷新后只读展示最新状态
 
 ### ADR-003: 非 macOS 平台返回空数据
 
@@ -806,7 +748,7 @@ mod tests {
 2. 同意日历权限 → 时间轴显示今日事件
 3. 拒绝提醒权限 → 显示权限拒绝提示
 4. 在系统提醒中创建提醒 → Goal Desk 刷新后显示
-5. 在 Goal Desk 中标记提醒完成 → 系统提醒同步完成状态
+5. 在 Goal Desk 中打开提醒 → 系统提醒事项 App 被打开
 
 ---
 

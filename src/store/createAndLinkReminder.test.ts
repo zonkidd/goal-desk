@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useTaskStore } from './taskStore'
 import { setWorkspaceMutationAdapter, resetWorkspaceMutationAdapter } from '../lib/workspaceMutations'
-import { setRuntimeAdapter, resetRuntimeAdapter } from '../lib/runtimeAdapter'
 import type { MutationAdapter } from '../lib/mutationAdapter'
-import type { RuntimeAdapter } from '../lib/runtimeAdapter'
 
 function createMockAdapter(): MutationAdapter {
   return {
@@ -13,7 +11,6 @@ function createMockAdapter(): MutationAdapter {
     updateTaskStatus: vi.fn().mockResolvedValue({ task: undefined, statusMessage: 'ok' }),
     updateTaskContent: vi.fn().mockResolvedValue({ task: undefined, statusMessage: 'ok' }),
     updateTaskFields: vi.fn().mockResolvedValue({ task: undefined, statusMessage: 'ok' }),
-    createSystemReminder: vi.fn().mockResolvedValue({ id: 'reminder-123', title: 'Test', done: false }),
     createGoal: vi.fn().mockResolvedValue({ goal: undefined, statusMessage: 'ok', openGoalWorkspace: false }),
     updateGoalFields: vi.fn().mockResolvedValue({ goal: undefined, statusMessage: 'ok' }),
     updateGoalStatus: vi.fn().mockResolvedValue({ goal: undefined, statusMessage: 'ok' }),
@@ -31,88 +28,80 @@ function createMockAdapter(): MutationAdapter {
   }
 }
 
-function createMockRuntime(isTauri: boolean): RuntimeAdapter {
-  return {
-    isTauri: () => isTauri,
-    getWindowLabel: () => 'main',
-    hideWindow: vi.fn().mockResolvedValue(undefined),
-    canOpenInBear: () => false,
-    canSyncTasks: () => false,
-    canLoadDesktopSnapshot: () => false,
-  }
-}
-
-describe('createAndLinkReminder', () => {
+describe('system Reminder link actions', () => {
   beforeEach(() => {
     resetWorkspaceMutationAdapter()
-    resetRuntimeAdapter()
     useTaskStore.setState({ tasks: [] })
   })
 
-  it('should create reminder and link to task when taskId is provided', async () => {
+  it('does not expose a system Reminder creation action', () => {
+    expect('createAndLinkReminder' in useTaskStore.getState()).toBe(false)
+  })
+
+  it('does not expose a system Reminder completion sync action', () => {
+    expect('syncTasksForSystemReminder' in useTaskStore.getState()).toBe(false)
+  })
+
+  it('should express unlink as a clear Reminder intent', async () => {
     const mockAdapter = createMockAdapter()
-    mockAdapter.updateTaskFields = vi.fn().mockResolvedValue({
-      task: { id: 'task-1', title: 'Test', systemReminderId: 'reminder-123' },
+    mockAdapter.updateTaskFields = vi.fn(async (_taskId, input: any) => ({
+      task: {
+        id: 'task-1',
+        title: 'Test',
+        content: '',
+        status: 'TODO' as const,
+        activityLogs: [],
+        systemReminderId: input.systemReminderId === null ? undefined : 'reminder-123',
+      },
       statusMessage: 'ok',
-    })
+    }))
     setWorkspaceMutationAdapter(mockAdapter)
-    setRuntimeAdapter(createMockRuntime(true))
 
     useTaskStore.setState({
-      tasks: [{ id: 'task-1', title: 'Test', content: '', status: 'TODO', activityLogs: [] }],
+      tasks: [
+        {
+          id: 'task-1',
+          title: 'Test',
+          content: '',
+          status: 'TODO',
+          systemReminderId: 'reminder-123',
+          activityLogs: [],
+        },
+      ],
     })
 
-    const result = await useTaskStore.getState().createAndLinkReminder('task-1', 'Reminder Title')
+    await useTaskStore.getState().unlinkTaskFromReminder('task-1')
 
-    expect(result).toBe('reminder-123')
-    expect(mockAdapter.createSystemReminder).toHaveBeenCalledWith('Reminder Title', undefined)
-    expect(mockAdapter.updateTaskFields).toHaveBeenCalled()
-  })
-
-  it('should create reminder without calling linkTaskToReminder when taskId is empty', async () => {
-    const mockAdapter = createMockAdapter()
-    setWorkspaceMutationAdapter(mockAdapter)
-    setRuntimeAdapter(createMockRuntime(true))
-
-    const linkSpy = vi.spyOn(useTaskStore.getState(), 'linkTaskToReminder')
-
-    const result = await useTaskStore.getState().createAndLinkReminder('', 'Reminder Title')
-
-    expect(result).toBe('reminder-123')
-    expect(mockAdapter.createSystemReminder).toHaveBeenCalledWith('Reminder Title', undefined)
-    expect(linkSpy).not.toHaveBeenCalled()
-  })
-
-  it('should create reminder without linking when taskId is empty in browser mode', async () => {
-    const mockAdapter = createMockAdapter()
-    setWorkspaceMutationAdapter(mockAdapter)
-    setRuntimeAdapter(createMockRuntime(false))
-
-    const result = await useTaskStore.getState().createAndLinkReminder('', 'Reminder Title')
-
-    expect(result).toContain('mock-reminder-')
-    const tasks = useTaskStore.getState().tasks
-    expect(tasks.every(t => !t.systemReminderId)).toBe(true)
-  })
-
-  it('should persist reminder link via adapter in browser mode when taskId is provided', async () => {
-    const mockAdapter = createMockAdapter()
-    mockAdapter.updateTaskFields = vi.fn().mockResolvedValue({
-      task: { id: 'task-1', title: 'Test', systemReminderId: 'mock-reminder-123' },
-      statusMessage: 'ok',
-    })
-    setWorkspaceMutationAdapter(mockAdapter)
-    setRuntimeAdapter(createMockRuntime(false))
-
-    useTaskStore.setState({
-      tasks: [{ id: 'task-1', title: 'Test', content: '', status: 'TODO', activityLogs: [] }],
-    })
-
-    const result = await useTaskStore.getState().createAndLinkReminder('task-1', 'Reminder Title')
-
-    expect(result).toContain('mock-reminder-')
     expect(mockAdapter.updateTaskFields).toHaveBeenCalledWith('task-1', expect.objectContaining({
-      systemReminderId: expect.stringContaining('mock-reminder-'),
+      systemReminderId: null,
+    }))
+    expect(useTaskStore.getState().tasks[0].systemReminderId).toBeUndefined()
+  })
+
+  it('omits systemReminderId during ordinary field saves when caller does not change the Reminder link', async () => {
+    const mockAdapter = createMockAdapter()
+    setWorkspaceMutationAdapter(mockAdapter)
+
+    useTaskStore.setState({
+      tasks: [
+        {
+          id: 'task-1',
+          title: 'Test',
+          content: '',
+          status: 'TODO',
+          systemReminderId: 'reminder-123',
+          activityLogs: [],
+        },
+      ],
+    })
+
+    await useTaskStore.getState().updateTaskFields('task-1', {
+      title: 'Updated',
+      showInTimeline: false,
+    }, [])
+
+    expect(mockAdapter.updateTaskFields).toHaveBeenCalledWith('task-1', expect.not.objectContaining({
+      systemReminderId: expect.anything(),
     }))
   })
 })

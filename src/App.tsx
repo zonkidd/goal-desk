@@ -10,7 +10,7 @@ import { getRuntimeModeStatusMessage } from './lib/taskPresentation'
 import { TaskCodec, type RustTask } from './lib/codecs'
 import { useUiStore } from './store/uiStore'
 import { useAreaStore } from './store/areaStore'
-import { useAppHydration, useReceiveExternalTask, useTaskGoalBridge } from './hooks/useStoreComposition'
+import { useAppHydration, useGoalAreaBridge, useReceiveExternalTask, useTaskGoalBridge } from './hooks/useStoreComposition'
 
 function MainApp() {
   const hydrateApp = useAppHydration()
@@ -18,6 +18,7 @@ function MainApp() {
   const setLoading = useUiStore((state) => state.setLoading)
   const setStatusMessage = useUiStore((state) => state.setStatusMessage)
   useTaskGoalBridge()
+  useGoalAreaBridge()
 
   useEffect(() => {
     const runtime = getRuntimeAdapter()

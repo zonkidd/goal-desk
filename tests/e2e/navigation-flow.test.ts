@@ -33,7 +33,7 @@ test.describe('完整导航流程 E2E', () => {
     await page.click('text=📅 日历看板')
     await expect(page.locator('section h1')).toContainText('日历看板')
     await page.click('button:has-text("日视图")')
-    await expect(page.locator('text=月历组件')).toBeVisible()
+    await expect(page.locator('text=个日程')).toBeVisible()
 
     // 4. 导航到提醒看板，切换到按时间视图
     await page.click('text=⏰ 提醒看板')
@@ -55,7 +55,7 @@ test.describe('完整导航流程 E2E', () => {
 
     // 验证回到周视图或日视图（状态可能保持）
     const inWeekView = await page.locator('text=周一').isVisible().catch(() => false)
-    const inDayView = await page.locator('text=月历组件').isVisible().catch(() => false)
+    const inDayView = await page.locator('text=个日程').isVisible().catch(() => false)
 
     // 至少应该在某一个视图中
     expect(inWeekView || inDayView).toBeTruthy()
@@ -70,7 +70,7 @@ test.describe('完整导航流程 E2E', () => {
     // 1. 设置日历看板为日视图
     await page.click('text=📅 日历看板')
     await page.click('button:has-text("日视图")')
-    await expect(page.locator('text=月历组件')).toBeVisible()
+    await expect(page.locator('text=个日程')).toBeVisible()
 
     // 2. 导航到提醒看板
     await page.click('text=⏰ 提醒看板')
@@ -89,7 +89,7 @@ test.describe('完整导航流程 E2E', () => {
 
     // 验证是否保持日视图（状态管理可能保持也可能重置）
     // 这里我们检查至少在某个视图中，不强制要求保持
-    const inDayView = await page.locator('text=月历组件').isVisible().catch(() => false)
+    const inDayView = await page.locator('text=个日程').isVisible().catch(() => false)
     const inWeekView = await page.locator('text=周一').isVisible().catch(() => false)
 
     // 至少在某一个视图中
@@ -129,6 +129,6 @@ test.describe('完整导航流程 E2E', () => {
 
     // 验证页面仍然可交互
     await page.click('button:has-text("日视图")')
-    await expect(page.locator('text=月历组件')).toBeVisible()
+    await expect(page.locator('text=个日程')).toBeVisible()
   })
 })

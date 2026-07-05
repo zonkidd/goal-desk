@@ -58,7 +58,7 @@ type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'PAUSED' | 'DONE'
 | `PAUSED` | `['IN_PROGRESS', 'DONE']` | **Resume** (高亮) + Complete |
 | `DONE` | `[]` | 不显示按钮 |
 
-**规则来源**：`src/lib/taskStateMachine.ts` - `nextAllowedStatuses()`
+**规则来源**：`src/lib/todoTransition.ts` - `getAllowedTodoStatusActions()`
 
 ### 3.2 按钮渲染逻辑
 
@@ -173,7 +173,7 @@ export function getTaskPrimaryStatusLabel(status: TaskStatus): string {
     case 'IN_PROGRESS':
       return 'Continue'  // 理论上不会显示，因为进行中显示 Pause
     case 'DONE':
-      return 'Reopen'    // 理论上不会显示，因为已完成不显示按钮
+      return ''          // 已完成为只读状态，不显示状态按钮
   }
 }
 ```
@@ -257,7 +257,7 @@ export function getTaskPrimaryStatusLabel(status: TaskStatus): string {
 
 ```typescript
 // src/components/drawer/TaskDrawer.tsx
-const statusActions = nextAllowedStatuses(task.status)  // 从状态机获取可执行操作
+const statusActions = getAllowedTodoStatusActions(task.status)  // 从状态机获取可执行操作
 
 <StatusMachineButtons
   status={task.status}
@@ -338,26 +338,17 @@ const statusActions = nextAllowedStatuses(task.status)  // 从状态机获取可
 
 ## 九、状态机集成
 
-### 9.1 nextAllowedStatuses 函数
+### 9.1 getAllowedTodoStatusActions 函数
 
 ```typescript
-// src/lib/taskStateMachine.ts
-export function nextAllowedStatuses(current: TaskStatus): TaskStatus[] {
-  switch (current) {
-    case 'TODO':
-      return ['IN_PROGRESS', 'DONE']
-    case 'IN_PROGRESS':
-      return ['PAUSED', 'DONE']
-    case 'PAUSED':
-      return ['IN_PROGRESS', 'DONE']
-    case 'DONE':
-      return []  // 已完成不允许转换
-  }
+// src/lib/todoTransition.ts
+export function getAllowedTodoStatusActions(status: TaskStatus): TaskStatus[] {
+  return [...TODO_TRANSITION_CONTRACT[status].allowedTargets]
 }
 ```
 
 **StatusMachineButtons 依赖此函数**：
-- 父组件调用 `nextAllowedStatuses(task.status)` 获取 `statusActions`
+- 父组件调用 `getAllowedTodoStatusActions(task.status)` 获取 `statusActions`
 - 传递给 StatusMachineButtons 作为 props
 - 按钮组根据 `statusActions` 决定显示哪些按钮
 
@@ -582,7 +573,7 @@ export const StatusMachineButtons = memo(function StatusMachineButtons({
 
 ### 代码
 - [`src/components/drawer/StatusMachineButtons.tsx`](../../src/components/drawer/StatusMachineButtons.tsx)
-- [`src/lib/taskStateMachine.ts`](../../src/lib/taskStateMachine.ts)
+- [`src/lib/todoTransition.ts`](../../src/lib/todoTransition.ts)
 - [`src/lib/taskPresentation.ts`](../../src/lib/taskPresentation.ts)
 
 ### 依赖库

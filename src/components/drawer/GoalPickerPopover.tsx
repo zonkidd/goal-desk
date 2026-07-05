@@ -47,9 +47,16 @@ export function GoalPickerPopover({
         transition={{ type: 'spring', stiffness: 360, damping: 28 }}
         className="absolute left-0 top-full z-[80] mt-3 w-[330px] rounded-3xl border border-white/80 bg-white/90 p-4 shadow-2xl shadow-slate-900/10 backdrop-blur-md"
       >
+        <div className="mb-3 px-1">
+          <div className="text-xs font-black text-slate-800">选择所属目标</div>
+          <div className="mt-1 text-[10px] font-semibold text-slate-500 leading-normal">
+            先从现有 Goal 中选择；如果没有合适的，再新建并关联。
+          </div>
+        </div>
         <div className="max-h-[220px] space-y-1.5 overflow-y-auto">
           <button
             type="button"
+            aria-label="Unlinked task"
             onClick={() => void editingSession.actions.unlinkGoal()}
             className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-colors ${
               !draft.linkedGoalIdDraft
@@ -93,7 +100,7 @@ export function GoalPickerPopover({
                 areas={draft.allAreas}
                 onChange={(value) => editingSession.actions.setNewGoalArea(value)}
                 onCreateArea={createArea}
-                placeholder="选择或创建领域"
+                placeholder="Area（可选）"
                 className="h-8 w-full rounded-lg border border-slate-200 bg-white/80 px-3 text-xs outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
               />
               <div className="flex gap-2">
@@ -116,6 +123,7 @@ export function GoalPickerPopover({
           ) : (
             <button
               type="button"
+              aria-label="新建并关联 Goal"
               onClick={() => editingSession.actions.startInlineGoalCreation()}
               className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 transition-colors hover:text-indigo-700"
             >

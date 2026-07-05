@@ -1,17 +1,11 @@
-import type { GoalCard, IntegrationStatus, ReminderItem } from '../types/app'
+import type { GoalCard } from '../types/app'
 import type { Task } from '../types/task'
+import type { EventKitSnapshotData } from './eventkitAdapter'
 import * as tauriCommands from './tauriCommands'
 import { getEventKitAdapter } from './workspaceMutations'
 
-export interface RawEventKitData {
-  calendarEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string; calendarTitle?: string }>
-  reminders: Array<{ id: string; title: string; dueAt?: string; done: boolean; listTitle?: string }>
-  systemReminders: ReminderItem[]
-  integrationStatus: IntegrationStatus
-}
-
 export async function loadDesktopSnapshot(): Promise<{
-  rawEventKit: RawEventKitData
+  rawEventKit: EventKitSnapshotData
   goals: GoalCard[]
   tasks: Task[]
 }> {

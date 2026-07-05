@@ -507,10 +507,10 @@ interface Capabilities {
 
 **计算逻辑**：
 ```typescript
-const validTransitions = getValidTransitions(task.status)
+const validTransitions = getAllowedTodoStatusActions(task.status)
 const statusActions = validTransitions.map(toStatus => ({
   toStatus,
-  label: getTransitionLabel(toStatus, task.status),
+  label: getTodoStatusActionLabel(toStatus),
   icon: getTransitionIcon(toStatus, task.status)
 }))
 ```

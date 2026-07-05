@@ -58,7 +58,7 @@ Kairos 是一个**本地优先的 macOS 桌面应用**，以 Goal（目标）为
 | **Board View**      | 看板视图：TODO / IN_PROGRESS / DONE 三列看板           | ✅   |
 | **Areas View**      | 领域管理：强实体分组，卡片网格布局                     | ✅   |
 | **Calendar Board**  | 日历周视图 / 日视图，汇集日历事件、提醒和任务          | ✅   |
-| **Reminders Board** | 系统提醒按清单 / 按时间展示，支持勾选状态双向同步      | ✅   |
+| **Reminders Board** | 系统提醒按清单 / 按时间只读展示                       | ✅   |
 
 ### 🛠 详细功能
 
@@ -181,7 +181,7 @@ TODO          IN_PROGRESS          DONE
 
 **提醒看板**：
 
-- **按清单**：2-4 列自适应网格，勾选状态双向同步
+- **按清单**：2-4 列自适应网格，只读展示 macOS 提醒事项
 - **按时间**：过期 / 今天 / 未来 7 天 / 更晚 / 无日期 五个分组
 
 <!-- TODO: SCREENSHOT — Calendar & Reminders 日历与提醒看板截图 -->
@@ -239,7 +239,7 @@ TODO          IN_PROGRESS          DONE
 ┌──────────────────────────────────────────────────────┐
 │                    React UI Layer                     │
 │  views/ (Today, Inbox, Goals, Board, Areas, ...)      │
-│  drawer/ (TaskDrawer, GoalDrawer, ReminderDrawer)     │
+│  drawer/ (TaskDrawer, GoalDrawer, SystemReminderDrawer) │
 │  modal/ (QuickCaptureModal, QuickCaptureWindow)       │
 ├──────────────────────────────────────────────────────┤
 │                 Zustand State Layer                    │
@@ -340,6 +340,7 @@ npm run test
 | 文档                                                   | 说明                                |
 | ------------------------------------------------------ | ----------------------------------- |
 | [设计理念与架构思想](docs/design/design-philosophy.md) | 产品定位、设计哲学、架构决策        |
+| [未来规划与核心开发方向](docs/design/future-directions.md) | 深入沉淀的产品核心演进与技术架构规划 |
 | [PRD 索引](docs/prd/README.md)                         | 7 份 PRD + 15 份 Spec，100% 覆盖    |
 | [CONTEXT.md](CONTEXT.md)                               | 领域语言（Ubiquitous Language）定义 |
 | [Areas 重设计 PRD](docs/areas-redesign-prd.md)         | Area 强实体重设计方案               |

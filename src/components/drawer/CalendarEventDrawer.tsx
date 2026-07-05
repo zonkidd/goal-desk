@@ -1,19 +1,19 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Calendar, Clock, Tag, X, ExternalLink } from 'lucide-react'
-import { useTodayTimeline } from '../../hooks/useWorkspaceDerived'
+import { findCalendarEventAgendaItem } from '../../lib/eventkitTransform'
 import { useUiStore } from '../../store/uiStore'
+import { useEventkitStore } from '../../store/eventkitStore'
 import { getEventKitAdapter } from '../../lib/workspaceMutations'
 
 const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
 
 export function CalendarEventDrawer() {
-  const timeline = useTodayTimeline()
+  const calendarEvents = useEventkitStore((state) => state.rawEventKit.calendarEvents)
   const isOpen = useUiStore((state) => state.activeDrawer?.type === 'calendarEvent')
   const eventId = useUiStore((state) => state.activeDrawer?.type === 'calendarEvent' ? state.activeDrawer.id : undefined)
   const onClose = useUiStore((state) => state.closeDrawer)
 
-  // 从 timeline 中查找 Calendar Event
-  const event = timeline.find((item) => item.id === eventId && item.source === 'calendar')
+  const event = findCalendarEventAgendaItem(calendarEvents, eventId)
 
   if (!event) return null
 

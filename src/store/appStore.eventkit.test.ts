@@ -9,11 +9,6 @@ function createMockAdapter(overrides: Partial<EventKitAdapter> = {}): EventKitAd
     requestRemindersAccess: vi.fn().mockResolvedValue('granted'),
     openCalendarEvent: vi.fn().mockResolvedValue(undefined),
     openSystemReminder: vi.fn().mockResolvedValue(undefined),
-    setSystemReminderCompleted: vi.fn().mockResolvedValue({
-      id: 'r1', title: 'Updated', dueAt: undefined, done: true, listTitle: undefined,
-    }),
-    fetchCalendarEvents: vi.fn().mockResolvedValue([]),
-    fetchReminders: vi.fn().mockResolvedValue([]),
     loadCalendarRange: vi.fn().mockResolvedValue({ events: [], reminders: [] }),
     loadRawEventKitData: vi.fn().mockResolvedValue({
       calendarEvents: [],
@@ -104,6 +99,37 @@ describe('EventKit Permission Management', () => {
       const state = useEventkitStore.getState()
       expect(state.eventkitPermissions.calendar).toBe('error')
     })
+
+    it('waits for an in-flight calendar permission request instead of resolving early', async () => {
+      let resolveRequest: ((value: 'granted') => void) | undefined
+      const adapter = createMockAdapter({
+        requestCalendarAccess: vi.fn().mockImplementation(
+          () =>
+            new Promise<'granted'>((resolve) => {
+              resolveRequest = resolve
+            }),
+        ),
+      })
+      setEventKitAdapter(adapter)
+
+      const firstRequest = useEventkitStore.getState().requestCalendarAccess()
+      const secondRequest = useEventkitStore.getState().requestCalendarAccess()
+
+      let secondResolved = false
+      void secondRequest.then(() => {
+        secondResolved = true
+      })
+
+      await Promise.resolve()
+
+      expect(adapter.requestCalendarAccess).toHaveBeenCalledOnce()
+      expect(secondResolved).toBe(false)
+
+      resolveRequest?.('granted')
+      await Promise.all([firstRequest, secondRequest])
+
+      expect(useEventkitStore.getState().eventkitPermissions.calendar).toBe('granted')
+    })
   })
 
   describe('requestRemindersAccess', () => {
@@ -145,12 +171,16 @@ describe('EventKit Permission Management', () => {
 
     it('should update rawEventKit with calendar events', async () => {
       const mockEvents = [
-        { id: '1', title: 'Meeting 1', startsAt: new Date('2026-06-14T10:00:00Z'), endsAt: new Date('2026-06-14T11:00:00Z') },
-        { id: '2', title: 'Meeting 2', startsAt: new Date('2026-06-14T14:00:00Z'), endsAt: new Date('2026-06-14T15:00:00Z') },
+        { id: '1', title: 'Meeting 1', startsAt: '2026-06-14T10:00:00.000Z', endsAt: '2026-06-14T11:00:00.000Z' },
+        { id: '2', title: 'Meeting 2', startsAt: '2026-06-14T14:00:00.000Z', endsAt: '2026-06-14T15:00:00.000Z' },
       ]
       const adapter = createMockAdapter({
-        fetchCalendarEvents: vi.fn().mockResolvedValue(mockEvents),
-        fetchReminders: vi.fn().mockResolvedValue([]),
+        loadRawEventKitData: vi.fn().mockResolvedValue({
+          calendarEvents: mockEvents,
+          reminders: [],
+          systemReminders: [],
+          integrationStatus: { calendar: 'granted', reminders: 'granted' },
+        }),
       })
       setEventKitAdapter(adapter)
 
@@ -167,8 +197,12 @@ describe('EventKit Permission Management', () => {
         { id: '3', title: 'Reminder 3', done: true },
       ]
       const adapter = createMockAdapter({
-        fetchCalendarEvents: vi.fn().mockResolvedValue([]),
-        fetchReminders: vi.fn().mockResolvedValue(mockReminders),
+        loadRawEventKitData: vi.fn().mockResolvedValue({
+          calendarEvents: [],
+          reminders: mockReminders,
+          systemReminders: mockReminders,
+          integrationStatus: { calendar: 'granted', reminders: 'granted' },
+        }),
       })
       setEventKitAdapter(adapter)
 
@@ -180,15 +214,19 @@ describe('EventKit Permission Management', () => {
 
     it('should update both simultaneously', async () => {
       const mockEvents = [
-        { id: '1', title: 'Event', startsAt: new Date('2026-06-14T10:00:00Z'), endsAt: new Date('2026-06-14T11:00:00Z') },
+        { id: '1', title: 'Event', startsAt: '2026-06-14T10:00:00.000Z', endsAt: '2026-06-14T11:00:00.000Z' },
       ]
       const mockReminders = [
         { id: '1', title: 'Reminder 1', done: false },
         { id: '2', title: 'Reminder 2', done: false },
       ]
       const adapter = createMockAdapter({
-        fetchCalendarEvents: vi.fn().mockResolvedValue(mockEvents),
-        fetchReminders: vi.fn().mockResolvedValue(mockReminders),
+        loadRawEventKitData: vi.fn().mockResolvedValue({
+          calendarEvents: mockEvents,
+          reminders: mockReminders,
+          systemReminders: mockReminders,
+          integrationStatus: { calendar: 'granted', reminders: 'granted' },
+        }),
       })
       setEventKitAdapter(adapter)
 
@@ -211,14 +249,12 @@ describe('EventKit Permission Management', () => {
 
       await useEventkitStore.getState().refreshEventkitData()
 
-      expect(adapter.fetchCalendarEvents).not.toHaveBeenCalled()
-      expect(adapter.fetchReminders).not.toHaveBeenCalled()
+      expect(adapter.loadRawEventKitData).not.toHaveBeenCalled()
     })
 
     it('should keep rawEventKit unchanged on API failure', async () => {
       const adapter = createMockAdapter({
-        fetchCalendarEvents: vi.fn().mockRejectedValue(new Error('Fetch failed')),
-        fetchReminders: vi.fn().mockRejectedValue(new Error('Fetch failed')),
+        loadRawEventKitData: vi.fn().mockRejectedValue(new Error('Fetch failed')),
       })
       setEventKitAdapter(adapter)
 
