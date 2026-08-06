@@ -17,8 +17,13 @@ function MainApp() {
   const receiveExternalTask = useReceiveExternalTask()
   const setLoading = useUiStore((state) => state.setLoading)
   const setStatusMessage = useUiStore((state) => state.setStatusMessage)
+  const theme = useUiStore((state) => state.theme)
   useTaskGoalBridge()
   useGoalAreaBridge()
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
 
   useEffect(() => {
     const runtime = getRuntimeAdapter()

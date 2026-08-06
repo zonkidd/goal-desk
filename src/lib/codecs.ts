@@ -106,3 +106,32 @@ export class GoalCodec {
     return rustArray.map(rust => GoalCodec.fromRust(rust))
   }
 }
+
+export interface RustDailyReviewBlock {
+  id: string
+  content: string
+}
+
+export interface RustDailyReviewItem {
+  id: string
+  date: string
+  blocks: RustDailyReviewBlock[]
+  createdAt: string
+  updatedAt: string
+}
+
+export class DailyReviewCodec {
+  static fromRust(rust: RustDailyReviewItem): import('../types/dailyReview').DailyReviewItem {
+    return {
+      id: rust.id,
+      date: rust.date,
+      blocks: rust.blocks.map(b => ({ id: b.id, content: b.content })),
+      createdAt: new Date(rust.createdAt),
+      updatedAt: new Date(rust.updatedAt),
+    }
+  }
+
+  static fromRustArray(rustArray: RustDailyReviewItem[]): import('../types/dailyReview').DailyReviewItem[] {
+    return rustArray.map(rust => DailyReviewCodec.fromRust(rust))
+  }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import type { AreaWithStats, GoalCard } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
 import { getTaskStatusActions } from './taskPresentation.ts'
@@ -229,7 +229,37 @@ export function createTodoEditingSession(input: CreateTodoEditingSessionInput): 
 export function useTodoEditingSession(
   input: Omit<CreateTodoEditingSessionInput, 'draft' | 'task'> & { task?: Task },
 ): ManagedTodoEditingSession | undefined {
-  const { task, goals, allAreas, createArea, activeArea, defaultGoalArea, updateTaskFields, updateTaskContent, updateTaskStatus, createGoal } = input
+  const { task, goals, allAreas, activeArea, defaultGoalArea } = input
+
+  const callbacksRef = useRef({
+    createArea: input.createArea,
+    createGoal: input.createGoal,
+    updateTaskFields: input.updateTaskFields,
+    updateTaskContent: input.updateTaskContent,
+    updateTaskStatus: input.updateTaskStatus,
+  })
+
+  // Keep ref up to date without triggering re-renders
+  callbacksRef.current = {
+    createArea: input.createArea,
+    createGoal: input.createGoal,
+    updateTaskFields: input.updateTaskFields,
+    updateTaskContent: input.updateTaskContent,
+    updateTaskStatus: input.updateTaskStatus,
+  }
+
+  // Stable proxies that never change reference
+  const stableCallbacks = useMemo(
+    () => ({
+      createArea: ((...args: Parameters<typeof input.createArea>) => callbacksRef.current.createArea(...args)) as typeof input.createArea,
+      createGoal: ((...args: Parameters<typeof input.createGoal>) => callbacksRef.current.createGoal(...args)) as typeof input.createGoal,
+      updateTaskFields: ((...args: Parameters<typeof input.updateTaskFields>) => callbacksRef.current.updateTaskFields(...args)) as typeof input.updateTaskFields,
+      updateTaskContent: ((...args: Parameters<typeof input.updateTaskContent>) => callbacksRef.current.updateTaskContent(...args)) as typeof input.updateTaskContent,
+      updateTaskStatus: ((...args: Parameters<typeof input.updateTaskStatus>) => callbacksRef.current.updateTaskStatus(...args)) as typeof input.updateTaskStatus,
+    }),
+    [],
+  )
+
   const sessionSeed = useMemo(
     () =>
       task
@@ -237,16 +267,12 @@ export function useTodoEditingSession(
           task,
           goals,
           allAreas,
-          createArea,
           activeArea,
           defaultGoalArea,
-          updateTaskFields,
-          updateTaskContent,
-          updateTaskStatus,
-          createGoal,
+          ...stableCallbacks,
         })
         : undefined,
-    [activeArea, allAreas, createArea, createGoal, defaultGoalArea, goals, task, updateTaskContent, updateTaskFields, updateTaskStatus],
+    [activeArea, allAreas, defaultGoalArea, goals, task, stableCallbacks],
   )
   const [draft, setDraft] = useState<TodoEditingDraft | undefined>(sessionSeed?.draft)
 
@@ -261,13 +287,9 @@ export function useTodoEditingSession(
       task,
       goals,
       allAreas,
-      createArea,
       activeArea,
       defaultGoalArea,
-      updateTaskFields,
-      updateTaskContent,
-      updateTaskStatus,
-      createGoal,
+      ...stableCallbacks,
       draft,
     })
 
@@ -347,7 +369,7 @@ export function useTodoEditingSession(
         setDraft(sessionSeed?.draft)
       },
     } satisfies ManagedTodoEditingSession
-  }, [activeArea, allAreas, createArea, createGoal, defaultGoalArea, draft, goals, sessionSeed?.draft, task, updateTaskContent, updateTaskFields, updateTaskStatus])
+  }, [activeArea, allAreas, defaultGoalArea, draft, goals, sessionSeed?.draft, task, stableCallbacks])
 
   return session
 }

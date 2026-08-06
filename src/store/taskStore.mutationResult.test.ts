@@ -18,6 +18,11 @@ function createMockAdapter(updatedTask: Task, restoredTask?: Task): MutationAdap
     softDeleteGoal: vi.fn().mockResolvedValue(undefined),
     restoreGoal: vi.fn().mockResolvedValue({ goal: undefined }),
     listDeletedGoals: vi.fn().mockResolvedValue([]),
+
+      createDailyReviewItem: vi.fn(),
+      updateDailyReviewItem: vi.fn(),
+      deleteDailyReviewItem: vi.fn(),
+      getDailyReviewTimeline: vi.fn(),
     listAreas: vi.fn().mockResolvedValue({ areas: [] }),
     createArea: vi.fn().mockResolvedValue({ area: undefined }),
     renameArea: vi.fn().mockResolvedValue({ area: undefined }),

@@ -69,4 +69,18 @@ export interface QueryAdapter {
   loadGoals(): Promise<GoalCard[]>
 }
 
-export type MutationAdapter = TaskMutation & GoalMutation & AreaMutation & QueryAdapter
+import type { DailyReviewItem, DailyReviewBlock } from '../types/dailyReview'
+
+export interface DailyReviewResult {
+  item?: DailyReviewItem
+  statusMessage?: string
+}
+
+export interface DailyReviewMutation {
+  createDailyReviewItem(date: string, blocks: DailyReviewBlock[]): Promise<DailyReviewResult>
+  updateDailyReviewItem(id: string, blocks: DailyReviewBlock[]): Promise<DailyReviewResult>
+  deleteDailyReviewItem(id: string): Promise<void>
+  getDailyReviewTimeline(limit?: number, beforeDate?: string): Promise<DailyReviewItem[]>
+}
+
+export type MutationAdapter = TaskMutation & GoalMutation & AreaMutation & DailyReviewMutation & QueryAdapter

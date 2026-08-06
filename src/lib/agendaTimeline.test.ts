@@ -136,4 +136,26 @@ describe('computeAgendaTimeline', () => {
       startsAt: plannedTodo.plannedStartAt,
     })
   })
+
+  it('automatically includes planned-start Todos in the timeline even when showInTimeline is false', () => {
+    const hiddenTodo: Task = {
+      id: 'hidden-planned-todo',
+      title: 'Keep off timeline',
+      content: '',
+      status: 'IN_PROGRESS',
+      plannedStartAt: new Date('2026-06-20T09:00:00+08:00'),
+      showInTimeline: false,
+      activityLogs: [],
+    }
+
+    const timeline = computeAgendaTimeline({
+      baseTimeline: [],
+      tasks: [hiddenTodo],
+      rangeStart: new Date('2026-06-20T00:00:00+08:00'),
+      rangeEnd: new Date('2026-06-20T23:59:59+08:00'),
+    })
+
+    expect(timeline.length).toBe(1)
+    expect(timeline[0].title).toBe('Keep off timeline')
+  })
 })

@@ -10,6 +10,7 @@ export { useTaskStore } from './taskStore'
 export { useGoalStore } from './goalStore'
 export { useEventkitStore } from './eventkitStore'
 export { useAreaStore } from './areaStore'
+export { useDailyReviewStore } from './dailyReviewStore'
 
 export {
   useAppHydration,

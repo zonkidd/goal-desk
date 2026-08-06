@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlignLeft, BookOpen, Calendar, CheckCircle, Clock, ExternalLink, Folder, Send, Trash2, X } from 'lucide-react'
+import { AlignLeft, BookOpen, Calendar, CheckCircle, Clock, ExternalLink, Folder, KeyRound, Link2, RefreshCw, Send, Trash2, Unlink, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { getRuntimeAdapter } from '../../lib/runtimeAdapter'
@@ -18,8 +18,10 @@ import { useEventkitStore } from '../../store/eventkitStore'
 import { useGoalStore } from '../../store/goalStore'
 import { useTaskStore } from '../../store/taskStore'
 import { useAreaStore } from '../../store/areaStore'
+import { useBearNoteStore } from '../../store/bearNoteStore'
 import { useUiStore } from '../../store/uiStore'
-import type { TaskStatus } from '../../types/task'
+import { useBearNoteEvents } from '../../hooks/useBearNoteEvents'
+import type { Task, TaskStatus } from '../../types/task'
 import type { GoalCard } from '../../types/app'
 
 function useTaskDrawerData() {
@@ -56,6 +58,7 @@ function useTaskDrawerData() {
 const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
 
 export function TaskDrawer() {
+  useBearNoteEvents()
   const {
     task, isOpen, closeDrawer, activeArea,
     updateTaskStatus, updateTaskContent, updateTaskFields, addTaskNote,
@@ -67,6 +70,8 @@ export function TaskDrawer() {
   const [logNote, setLogNote] = useState('')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false)
+  const loadBearIntegrationStatus = useBearNoteStore((s) => s.loadIntegrationStatus)
+  const loadBearPreview = useBearNoteStore((s) => s.loadPreview)
 
   useEffect(() => {
     setPendingStatus(null)
@@ -103,6 +108,18 @@ export function TaskDrawer() {
   const linkedReminder = task?.systemReminderId
     ? systemReminders.find((r) => r.id === task.systemReminderId)
     : undefined
+
+  const isTauriMain = getRuntimeAdapter().isTauri() && getRuntimeAdapter().getWindowLabel() === 'main'
+
+  useEffect(() => {
+    if (!isTauriMain) return
+    void loadBearIntegrationStatus()
+  }, [isTauriMain, loadBearIntegrationStatus])
+
+  useEffect(() => {
+    if (!isTauriMain || !task?.bearNoteId) return
+    void loadBearPreview(task.id)
+  }, [isTauriMain, loadBearPreview, task?.bearNoteId, task?.id])
 
   const handleOpenLinkedReminder = () => {
     if (!task?.systemReminderId) return
@@ -337,16 +354,6 @@ export function TaskDrawer() {
                       </div>
                     )}
                   </div>
-                  {task.bearNoteId && getRuntimeAdapter().isTauri() && (
-                    <button
-                      type="button"
-                      onClick={() => void openTaskInBear(task.id)}
-                      className="mt-2 flex items-center gap-2 text-xs font-bold text-amber-600 transition-colors hover:text-amber-700"
-                    >
-                      <BookOpen className="h-3.5 w-3.5" />
-                      Open in Bear
-                    </button>
-                  )}
                 </div>
 
               <div className="mx-8 my-2 h-px bg-slate-100" />
@@ -389,6 +396,10 @@ export function TaskDrawer() {
                   </div>
                 )}
               </div>
+
+              <div className="mx-8 my-2 h-px bg-slate-100" />
+
+              <BearNoteSection task={task} canEditFields={canEditFields} />
 
               <div className="mx-8 my-2 h-px bg-slate-100" />
 
@@ -507,6 +518,165 @@ export function TaskDrawer() {
       )}
     </AnimatePresence>
     </>
+  )
+}
+
+function BearNoteSection({ task, canEditFields }: { task: Task; canEditFields: boolean }) {
+  const runtime = getRuntimeAdapter()
+  const isTauriMain = runtime.isTauri() && runtime.getWindowLabel() === 'main'
+  const tokenConfigured = useBearNoteStore((s) => s.tokenConfigured)
+  const preview = useBearNoteStore((s) => s.previewsByTaskId[task.id])
+  const isLoading = useBearNoteStore((s) => s.isLoading)
+  const errorMessage = useBearNoteStore((s) => s.errorMessage)
+  const saveApiToken = useBearNoteStore((s) => s.saveApiToken)
+  const linkSelectedNote = useBearNoteStore((s) => s.linkSelectedNote)
+  const refreshPreview = useBearNoteStore((s) => s.refreshPreview)
+  const unlinkNote = useBearNoteStore((s) => s.unlinkNote)
+  const replaceTask = useTaskStore((s) => s.replaceTask)
+  const [tokenPanelOpen, setTokenPanelOpen] = useState(false)
+  const [tokenDraft, setTokenDraft] = useState('')
+
+  if (!isTauriMain) return null
+
+  const saveToken = async () => {
+    if (!tokenDraft.trim()) return
+    await saveApiToken(tokenDraft)
+    setTokenDraft('')
+    setTokenPanelOpen(false)
+  }
+
+  const unlink = async () => {
+    const updated = await unlinkNote(task.id)
+    if (updated) replaceTask(updated)
+  }
+
+  return (
+    <section className="px-8 py-4">
+      <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-700">
+            <BookOpen className="h-4 w-4" />
+            Bear 笔记
+          </h3>
+          {task.bearNoteId && (
+            <button
+              type="button"
+              onClick={() => void openTaskInBear(task.id)}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 underline hover:text-amber-900"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Open in Bear
+            </button>
+          )}
+        </div>
+
+        {!tokenConfigured ? (
+          <div className="space-y-3">
+            <p className="text-xs leading-relaxed text-slate-600">保存 Bear API Token 后，可关联 Bear 当前选中的笔记。</p>
+            <button
+              type="button"
+              onClick={() => setTokenPanelOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-amber-700"
+            >
+              <KeyRound className="h-3.5 w-3.5" />
+              配置 Bear Token
+            </button>
+            {tokenPanelOpen && (
+              <div role="dialog" aria-label="配置 Bear Token" className="rounded-lg border border-amber-200 bg-white p-3 shadow-sm">
+                <label className="block text-xs font-bold text-slate-600">
+                  Bear API Token
+                  <input
+                    aria-label="Bear API Token"
+                    value={tokenDraft}
+                    onChange={(event) => setTokenDraft(event.target.value)}
+                    className="mt-2 h-9 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                  />
+                </label>
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTokenPanelOpen(false)}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void saveToken()}
+                    className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+                  >
+                    保存 Token
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : task.bearNoteId ? (
+          <div className="space-y-3">
+            {preview ? (
+              <div className="rounded-lg border border-amber-100 bg-white px-3 py-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-sm font-black text-slate-900">Bear · {preview.title}</h4>
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    {preview.fetchedAt.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}
+                  </span>
+                </div>
+                <div className="max-h-72 overflow-y-auto text-sm">
+                  <MarkdownContent content={preview.note} />
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs leading-relaxed text-slate-600">已关联 Bear 笔记，刷新后可在这里预览内容。</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => void refreshPreview(task.id)}
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                刷新预览
+              </button>
+              {canEditFields && (
+                <>
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => void linkSelectedNote(task.id)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    替换为当前 Bear 笔记
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => void unlink()}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    <Unlink className="h-3.5 w-3.5" />
+                    解除 Bear 关联
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={() => void linkSelectedNote(task.id)}
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-amber-700 disabled:opacity-60"
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            链接当前 Bear 笔记
+          </button>
+        )}
+
+        {errorMessage && <p className="mt-3 text-xs font-semibold text-red-600">{errorMessage}</p>}
+      </div>
+    </section>
   )
 }
 

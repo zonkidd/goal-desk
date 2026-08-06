@@ -16,6 +16,10 @@ export interface UiStoreState {
   activeArea: AreaFilter
   showCompletedTodos: boolean
 
+  // Theme selection
+  theme: 'wabi-sabi' | 'liquid-glass'
+  setTheme: (theme: 'wabi-sabi' | 'liquid-glass') => void
+
   // 加载和状态消息
   isLoading: boolean
   statusMessage: string
@@ -53,6 +57,7 @@ export const useUiStore = create<UiStoreState>((set, get) => ({
   currentView: 'inbox',
   activeArea: 'ALL',
   showCompletedTodos: false,
+  theme: typeof window !== 'undefined' ? (localStorage.getItem('kairos-theme') as 'wabi-sabi' | 'liquid-glass') || 'wabi-sabi' : 'wabi-sabi',
   isLoading: true,
   statusMessage: '',
   activeDrawer: null,
@@ -62,6 +67,12 @@ export const useUiStore = create<UiStoreState>((set, get) => ({
   setView: (view) => set({ currentView: view }),
   setActiveArea: (area) => set({ activeArea: area }),
   setShowCompletedTodos: (value) => set({ showCompletedTodos: value }),
+  setTheme: (theme) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('kairos-theme', theme)
+    }
+    set({ theme })
+  },
 
   // 状态操作
   setLoading: (value) => set({ isLoading: value }),

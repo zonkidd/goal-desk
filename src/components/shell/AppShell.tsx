@@ -8,6 +8,7 @@ import { AreasView } from '../views/AreasView'
 import { CalendarView } from '../views/CalendarView'
 import { RemindersView } from '../views/RemindersView'
 import { RecycleBinView } from '../views/RecycleBinView'
+import { DailyReviewView } from '../views/DailyReviewView'
 import { TaskDrawer } from '../drawer/TaskDrawer'
 import { GoalDrawer } from '../drawer/GoalDrawer'
 import { CalendarEventDrawer } from '../drawer/CalendarEventDrawer'
@@ -22,14 +23,14 @@ export function AppShell() {
   const isLoading = useUiStore((state) => state.isLoading)
 
   return (
-    <main className="mesh-bg relative flex h-screen overflow-hidden select-none text-slate-800">
+    <main className="mesh-bg relative flex h-screen overflow-hidden select-none text-theme-primary transition-colors">
       <Sidebar />
 
       <section className="relative flex flex-1 flex-col overflow-y-auto">
         <TopBar />
         <div className="mx-auto w-full max-w-7xl p-10">
           <div className="mb-6">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-slate-400">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-theme-secondary transition-colors">
               {isLoading ? 'Syncing workspace' : statusMessage}
             </p>
             {!isLoading && !getRuntimeAdapter().isTauri() && (
@@ -43,6 +44,7 @@ export function AppShell() {
           {currentView === 'today' && <TodayView />}
           {currentView === 'board' && <BoardView />}
           {currentView === 'goals' && <GoalsView />}
+          {currentView === 'daily-review' && <DailyReviewView />}
           {currentView === 'areas' && <AreasView />}
           {currentView === 'calendar' && <CalendarView />}
           {currentView === 'reminders' && <RemindersView />}

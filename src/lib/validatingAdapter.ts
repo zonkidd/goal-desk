@@ -116,4 +116,20 @@ export class ValidatingMutationAdapter implements MutationAdapter {
   async listDeletedGoals(): Promise<GoalCard[]> {
     return this.inner.listDeletedGoals()
   }
+
+  async createDailyReviewItem(date: string, blocks: import('../types/dailyReview').DailyReviewBlock[]): Promise<import('./mutationAdapter').DailyReviewResult> {
+    return this.inner.createDailyReviewItem(date, blocks)
+  }
+
+  async updateDailyReviewItem(id: string, blocks: import('../types/dailyReview').DailyReviewBlock[]): Promise<import('./mutationAdapter').DailyReviewResult> {
+    return this.inner.updateDailyReviewItem(id, blocks)
+  }
+
+  async deleteDailyReviewItem(id: string): Promise<void> {
+    return this.inner.deleteDailyReviewItem(id)
+  }
+
+  async getDailyReviewTimeline(limit?: number, beforeDate?: string): Promise<import('../types/dailyReview').DailyReviewItem[]> {
+    return this.inner.getDailyReviewTimeline(limit, beforeDate)
+  }
 }

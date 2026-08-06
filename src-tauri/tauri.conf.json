@@ -39,6 +39,13 @@
       "csp": null
     }
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["kairos"]
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

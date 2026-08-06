@@ -19,11 +19,16 @@ export function addDays(date: Date, days: number): Date {
  * startBoundary (plannedStartAt || createdAt) <= today <= dueDate (if present).
  */
 export function isTaskInActiveDateRange(
-  task: { plannedStartAt?: Date; dueDate?: Date; createdAt?: Date },
+  task: {
+    plannedStartAt?: Date
+    dueDate?: Date
+    createdAt?: Date
+    activityLogs?: Array<{ action: string; timestamp: Date }>
+  },
   now: Date,
 ): boolean {
   const today = startOfDay(now)
-  const startBoundary = task.plannedStartAt || task.createdAt
+  const startBoundary = task.plannedStartAt || task.createdAt || task.activityLogs?.find((log) => log.action === 'CREATED')?.timestamp
   if (!startBoundary) return false
 
   const startDay = startOfDay(startBoundary)

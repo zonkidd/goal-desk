@@ -1,12 +1,57 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TaskDrawer } from './TaskDrawer'
 import { useTaskStore } from '../../store/taskStore'
 import { useUiStore } from '../../store/uiStore'
 import { useEventkitStore } from '../../store/eventkitStore'
 import { useAreaStore } from '../../store/areaStore'
 import { resetEventKitAdapter, setEventKitAdapter, type EventKitAdapter } from '../../lib/workspaceMutations'
+import { resetRuntimeAdapter, setRuntimeAdapter, type RuntimeAdapter } from '../../lib/runtimeAdapter'
+import {
+  getBearIntegrationStatus,
+  linkSelectedBearNote,
+  saveBearApiToken,
+} from '../../lib/tauriCommands'
+
+const eventHandlers = new Map<string, (event: { payload: unknown }) => void>()
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn((eventName: string, handler: (event: { payload: unknown }) => void) => {
+    eventHandlers.set(eventName, handler)
+    return Promise.resolve(() => eventHandlers.delete(eventName))
+  }),
+}))
+
+vi.mock('../../lib/tauriCommands', () => ({
+  openTaskInBear: vi.fn().mockResolvedValue(undefined),
+  getBearIntegrationStatus: vi.fn().mockResolvedValue({ tokenConfigured: false }),
+  saveBearApiToken: vi.fn().mockResolvedValue({ tokenConfigured: true }),
+  clearBearApiToken: vi.fn().mockResolvedValue({ tokenConfigured: false }),
+  linkSelectedBearNote: vi.fn().mockResolvedValue(undefined),
+  refreshBearNotePreview: vi.fn().mockResolvedValue(undefined),
+  getBearNotePreview: vi.fn().mockResolvedValue(undefined),
+  bearNotePreviewFromRust: vi.fn((preview) => ({
+    ...preview,
+    modificationDate: preview.modificationDate ? new Date(preview.modificationDate) : undefined,
+    creationDate: preview.creationDate ? new Date(preview.creationDate) : undefined,
+    fetchedAt: new Date(preview.fetchedAt),
+  })),
+  unlinkBearNote: vi.fn().mockResolvedValue({
+    id: 'task-1',
+    title: 'Prepare architecture notes',
+    content: '',
+    status: 'TODO',
+    plannedStartAt: null,
+    dueAt: null,
+    linkedGoalId: null,
+    linkedGoalLabel: null,
+    bearNoteId: null,
+    systemReminderId: null,
+    showInTimeline: false,
+    activityLogs: [],
+  }),
+}))
 
 const MOTION_KEYS = new Set([
   'initial',
@@ -79,10 +124,12 @@ describe('TaskDrawer', () => {
       eventkitPermissions: { calendar: 'granted', reminders: 'granted' },
       rawEventKit: { calendarEvents: [], reminders: [] },
     })
+    eventHandlers.clear()
   })
 
   afterEach(() => {
     resetEventKitAdapter()
+    resetRuntimeAdapter()
   })
 
   it('does not offer System Reminder creation for an unlinked Todo', () => {
@@ -215,5 +262,72 @@ describe('TaskDrawer', () => {
 
     expect(screen.queryByPlaceholderText('写一句，后续回看会轻松很多... (按回车确认)')).not.toBeInTheDocument()
     expect(screen.getByDisplayValue('Review integration edge cases')).toBeInTheDocument()
+  })
+
+  it('configures Bear token and renders the linked Bear note preview', async () => {
+    const user = userEvent.setup()
+    const runtimeAdapter: RuntimeAdapter = {
+      isTauri: () => true,
+      getWindowLabel: () => 'main',
+      hideWindow: vi.fn().mockResolvedValue(undefined),
+      canOpenInBear: () => true,
+      canSyncTasks: () => true,
+      canLoadDesktopSnapshot: () => true,
+    }
+    setRuntimeAdapter(runtimeAdapter)
+
+    render(<TaskDrawer />)
+
+    expect(await screen.findByText('Bear 笔记')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '配置 Bear Token' }))
+    await user.type(screen.getByLabelText('Bear API Token'), 'token-123')
+    await user.click(screen.getByRole('button', { name: '保存 Token' }))
+
+    await waitFor(() => {
+      expect(saveBearApiToken).toHaveBeenCalledWith('token-123')
+    })
+
+    await user.click(screen.getByRole('button', { name: '链接当前 Bear 笔记' }))
+
+    expect(linkSelectedBearNote).toHaveBeenCalledWith('task-1')
+
+    const linkedHandler = eventHandlers.get('bear-note:linked')
+    expect(linkedHandler).toBeDefined()
+
+    await act(async () => {
+      linkedHandler?.({
+        payload: {
+          task: {
+            id: 'task-1',
+            title: 'Prepare architecture notes',
+            content: '',
+            status: 'TODO',
+            plannedStartAt: null,
+            dueAt: null,
+            linkedGoalId: null,
+            linkedGoalLabel: null,
+            bearNoteId: 'bear-note-123',
+            systemReminderId: null,
+            showInTimeline: false,
+            activityLogs: [],
+          },
+          preview: {
+            taskId: 'task-1',
+            bearNoteId: 'bear-note-123',
+            title: 'Launch Plan',
+            note: '# Launch Plan\n\nHello Bear',
+            tags: ['work'],
+            isTrashed: false,
+            modificationDate: '2026-07-07T09:00:00+08:00',
+            creationDate: '2026-07-06T09:00:00+08:00',
+            fetchedAt: '2026-07-07T09:05:00+08:00',
+          },
+        },
+      })
+    })
+
+    expect(await screen.findByText('Launch Plan')).toBeInTheDocument()
+    expect(screen.getByText('Hello Bear')).toBeInTheDocument()
+    expect(getBearIntegrationStatus).toHaveBeenCalled()
   })
 })

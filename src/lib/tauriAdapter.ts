@@ -19,6 +19,10 @@ import {
   softDeleteGoal as persistSoftDeleteGoal,
   restoreGoal as persistRestoreGoal,
   listDeletedGoals as persistListDeletedGoals,
+  createDailyReviewItem as persistCreateDailyReviewItem,
+  updateDailyReviewItem as persistUpdateDailyReviewItem,
+  deleteDailyReviewItem as persistDeleteDailyReviewItem,
+  getDailyReviewTimeline as persistGetDailyReviewTimeline,
 } from './tauriCommands'
 import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
@@ -202,5 +206,31 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
 
   async listDeletedGoals(): Promise<GoalCard[]> {
     return persistListDeletedGoals()
+  }
+
+  async createDailyReviewItem(date: string, blocks: import('../types/dailyReview').DailyReviewBlock[]): Promise<import('./mutationAdapter').DailyReviewResult> {
+    try {
+      const item = await persistCreateDailyReviewItem(date, blocks)
+      return { item, statusMessage: 'Daily review created' }
+    } catch (e: any) {
+      return { statusMessage: `Failed to create daily review: ${e}` }
+    }
+  }
+
+  async updateDailyReviewItem(id: string, blocks: import('../types/dailyReview').DailyReviewBlock[]): Promise<import('./mutationAdapter').DailyReviewResult> {
+    try {
+      const item = await persistUpdateDailyReviewItem(id, blocks)
+      return { item, statusMessage: 'Daily review updated' }
+    } catch (e: any) {
+      return { statusMessage: `Failed to update daily review: ${e}` }
+    }
+  }
+
+  async deleteDailyReviewItem(id: string): Promise<void> {
+    return persistDeleteDailyReviewItem(id)
+  }
+
+  async getDailyReviewTimeline(limit?: number, beforeDate?: string): Promise<import('../types/dailyReview').DailyReviewItem[]> {
+    return persistGetDailyReviewTimeline(limit, beforeDate)
   }
 }

@@ -167,6 +167,7 @@ impl Goal {
                 note: None,
                 timestamp: Local::now(),
             }],
+            checklists: vec![],
             deleted_at: None,
         }
     }
@@ -235,6 +236,15 @@ pub struct TaskActivityLog {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TaskChecklistItem {
+    pub id: Uuid,
+    pub title: String,
+    pub completed: bool,
+    pub sort_order: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeskTask {
     pub id: Uuid,
     pub title: String,
@@ -248,6 +258,8 @@ pub struct DeskTask {
     pub system_reminder_id: Option<String>,
     pub show_in_timeline: bool,
     pub activity_logs: Vec<TaskActivityLog>,
+    #[serde(default)]
+    pub checklists: Vec<TaskChecklistItem>,
     pub deleted_at: Option<DateTime<Local>>,
 }
 
@@ -272,6 +284,7 @@ impl DeskTask {
                 note: None,
                 timestamp: Local::now(),
             }],
+            checklists: vec![],
             deleted_at: None,
         }
     }
@@ -301,15 +314,10 @@ impl DeskTask {
 
     /// 是否应该在今日时间线显示
     pub fn should_show_in_today_timeline(&self, today: NaiveDate) -> bool {
-        if !self.show_in_timeline {
-            return false;
-        }
-
         if let Some(planned) = self.planned_start_at {
             let start_day = planned.date_naive();
             return start_day == today;
         }
-
         false
     }
 
@@ -519,6 +527,7 @@ mod tests {
                 system_reminder_id: None,
                 show_in_timeline: false,
                 activity_logs: vec![],
+                checklists: vec![],
                 deleted_at: None,
             },
             DeskTask {
@@ -534,6 +543,7 @@ mod tests {
                 system_reminder_id: None,
                 show_in_timeline: false,
                 activity_logs: vec![],
+                checklists: vec![],
                 deleted_at: None,
             },
         ];
@@ -557,6 +567,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            checklists: vec![],
             deleted_at: None,
         }];
 
@@ -634,9 +645,9 @@ mod tests {
 
         let mut task = DeskTask::new_todo("Test".to_string());
 
-        // show_in_timeline = false
+        // show_in_timeline = false (but planned_start_at matches today)
         task.planned_start_at = Some(Local::now().with_hour(9).unwrap());
-        assert!(!task.should_show_in_today_timeline(today));
+        assert!(task.should_show_in_today_timeline(today));
 
         // show_in_timeline = true, planned_start_at 匹配
         task.show_in_timeline = true;
@@ -715,4 +726,21 @@ mod tests {
         assert_eq!(task.activity_logs.len(), 1);
         assert_eq!(task.activity_logs[0].action, TaskActivityAction::Created);
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyReviewBlock {
+    pub id: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyReviewItem {
+    pub id: Uuid,
+    pub date: String,
+    pub blocks: Vec<DailyReviewBlock>,
+    pub created_at: DateTime<Local>,
+    pub updated_at: DateTime<Local>,
 }

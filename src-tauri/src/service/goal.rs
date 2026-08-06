@@ -152,11 +152,20 @@ impl GoalService {
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Goal not found: {goal_id}"))?;
 
+        let previous_title = goal.title.clone();
         goal.title = trimmed_title.to_string();
         goal.area_id = Some(area_id);
         goal.description = description.to_string();
 
         GoalRepository::update(&self.repo, &goal).map_err(|e| e.to_string())?;
+        if previous_title != goal.title {
+            let tasks =
+                TaskRepository::list_by_goal(&self.repo, goal.id).map_err(|e| e.to_string())?;
+            for mut task in tasks {
+                task.linked_goal_label = Some(goal.title.clone());
+                TaskRepository::update(&self.repo, &task).map_err(|e| e.to_string())?;
+            }
+        }
         Ok(goal)
     }
 
@@ -185,10 +194,7 @@ impl GoalService {
         let tasks = TaskRepository::list(&self.repo).map_err(|e| e.to_string())?;
         let assembler = GoalSummaryAssembler::new(&areas, &tasks);
 
-        Ok(goals
-            .iter()
-            .map(|goal| assembler.summarize(goal))
-            .collect())
+        Ok(goals.iter().map(|goal| assembler.summarize(goal)).collect())
     }
 
     pub fn get_goal_summary_by_id(&self, goal_id: &str) -> Result<GoalSummary, String> {
@@ -221,9 +227,6 @@ impl GoalService {
         let tasks = TaskRepository::list(&self.repo).map_err(|e| e.to_string())?;
         let assembler = GoalSummaryAssembler::new(&areas, &tasks);
 
-        Ok(goals
-            .iter()
-            .map(|goal| assembler.summarize(goal))
-            .collect())
+        Ok(goals.iter().map(|goal| assembler.summarize(goal)).collect())
     }
 }

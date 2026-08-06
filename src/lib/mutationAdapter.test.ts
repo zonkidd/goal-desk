@@ -48,6 +48,11 @@ describe('MutationAdapter interface', () => {
       softDeleteGoal: vi.fn().mockResolvedValue(undefined),
       restoreGoal: vi.fn().mockResolvedValue({ goal: mockGoal, statusMessage: 'restored' }),
       listDeletedGoals: vi.fn().mockResolvedValue([]),
+
+      createDailyReviewItem: vi.fn(),
+      updateDailyReviewItem: vi.fn(),
+      deleteDailyReviewItem: vi.fn(),
+      getDailyReviewTimeline: vi.fn(),
     }
   })
 

@@ -25,6 +25,10 @@ function didGoalRelevantTaskChange(previousTasks: Task[], currentTasks: Task[]):
       continue
     }
 
+    if (previousTask === currentTask) {
+      continue
+    }
+
     if (!previousTask || !currentTask) {
       return true
     }
@@ -56,6 +60,10 @@ function didAreaRelevantGoalChange(previousGoals: GoalCard[], currentGoals: Goal
 
     if (!previousGoal || !currentGoal) {
       return true
+    }
+
+    if (previousGoal === currentGoal) {
+      continue
     }
 
     if (previousGoal.area !== currentGoal.area) {

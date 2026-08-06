@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach } from 'vitest'
 import { deriveTodayAttentionGroups, deriveTodayAgenda, filterAgendaByArea, getTodayFocusTasks, convertEventKitToRawItems, groupByDate, filterGoalsByArea, filterTasksByArea } from './workspaceDerivation'
 import type { Task } from '../types/task'
 import type { GoalCard } from '../types/app'
+import { UNCATEGORIZED_AREA_TITLE } from './constants'
 
 describe('workspaceDerivation - 今日焦点任务筛选', () => {
   let now: Date
@@ -49,6 +50,26 @@ describe('workspaceDerivation - 今日焦点任务筛选', () => {
 
     expect(focusTasks).toHaveLength(1)
     expect(focusTasks[0].id).toBe('t1')
+  })
+
+  test('无 plannedStartAt 和 createdAt 时使用 CREATED 日志作为持续推进起点', () => {
+    const tasks: Task[] = [
+      {
+        id: 't1',
+        title: '已开始但未计划开始的任务',
+        status: 'IN_PROGRESS',
+        dueDate: new Date('2026-06-20T00:00:00+08:00'),
+        content: '',
+        activityLogs: [
+          { action: 'CREATED', timestamp: new Date('2026-06-10T09:00:00+08:00') },
+        ],
+        showInTimeline: false,
+      },
+    ]
+
+    const focusTasks = getTodayFocusTasks(tasks, [], 'ALL', now)
+
+    expect(focusTasks.map((task) => task.id)).toEqual(['t1'])
   })
 
   test('排除已完成任务', () => {
@@ -570,6 +591,22 @@ describe('filterByArea - 通用领域过滤', () => {
     const result = filterTasksByArea(tasks, goals, 'Work')
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe('t1')
+  })
+
+  test('filterTasksByArea 未分类包含无关联 tasks', () => {
+    const tasks: Task[] = [
+      { id: 't1', title: 'Unlinked', content: '', status: 'TODO', activityLogs: [], showInTimeline: false },
+      { id: 't2', title: 'Uncategorized goal task', content: '', status: 'TODO', linkedGoalId: 'g1', activityLogs: [], showInTimeline: false },
+      { id: 't3', title: 'Work task', content: '', status: 'TODO', linkedGoalId: 'g2', activityLogs: [], showInTimeline: false },
+    ]
+    const goals: GoalCard[] = [
+      { id: 'g1', title: 'G1', area: UNCATEGORIZED_AREA_TITLE, status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
+      { id: 'g2', title: 'G2', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
+    ]
+
+    const result = filterTasksByArea(tasks, goals, UNCATEGORIZED_AREA_TITLE)
+
+    expect(result.map((task) => task.id).sort()).toEqual(['t1', 't2'])
   })
 })
 

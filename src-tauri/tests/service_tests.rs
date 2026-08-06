@@ -1,3 +1,4 @@
+use goal_desk_tauri::bear::BearCallbackNote;
 use goal_desk_tauri::domain::DeskTask;
 use goal_desk_tauri::domain::{GoalStatus, TaskStatus};
 use goal_desk_tauri::repository::SqliteRepository;
@@ -34,6 +35,7 @@ fn test_task(title: &str) -> DeskTask {
         system_reminder_id: Some("reminder-123".to_string()),
         show_in_timeline: true,
         activity_logs: vec![],
+        checklists: vec![],
         deleted_at: None,
     }
 }
@@ -214,6 +216,72 @@ fn goal_service_update_fields() {
     assert_eq!(updated.title, "Updated");
     assert_eq!(updated.description, "new desc");
     assert_ne!(updated.area_id, goal.area_id);
+}
+
+#[test]
+fn goal_service_update_fields_refreshes_linked_task_labels() {
+    let repo = temp_repo("goal_update_task_labels");
+    let goal_service = GoalService::new(repo.clone());
+    let task_service = TaskService::new(repo);
+    let goal = goal_service
+        .create_goal("Original", "Work", "desc", GoalStatus::Active)
+        .unwrap();
+    let task = task_service
+        .create_task_for_goal(&goal.id.to_string(), "Linked task")
+        .unwrap();
+    assert_eq!(task.linked_goal_label.as_deref(), Some("Original"));
+
+    goal_service
+        .update_goal_fields(&goal.id.to_string(), "Updated", "Work", "desc")
+        .unwrap();
+
+    let reloaded = task_service
+        .find_task(&task.id.to_string())
+        .unwrap()
+        .unwrap();
+    assert_eq!(reloaded.linked_goal_label.as_deref(), Some("Updated"));
+}
+
+#[test]
+fn bear_note_link_persists_task_link_and_preview() {
+    let repo = temp_repo("bear_note_link");
+    let app_service = AppService::new(repo);
+    let task = app_service.task.capture_task("Review Bear note").unwrap();
+    let note = BearCallbackNote {
+        identifier: "bear-note-123".to_string(),
+        title: "Launch Plan".to_string(),
+        note: "# Launch\n\nHello Bear".to_string(),
+        tags: vec!["work".to_string()],
+        is_trashed: false,
+        modification_date: Some(parse_test_datetime("2026-07-07T09:00:00+08:00")),
+        creation_date: Some(parse_test_datetime("2026-07-06T09:00:00+08:00")),
+    };
+
+    let linked = app_service
+        .bear
+        .link_task_to_callback_note(&task.id.to_string(), note)
+        .unwrap();
+
+    assert_eq!(linked.task.bear_note_id.as_deref(), Some("bear-note-123"));
+    assert_eq!(linked.preview.title, "Launch Plan");
+    assert_eq!(linked.preview.note, "# Launch\n\nHello Bear");
+    assert_eq!(linked.preview.tags, vec!["work"]);
+
+    let reloaded_task = app_service
+        .task
+        .find_task(&task.id.to_string())
+        .unwrap()
+        .unwrap();
+    let reloaded_preview = app_service
+        .bear
+        .get_note_preview(&task.id.to_string())
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(reloaded_task.bear_note_id.as_deref(), Some("bear-note-123"));
+    assert_eq!(reloaded_preview.bear_note_id, "bear-note-123");
+    assert_eq!(reloaded_preview.title, "Launch Plan");
+    assert_eq!(reloaded_preview.note, "# Launch\n\nHello Bear");
 }
 
 #[test]
@@ -935,6 +1003,7 @@ fn goal_summary_assembler_summarizes_goals_from_one_workspace_context() {
         system_reminder_id: None,
         show_in_timeline: false,
         activity_logs: vec![],
+        checklists: vec![],
         deleted_at: None,
     };
     let next_task = DeskTask {
@@ -950,6 +1019,7 @@ fn goal_summary_assembler_summarizes_goals_from_one_workspace_context() {
         system_reminder_id: None,
         show_in_timeline: false,
         activity_logs: vec![],
+        checklists: vec![],
         deleted_at: None,
     };
 

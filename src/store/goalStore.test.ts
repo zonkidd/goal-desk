@@ -42,6 +42,11 @@ describe('goalStore.refreshGoals', () => {
       softDeleteGoal: vi.fn(),
       restoreGoal: vi.fn(),
       listDeletedGoals: vi.fn().mockResolvedValue([]),
+
+      createDailyReviewItem: vi.fn(),
+      updateDailyReviewItem: vi.fn(),
+      deleteDailyReviewItem: vi.fn(),
+      getDailyReviewTimeline: vi.fn(),
     } as MutationAdapter
   })
 

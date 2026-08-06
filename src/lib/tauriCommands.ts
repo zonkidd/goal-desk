@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { AreaWithStats, GoalCard } from '../types/app'
+import type { BearIntegrationStatus, BearNotePreview, RustBearNotePreview } from '../types/bear'
 import type { Task, TaskStatus } from '../types/task'
 import { TaskCodec, GoalCodec, type RustTask, type RustGoalCard } from './codecs'
 import { UNCATEGORIZED_AREA_TITLE } from './constants'
@@ -148,6 +149,50 @@ export async function openUrl(url: string): Promise<void> {
   return invoke('open_url', { url })
 }
 
+export function bearNotePreviewFromRust(rust: RustBearNotePreview): BearNotePreview {
+  return {
+    taskId: rust.taskId,
+    bearNoteId: rust.bearNoteId,
+    title: rust.title,
+    note: rust.note,
+    tags: rust.tags,
+    isTrashed: rust.isTrashed,
+    modificationDate: rust.modificationDate ? new Date(rust.modificationDate) : undefined,
+    creationDate: rust.creationDate ? new Date(rust.creationDate) : undefined,
+    fetchedAt: new Date(rust.fetchedAt),
+  }
+}
+
+export async function getBearIntegrationStatus(): Promise<BearIntegrationStatus> {
+  return invoke<BearIntegrationStatus>('get_bear_integration_status')
+}
+
+export async function saveBearApiToken(token: string): Promise<BearIntegrationStatus> {
+  return invoke<BearIntegrationStatus>('save_bear_api_token', { token })
+}
+
+export async function clearBearApiToken(): Promise<BearIntegrationStatus> {
+  return invoke<BearIntegrationStatus>('clear_bear_api_token')
+}
+
+export async function linkSelectedBearNote(taskId: string): Promise<void> {
+  return invoke('link_selected_bear_note', { taskId })
+}
+
+export async function refreshBearNotePreview(taskId: string): Promise<void> {
+  return invoke('refresh_bear_note_preview', { taskId })
+}
+
+export async function getBearNotePreview(taskId: string): Promise<BearNotePreview | undefined> {
+  const preview = await invoke<RustBearNotePreview | null>('get_bear_note_preview', { taskId })
+  return preview ? bearNotePreviewFromRust(preview) : undefined
+}
+
+export async function unlinkBearNote(taskId: string): Promise<Task> {
+  const task = await invoke<RustTask>('unlink_bear_note', { taskId })
+  return TaskCodec.fromRust(task)
+}
+
 // ============================================================================
 // Soft Delete & Restore Commands
 // ============================================================================
@@ -178,4 +223,30 @@ export async function restoreGoal(goalId: string): Promise<GoalCard> {
 export async function listDeletedGoals(): Promise<GoalCard[]> {
   const goals = await invoke<RustGoalCard[]>('list_deleted_goals')
   return goals.map((item) => GoalCodec.fromRust(item))
+}
+
+// ============================================================================
+// Daily Review Commands
+// ============================================================================
+
+import type { DailyReviewItem, DailyReviewBlock } from '../types/dailyReview'
+import { DailyReviewCodec, type RustDailyReviewItem } from './codecs'
+
+export async function createDailyReviewItem(date: string, blocks: DailyReviewBlock[]): Promise<DailyReviewItem> {
+  const item = await invoke<RustDailyReviewItem>('create_daily_review_item', { date, blocks })
+  return DailyReviewCodec.fromRust(item)
+}
+
+export async function updateDailyReviewItem(id: string, blocks: DailyReviewBlock[]): Promise<DailyReviewItem> {
+  const item = await invoke<RustDailyReviewItem>('update_daily_review_item', { id, blocks })
+  return DailyReviewCodec.fromRust(item)
+}
+
+export async function deleteDailyReviewItem(id: string): Promise<void> {
+  return invoke('delete_daily_review_item', { id })
+}
+
+export async function getDailyReviewTimeline(limit?: number, beforeDate?: string): Promise<DailyReviewItem[]> {
+  const items = await invoke<RustDailyReviewItem[]>('get_daily_review_timeline', { limit, beforeDate })
+  return DailyReviewCodec.fromRustArray(items)
 }

@@ -16,6 +16,7 @@ const BROWSER_STORAGE_GOALS = 'goal-desk-browser-goals'
 const BROWSER_STORAGE_AREAS = 'goal-desk-browser-areas'
 const BROWSER_STORAGE_DELETED_TASKS = 'goal-desk-browser-deleted-tasks'
 const BROWSER_STORAGE_DELETED_GOALS = 'goal-desk-browser-deleted-goals'
+const BROWSER_STORAGE_DAILY_REVIEWS = 'goal-desk-browser-daily-reviews'
 
 type BrowserDeletedTask = Omit<Task, 'deletedAt'> & { deletedAt?: string }
 
@@ -460,5 +461,63 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
 
   async listDeletedGoals(): Promise<GoalCard[]> {
     return loadFromLocalStorage<GoalCard & { deletedAt?: string }>(BROWSER_STORAGE_DELETED_GOALS)
+  }
+
+  // ============================================================================
+  // Daily Review (Browser Mock)
+  // ============================================================================
+
+  async createDailyReviewItem(date: string, blocks: import('../types/dailyReview').DailyReviewBlock[]): Promise<import('./mutationAdapter').DailyReviewResult> {
+    const items = loadFromLocalStorage<import('../types/dailyReview').DailyReviewItem>(BROWSER_STORAGE_DAILY_REVIEWS)
+    const now = new Date()
+    const newItem: import('../types/dailyReview').DailyReviewItem = {
+      id: crypto.randomUUID(),
+      date,
+      blocks,
+      createdAt: now,
+      updatedAt: now,
+    }
+    items.unshift(newItem)
+    saveToLocalStorage(BROWSER_STORAGE_DAILY_REVIEWS, items)
+    return { item: newItem, statusMessage: BROWSER_PREVIEW_STATUS }
+  }
+
+  async updateDailyReviewItem(id: string, blocks: import('../types/dailyReview').DailyReviewBlock[]): Promise<import('./mutationAdapter').DailyReviewResult> {
+    const items = loadFromLocalStorage<import('../types/dailyReview').DailyReviewItem>(BROWSER_STORAGE_DAILY_REVIEWS)
+    const idx = items.findIndex((i) => i.id === id)
+    if (idx === -1) {
+      return { statusMessage: 'Daily review not found' }
+    }
+    items[idx] = { ...items[idx], blocks, updatedAt: new Date() }
+    saveToLocalStorage(BROWSER_STORAGE_DAILY_REVIEWS, items)
+    return { item: items[idx], statusMessage: BROWSER_PREVIEW_STATUS }
+  }
+
+  async deleteDailyReviewItem(id: string): Promise<void> {
+    const items = loadFromLocalStorage<import('../types/dailyReview').DailyReviewItem>(BROWSER_STORAGE_DAILY_REVIEWS)
+    const filtered = items.filter((i) => i.id !== id)
+    saveToLocalStorage(BROWSER_STORAGE_DAILY_REVIEWS, filtered)
+  }
+
+  async getDailyReviewTimeline(limit?: number, beforeDate?: string): Promise<import('../types/dailyReview').DailyReviewItem[]> {
+    let items = loadFromLocalStorage<import('../types/dailyReview').DailyReviewItem>(BROWSER_STORAGE_DAILY_REVIEWS)
+    
+    // Sort by date descending
+    items.sort((a, b) => {
+      if (a.date !== b.date) {
+        return a.date > b.date ? -1 : 1
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
+
+    if (beforeDate) {
+      items = items.filter(item => item.date < beforeDate)
+    }
+
+    if (limit && limit > 0) {
+      items = items.slice(0, limit)
+    }
+
+    return items
   }
 }

@@ -124,6 +124,7 @@ impl TaskService {
                 note: None,
                 timestamp: now,
             }],
+            checklists: vec![],
             deleted_at: None,
         };
 

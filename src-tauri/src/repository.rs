@@ -1,3 +1,4 @@
+use crate::bear::BearNotePreview;
 use crate::domain::{
     Area, DeskTask, Goal, GoalStatus, Project, Reminder, TaskActivityAction, TaskActivityLog,
     TaskStatus, WorkspaceSnapshot, UNCATEGORIZED_AREA_ID,
@@ -166,6 +167,30 @@ impl SqliteRepository {
                 note TEXT NULL,
                 timestamp TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS bear_note_previews (
+                task_id TEXT PRIMARY KEY,
+                bear_note_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                note TEXT NOT NULL,
+                tags_json TEXT NOT NULL,
+                is_trashed INTEGER NOT NULL,
+                modification_date TEXT NULL,
+                creation_date TEXT NULL,
+                fetched_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS daily_review_items (
+                id TEXT PRIMARY KEY,
+                date TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_daily_review_items_timeline ON daily_review_items (date DESC, created_at ASC);
             ",
         )?;
 
@@ -397,6 +422,105 @@ impl SqliteRepository {
         load_tasks_with_filter(connection, "", &[])
     }
 
+    pub fn set_app_setting(&self, key: &str, value: &str) -> Result<(), RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        connection.execute(
+            "INSERT INTO app_settings (key, value, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            params![key, value, Local::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_app_setting(&self, key: &str) -> Result<Option<String>, RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        let value = connection.query_row(
+            "SELECT value FROM app_settings WHERE key = ?1",
+            params![key],
+            |row| row.get(0),
+        );
+        match value {
+            Ok(value) => Ok(Some(value)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    pub fn delete_app_setting(&self, key: &str) -> Result<(), RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        connection.execute("DELETE FROM app_settings WHERE key = ?1", params![key])?;
+        Ok(())
+    }
+
+    pub fn upsert_bear_note_preview(
+        &self,
+        preview: &BearNotePreview,
+    ) -> Result<(), RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        let tags_json = serde_json::to_string(&preview.tags)
+            .map_err(|error| RepositoryError::Data(error.to_string()))?;
+        connection.execute(
+            "INSERT INTO bear_note_previews (
+                task_id, bear_note_id, title, note, tags_json, is_trashed,
+                modification_date, creation_date, fetched_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             ON CONFLICT(task_id) DO UPDATE SET
+                bear_note_id = excluded.bear_note_id,
+                title = excluded.title,
+                note = excluded.note,
+                tags_json = excluded.tags_json,
+                is_trashed = excluded.is_trashed,
+                modification_date = excluded.modification_date,
+                creation_date = excluded.creation_date,
+                fetched_at = excluded.fetched_at",
+            params![
+                preview.task_id.to_string(),
+                preview.bear_note_id,
+                preview.title,
+                preview.note,
+                tags_json,
+                preview.is_trashed as i64,
+                option_datetime(preview.modification_date),
+                option_datetime(preview.creation_date),
+                preview.fetched_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn find_bear_note_preview(
+        &self,
+        task_id: Uuid,
+    ) -> Result<Option<BearNotePreview>, RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        let result = connection.query_row(
+            "SELECT task_id, bear_note_id, title, note, tags_json, is_trashed, modification_date, creation_date, fetched_at
+             FROM bear_note_previews WHERE task_id = ?1",
+            params![task_id.to_string()],
+            |row| bear_note_preview_from_row(row),
+        );
+        match result {
+            Ok(preview) => Ok(Some(preview)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    pub fn delete_bear_note_preview(&self, task_id: Uuid) -> Result<(), RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        connection.execute(
+            "DELETE FROM bear_note_previews WHERE task_id = ?1",
+            params![task_id.to_string()],
+        )?;
+        Ok(())
+    }
+
     fn ensure_column_exists(
         connection: &Connection,
         table_name: &str,
@@ -417,6 +541,27 @@ impl SqliteRepository {
         connection.execute(&alter, [])?;
         Ok(())
     }
+}
+
+fn bear_note_preview_from_row(row: &rusqlite::Row<'_>) -> Result<BearNotePreview, rusqlite::Error> {
+    let tags_json: String = row.get(4)?;
+    let tags = serde_json::from_str::<Vec<String>>(&tags_json).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(error))
+    })?;
+
+    Ok(BearNotePreview {
+        task_id: parse_uuid(row.get::<_, String>(0)?).map_err(rusqlite::Error::from)?,
+        bear_note_id: row.get(1)?,
+        title: row.get(2)?,
+        note: row.get(3)?,
+        tags,
+        is_trashed: row.get::<_, i64>(5)? != 0,
+        modification_date: parse_optional_datetime(row.get::<_, Option<String>>(6)?)
+            .map_err(rusqlite::Error::from)?,
+        creation_date: parse_optional_datetime(row.get::<_, Option<String>>(7)?)
+            .map_err(rusqlite::Error::from)?,
+        fetched_at: parse_datetime(row.get::<_, String>(8)?).map_err(rusqlite::Error::from)?,
+    })
 }
 
 fn option_uuid(value: Option<Uuid>) -> Option<String> {
@@ -849,7 +994,7 @@ impl TaskRepository for SqliteRepository {
         let connection = guard.as_ref().unwrap();
         let mut tasks = load_tasks_with_filter(
             &connection,
-            "WHERE id = ?1",
+            "WHERE id = ?1 AND deleted_at IS NULL",
             &[&id.to_string() as &dyn rusqlite::types::ToSql],
         )?;
         Ok(tasks.pop())
@@ -864,7 +1009,7 @@ impl TaskRepository for SqliteRepository {
         let connection = guard.as_ref().unwrap();
         load_tasks_with_filter(
             &connection,
-            "WHERE linked_goal_id = ?1",
+            "WHERE linked_goal_id = ?1 AND deleted_at IS NULL",
             &[&goal_id.to_string() as &dyn rusqlite::types::ToSql],
         )
     }
@@ -874,7 +1019,7 @@ impl TaskRepository for SqliteRepository {
         let connection = guard.as_ref().unwrap();
         load_tasks_with_filter(
             &connection,
-            "WHERE status = ?1",
+            "WHERE status = ?1 AND deleted_at IS NULL",
             &[&task_status_as_str(status) as &dyn rusqlite::types::ToSql],
         )
     }
@@ -1141,6 +1286,7 @@ impl TaskRow {
             system_reminder_id: self.system_reminder_id,
             show_in_timeline: self.show_in_timeline != 0,
             activity_logs: logs_by_task_id.remove(&self.id).unwrap_or_default(),
+            checklists: vec![],
             deleted_at: parse_optional_datetime(self.deleted_at)?,
         })
     }
@@ -1175,6 +1321,89 @@ fn load_tasks_with_filter(
         .into_iter()
         .map(|task| task.into_task(&mut logs_by_task_id))
         .collect()
+}
+
+pub trait DailyReviewRepository {
+    fn create(&self, item: &crate::domain::DailyReviewItem) -> Result<(), RepositoryError>;
+    fn update(&self, item: &crate::domain::DailyReviewItem) -> Result<(), RepositoryError>;
+    fn delete(&self, id: Uuid) -> Result<(), RepositoryError>;
+    fn get_timeline(&self, limit: u32, offset: u32) -> Result<Vec<crate::domain::DailyReviewItem>, RepositoryError>;
+}
+
+impl DailyReviewRepository for SqliteRepository {
+    fn create(&self, item: &crate::domain::DailyReviewItem) -> Result<(), RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        connection.execute(
+            "INSERT INTO daily_review_items (id, date, content, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                item.id.to_string(),
+                &item.date,
+                serde_json::to_string(&item.blocks).unwrap_or_else(|_| "[]".to_string()),
+                item.created_at.to_rfc3339(),
+                item.updated_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn update(&self, item: &crate::domain::DailyReviewItem) -> Result<(), RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        let rows = connection.execute(
+            "UPDATE daily_review_items SET content = ?1, updated_at = ?2 WHERE id = ?3",
+            rusqlite::params![
+                serde_json::to_string(&item.blocks).unwrap_or_else(|_| "[]".to_string()),
+                item.updated_at.to_rfc3339(),
+                item.id.to_string(),
+            ],
+        )?;
+        if rows == 0 {
+            return Err(RepositoryError::Data(format!("Item not found: {}", item.id)));
+        }
+        Ok(())
+    }
+
+    fn delete(&self, id: Uuid) -> Result<(), RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        connection.execute(
+            "DELETE FROM daily_review_items WHERE id = ?1",
+            rusqlite::params![id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn get_timeline(&self, limit: u32, offset: u32) -> Result<Vec<crate::domain::DailyReviewItem>, RepositoryError> {
+        let guard = self.cached_connection()?;
+        let connection = guard.as_ref().unwrap();
+        let mut stmt = connection.prepare(
+            "SELECT id, date, content, created_at, updated_at 
+             FROM daily_review_items 
+             ORDER BY date DESC, created_at ASC 
+             LIMIT ?1 OFFSET ?2",
+        )?;
+        
+        let iter = stmt.query_map(rusqlite::params![limit, offset], |row| {
+            let id_str: String = row.get(0)?;
+            let id = Uuid::parse_str(&id_str).unwrap_or_default();
+            let content_str: String = row.get(2)?;
+            let blocks = serde_json::from_str(&content_str).unwrap_or_else(|_| Vec::new());
+            Ok(crate::domain::DailyReviewItem {
+                id,
+                date: row.get(1)?,
+                blocks,
+                created_at: parse_datetime(row.get::<_, String>(3)?).unwrap_or_else(|_| chrono::Local::now()),
+                updated_at: parse_datetime(row.get::<_, String>(4)?).unwrap_or_else(|_| chrono::Local::now()),
+            })
+        })?;
+
+        let mut items = Vec::new();
+        for item in iter {
+            items.push(item?);
+        }
+        Ok(items)
+    }
 }
 
 #[cfg(test)]
@@ -1510,6 +1739,7 @@ mod tests {
                 note: None,
                 timestamp: chrono::Local::now(),
             }],
+            checklists: vec![],
             deleted_at: None,
         };
         TaskRepository::create(&repo, &task).unwrap();
@@ -1566,6 +1796,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            checklists: vec![],
             deleted_at: None,
         };
 
@@ -1582,6 +1813,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            checklists: vec![],
             deleted_at: None,
         };
 
@@ -1598,6 +1830,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            checklists: vec![],
             deleted_at: None,
         };
 
@@ -1630,6 +1863,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            checklists: vec![],
             deleted_at: None,
         };
 
@@ -1646,6 +1880,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            checklists: vec![],
             deleted_at: None,
         };
 
@@ -1681,6 +1916,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            checklists: vec![],
             deleted_at: None,
         };
         TaskRepository::create(&repo, &task).unwrap();
@@ -1717,6 +1953,7 @@ mod tests {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            checklists: vec![],
             deleted_at: None,
         };
         TaskRepository::create(&repo, &task).unwrap();

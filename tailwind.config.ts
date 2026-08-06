@@ -8,9 +8,24 @@ export default {
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"Segoe UI"', 'sans-serif'],
       },
+      colors: {
+        theme: {
+          bg: 'var(--bg-base)',
+          panel: 'var(--panel-bg)',
+          card: 'var(--card-bg)',
+          primary: 'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          accent: 'var(--accent)',
+          'accent-light': 'var(--accent-light)',
+          'accent-sec': 'var(--accent-secondary)',
+          'accent-sec-light': 'var(--accent-sec-light)',
+          pause: 'var(--pause-color)',
+          'pause-light': 'var(--pause-light)',
+        }
+      },
       boxShadow: {
-        glass: '0 8px 32px rgba(0, 0, 0, 0.04)',
-        card: '0 8px 24px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(59, 130, 246, 0.1)',
+        glass: 'var(--panel-shadow)',
+        card: 'var(--card-shadow)',
       },
       keyframes: {
         springUp: {

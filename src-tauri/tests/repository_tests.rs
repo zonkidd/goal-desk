@@ -131,6 +131,7 @@ fn sqlite_repository_saves_and_loads_desk_tasks() {
             note: None,
             timestamp: Local::now(),
         }],
+        checklists: vec![],
         deleted_at: None,
     };
 
@@ -166,6 +167,7 @@ fn task_repository_loads_task_with_empty_activity_logs() {
         system_reminder_id: None,
         show_in_timeline: false,
         activity_logs: vec![],
+        checklists: vec![],
         deleted_at: None,
     };
 
@@ -216,6 +218,7 @@ fn task_repository_filters_by_goal_and_status() {
                 note: None,
                 timestamp: Local::now(),
             }],
+            checklists: vec![],
             deleted_at: None,
         },
         DeskTask {
@@ -231,6 +234,7 @@ fn task_repository_filters_by_goal_and_status() {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            checklists: vec![],
             deleted_at: None,
         },
         DeskTask {
@@ -246,6 +250,7 @@ fn task_repository_filters_by_goal_and_status() {
             system_reminder_id: None,
             show_in_timeline: false,
             activity_logs: vec![],
+            checklists: vec![],
             deleted_at: None,
         },
     ];
@@ -275,8 +280,46 @@ fn task_repository_filters_by_goal_and_status() {
 }
 
 #[test]
+fn task_repository_active_queries_exclude_soft_deleted_tasks() {
+    let file_name = format!(
+        "goal-desk-soft-delete-filter-test-{}.sqlite",
+        Uuid::new_v4()
+    );
+    let path = std::env::temp_dir().join(file_name);
+    let repository = SqliteRepository::new(path.clone());
+    repository.initialize().unwrap();
+
+    use goal_desk_tauri::repository::TaskRepository;
+
+    let goal_id = Uuid::new_v4();
+    let mut task = DeskTask::new_todo("Deleted Task".to_string());
+    task.status = TaskStatus::InProgress;
+    task.linked_goal_id = Some(goal_id);
+
+    TaskRepository::create(&repository, &task).unwrap();
+    TaskRepository::soft_delete(&repository, task.id).unwrap();
+
+    assert!(TaskRepository::find(&repository, task.id)
+        .unwrap()
+        .is_none());
+    assert!(TaskRepository::list_by_goal(&repository, goal_id)
+        .unwrap()
+        .is_empty());
+    assert!(
+        TaskRepository::list_by_status(&repository, TaskStatus::InProgress)
+            .unwrap()
+            .is_empty()
+    );
+
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
 fn task_repository_filtered_load_ignores_unrelated_malformed_activity_logs() {
-    let file_name = format!("goal-desk-filtered-log-scope-test-{}.sqlite", Uuid::new_v4());
+    let file_name = format!(
+        "goal-desk-filtered-log-scope-test-{}.sqlite",
+        Uuid::new_v4()
+    );
     let path = std::env::temp_dir().join(file_name);
     let repository = SqliteRepository::new(path.clone());
     repository.initialize().unwrap();
@@ -303,6 +346,7 @@ fn task_repository_filtered_load_ignores_unrelated_malformed_activity_logs() {
             note: None,
             timestamp: Local::now(),
         }],
+        checklists: vec![],
         deleted_at: None,
     };
     let unrelated_task = DeskTask {
@@ -318,6 +362,7 @@ fn task_repository_filtered_load_ignores_unrelated_malformed_activity_logs() {
         system_reminder_id: None,
         show_in_timeline: false,
         activity_logs: vec![],
+        checklists: vec![],
         deleted_at: None,
     };
 
@@ -352,7 +397,10 @@ fn task_repository_filtered_load_ignores_unrelated_malformed_activity_logs() {
 
 #[test]
 fn task_repository_update_rejects_missing_task_without_persisting_activity_logs() {
-    let file_name = format!("goal-desk-missing-task-update-test-{}.sqlite", Uuid::new_v4());
+    let file_name = format!(
+        "goal-desk-missing-task-update-test-{}.sqlite",
+        Uuid::new_v4()
+    );
     let path = std::env::temp_dir().join(file_name);
     let repository = SqliteRepository::new(path.clone());
     repository.initialize().unwrap();
@@ -377,6 +425,7 @@ fn task_repository_update_rejects_missing_task_without_persisting_activity_logs(
             note: None,
             timestamp: Local::now(),
         }],
+        checklists: vec![],
         deleted_at: None,
     };
 

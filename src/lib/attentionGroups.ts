@@ -31,18 +31,9 @@ export function deriveTodayAttentionGroups(
     (task) => task.status === 'TODO' || task.status === 'IN_PROGRESS' || task.status === 'PAUSED',
   )
 
-  const overdue = deadlineVisibleTasks
-    .filter((task) => task.dueDate && startOfDay(task.dueDate).getTime() < today.getTime())
-    .sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0))
-
-  const dueToday = deadlineVisibleTasks
-    .filter((task) => task.dueDate && isSameDay(task.dueDate, today) && !overdue.includes(task))
-    .sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0))
-
-  const ongoing = activeTasks
+  const ongoingBase = activeTasks
     .filter((task) => {
       if (task.status !== 'IN_PROGRESS') return false
-      if (overdue.includes(task) || dueToday.includes(task)) return false
       return isTaskInActiveDateRange(task, now)
     })
     .sort((a, b) => {
@@ -64,7 +55,8 @@ export function deriveTodayAttentionGroups(
       return bDaysElapsed - aDaysElapsed
     })
 
-  const ongoingIds = new Set(ongoing.map((t) => t.id))
+  const ongoingIds = new Set(ongoingBase.map((t) => t.id))
+  
   const linkedTodayTasks = activeTasks
     .filter((task) => {
       if (ongoingIds.has(task.id)) return false
@@ -75,7 +67,16 @@ export function deriveTodayAttentionGroups(
     })
     .sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0))
 
-  const mergedOngoing = [...ongoing, ...linkedTodayTasks]
+  const mergedOngoing = [...ongoingBase, ...linkedTodayTasks]
+  const mergedOngoingIds = new Set(mergedOngoing.map((t) => t.id))
+
+  const overdue = deadlineVisibleTasks
+    .filter((task) => task.dueDate && startOfDay(task.dueDate).getTime() < today.getTime() && !mergedOngoingIds.has(task.id))
+    .sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0))
+
+  const dueToday = deadlineVisibleTasks
+    .filter((task) => task.dueDate && isSameDay(task.dueDate, today) && !overdue.includes(task) && !mergedOngoingIds.has(task.id))
+    .sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0))
 
   const systemReminders = allSystemReminders
     .filter((r) => {

@@ -1,3 +1,4 @@
+pub mod bear;
 pub mod domain;
 pub mod eventkit;
 pub mod repository;
@@ -11,9 +12,12 @@ use domain::{
 };
 use eventkit::SystemAgendaSnapshot;
 use repository::SqliteRepository;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use service::AppService;
-use tauri::{AppHandle, Manager};
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Emitter, Manager};
+#[cfg(desktop)]
+use tauri_plugin_deep_link::DeepLinkExt;
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 use uuid::Uuid;
@@ -41,6 +45,41 @@ pub struct TaskFieldPatchCommand {
     pub linked_goal_label: Option<NullablePatch<String>>,
     pub show_in_timeline: Option<bool>,
     pub system_reminder_id: Option<NullablePatch<String>>,
+}
+
+#[derive(Clone, Default)]
+pub struct BearRequestState {
+    pending: Arc<Mutex<bear::PendingBearRequests>>,
+}
+
+impl BearRequestState {
+    fn insert(&self, task_id: Uuid, kind: bear::BearCallbackRequestKind) -> Result<String, String> {
+        self.pending
+            .lock()
+            .map_err(|error| error.to_string())
+            .map(|mut pending| pending.insert(task_id, kind))
+    }
+
+    fn consume_success_url(&self, raw_url: &str) -> Result<bear::AcceptedBearCallback, String> {
+        self.pending
+            .lock()
+            .map_err(|error| error.to_string())?
+            .consume_success_url(raw_url)
+    }
+
+    fn consume_error_url(&self, raw_url: &str) -> Result<bear::AcceptedBearErrorCallback, String> {
+        self.pending
+            .lock()
+            .map_err(|error| error.to_string())?
+            .consume_error_url(raw_url)
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BearNoteErrorEvent {
+    task_id: Option<String>,
+    message: String,
 }
 
 impl TaskFieldPatchCommand {
@@ -199,6 +238,79 @@ fn bear_note_url(note_id: &str) -> String {
     format!("bear://x-callback-url/open-note?id={note_id}")
 }
 
+fn open_macos_url(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = url;
+        Err("URL opening only supported on macOS".to_string())
+    }
+}
+
+#[cfg(desktop)]
+fn handle_bear_deep_link<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    pending: &BearRequestState,
+    raw_url: &str,
+) {
+    if raw_url.starts_with("kairos://bear-note-callback") {
+        match pending.consume_success_url(raw_url) {
+            Ok(accepted) => {
+                let service = app.state::<AppService>();
+                match service.bear.link_task_to_callback_note(
+                    &accepted.request.task_id.to_string(),
+                    accepted.note,
+                ) {
+                    Ok(linked) => {
+                        let _ = app.emit("bear-note:linked", linked);
+                    }
+                    Err(error) => {
+                        let _ = app.emit(
+                            "bear-note:error",
+                            BearNoteErrorEvent {
+                                task_id: Some(accepted.request.task_id.to_string()),
+                                message: error,
+                            },
+                        );
+                    }
+                }
+            }
+            Err(error) => {
+                let _ = app.emit(
+                    "bear-note:error",
+                    BearNoteErrorEvent {
+                        task_id: None,
+                        message: error,
+                    },
+                );
+            }
+        }
+        return;
+    }
+
+    if raw_url.starts_with("kairos://bear-note-error") {
+        let error_event = match pending.consume_error_url(raw_url) {
+            Ok(accepted) => BearNoteErrorEvent {
+                task_id: Some(accepted.request.task_id.to_string()),
+                message: accepted.message,
+            },
+            Err(error) => BearNoteErrorEvent {
+                task_id: None,
+                message: error,
+            },
+        };
+        let _ = app.emit("bear-note:error", error_event);
+    }
+}
+
 fn show_quick_capture_window_internal<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let window = ensure_quick_capture_window(app)?;
 
@@ -214,13 +326,20 @@ fn show_quick_capture_window_internal<R: tauri::Runtime>(app: &AppHandle<R>) -> 
 
 mod commands {
     use super::{
-        bear_note_url, eventkit, load_or_seed_workspace, show_quick_capture_window_internal,
-        timeline_from_workspace, workspace_repository, DeskTask, GoalStatus, GoalSummary,
-        SystemAgendaSnapshot, TaskStatus, TimelineItem,
+        bear_note_url, eventkit, load_or_seed_workspace, open_macos_url,
+        show_quick_capture_window_internal, timeline_from_workspace, workspace_repository,
+        BearRequestState, DeskTask, GoalStatus, GoalSummary, SystemAgendaSnapshot, TaskStatus,
+        TimelineItem,
+    };
+    use crate::bear::{
+        build_bear_note_preview_url, build_bear_selected_note_url, BearCallbackRequestKind,
+        BearNotePreview,
     };
     use crate::service::AppService;
+    use crate::service::BearIntegrationStatus;
     use chrono::{Datelike, Duration, Local, TimeZone};
     use tauri::{AppHandle, Emitter, State};
+    use uuid::Uuid;
 
     #[tauri::command]
     pub fn today_snapshot(app: AppHandle) -> Result<Vec<TimelineItem>, String> {
@@ -413,6 +532,87 @@ mod commands {
     }
 
     #[tauri::command]
+    pub fn get_bear_integration_status(
+        svc: State<'_, AppService>,
+    ) -> Result<BearIntegrationStatus, String> {
+        svc.bear.integration_status()
+    }
+
+    #[tauri::command]
+    pub fn save_bear_api_token(
+        svc: State<'_, AppService>,
+        token: String,
+    ) -> Result<BearIntegrationStatus, String> {
+        svc.bear.save_api_token(&token)
+    }
+
+    #[tauri::command]
+    pub fn clear_bear_api_token(
+        svc: State<'_, AppService>,
+    ) -> Result<BearIntegrationStatus, String> {
+        svc.bear.clear_api_token()
+    }
+
+    #[tauri::command]
+    pub fn get_bear_note_preview(
+        svc: State<'_, AppService>,
+        task_id: String,
+    ) -> Result<Option<BearNotePreview>, String> {
+        svc.bear.get_note_preview(&task_id)
+    }
+
+    #[tauri::command]
+    pub fn link_selected_bear_note(
+        svc: State<'_, AppService>,
+        pending: State<'_, BearRequestState>,
+        task_id: String,
+    ) -> Result<(), String> {
+        let task_uuid = Uuid::parse_str(&task_id).map_err(|error| error.to_string())?;
+        let _ = svc
+            .task
+            .find_task(&task_id)?
+            .ok_or_else(|| format!("Task not found: {task_id}"))?;
+        let token = svc
+            .bear
+            .bear_api_token()?
+            .ok_or_else(|| "Bear API token is not configured".to_string())?;
+        let request_id = pending.insert(task_uuid, BearCallbackRequestKind::LinkSelected)?;
+        let url = build_bear_selected_note_url(&token, &request_id)?;
+        open_macos_url(&url)
+    }
+
+    #[tauri::command]
+    pub fn refresh_bear_note_preview(
+        svc: State<'_, AppService>,
+        pending: State<'_, BearRequestState>,
+        task_id: String,
+    ) -> Result<(), String> {
+        let task_uuid = Uuid::parse_str(&task_id).map_err(|error| error.to_string())?;
+        let task = svc
+            .task
+            .find_task(&task_id)?
+            .ok_or_else(|| format!("Task not found: {task_id}"))?;
+        let note_id = task
+            .bear_note_id
+            .as_deref()
+            .ok_or_else(|| "This task is not linked to a Bear note".to_string())?;
+        let request_id = pending.insert(task_uuid, BearCallbackRequestKind::RefreshPreview)?;
+        let url = build_bear_note_preview_url(note_id, &request_id)?;
+        open_macos_url(&url)
+    }
+
+    #[tauri::command]
+    pub fn unlink_bear_note(
+        app: AppHandle,
+        svc: State<'_, AppService>,
+        task_id: String,
+    ) -> Result<DeskTask, String> {
+        let task = svc.bear.unlink_note(&task_id)?;
+        let _ = app.emit("bear-note:unlinked", &task);
+        Ok(task)
+    }
+
+    #[tauri::command]
     pub fn show_quick_capture_window(app: AppHandle) -> Result<(), String> {
         show_quick_capture_window_internal(&app)
     }
@@ -468,19 +668,7 @@ mod commands {
 
     #[tauri::command]
     pub fn open_url(url: String) -> Result<(), String> {
-        #[cfg(target_os = "macos")]
-        {
-            std::process::Command::new("open")
-                .arg(&url)
-                .spawn()
-                .map_err(|e| format!("Failed to open URL: {}", e))?;
-            Ok(())
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            Err("URL opening only supported on macOS".to_string())
-        }
+        open_macos_url(&url)
     }
 
     #[tauri::command]
@@ -520,11 +708,57 @@ mod commands {
     pub fn list_deleted_goals(svc: State<'_, AppService>) -> Result<Vec<GoalSummary>, String> {
         svc.goal.list_deleted_goals()
     }
+
+    #[tauri::command]
+    pub fn create_daily_review_item(
+        svc: State<'_, AppService>,
+        date: String,
+        blocks: Vec<crate::domain::DailyReviewBlock>,
+    ) -> Result<crate::domain::DailyReviewItem, String> {
+        svc.daily_review.create_item(&date, blocks)
+    }
+
+    #[tauri::command]
+    pub fn update_daily_review_item(
+        svc: State<'_, AppService>,
+        id: String,
+        blocks: Vec<crate::domain::DailyReviewBlock>,
+    ) -> Result<crate::domain::DailyReviewItem, String> {
+        let parsed_id = uuid::Uuid::parse_str(&id).map_err(|e| e.to_string())?;
+        svc.daily_review.update_item(parsed_id, blocks)
+    }
+
+    #[tauri::command]
+    pub fn delete_daily_review_item(
+        svc: State<'_, AppService>,
+        id: String,
+    ) -> Result<(), String> {
+        let parsed_id = uuid::Uuid::parse_str(&id).map_err(|e| e.to_string())?;
+        svc.daily_review.delete_item(parsed_id)
+    }
+
+    #[tauri::command]
+    pub fn get_daily_review_timeline(
+        svc: State<'_, AppService>,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<crate::domain::DailyReviewItem>, String> {
+        svc.daily_review.get_timeline(limit, offset)
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_deep_link::init())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
+            }
+        })
         .setup(|app| {
             let path = app
                 .handle()
@@ -536,9 +770,23 @@ pub fn run() {
             let app_service = AppService::new(repo);
             app_service.initialize().map_err(|e| e.to_string())?;
             app.handle().manage(app_service);
+            let bear_requests = BearRequestState::default();
+            let bear_requests_for_events = bear_requests.clone();
+            app.handle().manage(bear_requests);
 
             #[cfg(desktop)]
             {
+                let deep_link_handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    for url in event.urls() {
+                        handle_bear_deep_link(
+                            &deep_link_handle,
+                            &bear_requests_for_events,
+                            url.as_str(),
+                        );
+                    }
+                });
+
                 let handle = app.handle().clone();
                 app.handle().plugin(
                     tauri_plugin_global_shortcut::Builder::new()
@@ -575,6 +823,13 @@ pub fn run() {
             commands::update_task_status,
             commands::add_task_note,
             commands::open_task_in_bear,
+            commands::get_bear_integration_status,
+            commands::save_bear_api_token,
+            commands::clear_bear_api_token,
+            commands::link_selected_bear_note,
+            commands::refresh_bear_note_preview,
+            commands::get_bear_note_preview,
+            commands::unlink_bear_note,
             commands::show_quick_capture_window,
             commands::eventkit_snapshot,
             commands::load_calendar_range,
@@ -587,8 +842,20 @@ pub fn run() {
             commands::list_deleted_tasks,
             commands::soft_delete_goal,
             commands::restore_goal,
-            commands::list_deleted_goals
+            commands::list_deleted_goals,
+            commands::create_daily_review_item,
+            commands::update_daily_review_item,
+            commands::delete_daily_review_item,
+            commands::get_daily_review_timeline
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Kairos");
+        .build(tauri::generate_context!())
+        .expect("error while running Kairos")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Reopen { .. } = event {
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        });
 }
