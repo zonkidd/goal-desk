@@ -21,7 +21,7 @@ describe('workspaceDerivation - 今日焦点任务筛选', () => {
         plannedStartAt: new Date('2026-06-10T00:00:00+08:00'), // 4天前开始
         dueDate: new Date('2026-06-20T00:00:00+08:00'), // 6天后截止
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
       {
@@ -31,7 +31,7 @@ describe('workspaceDerivation - 今日焦点任务筛选', () => {
         plannedStartAt: new Date('2026-06-15T00:00:00+08:00'), // 明天开始
         dueDate: new Date('2026-06-20T00:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
       {
@@ -41,7 +41,7 @@ describe('workspaceDerivation - 今日焦点任务筛选', () => {
         plannedStartAt: new Date('2026-06-01T00:00:00+08:00'),
         dueDate: new Date('2026-06-13T00:00:00+08:00'), // 昨天截止
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
     ]
@@ -81,7 +81,7 @@ describe('workspaceDerivation - 今日焦点任务筛选', () => {
         plannedStartAt: new Date('2026-06-10T00:00:00+08:00'),
         dueDate: new Date('2026-06-20T00:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
     ]
@@ -106,7 +106,7 @@ describe('workspaceDerivation - 今日焦点任务筛选', () => {
         plannedStartAt: new Date('2026-06-10T00:00:00+08:00'),
         dueDate: new Date('2026-06-20T00:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
       {
@@ -117,7 +117,7 @@ describe('workspaceDerivation - 今日焦点任务筛选', () => {
         plannedStartAt: new Date('2026-06-10T00:00:00+08:00'),
         dueDate: new Date('2026-06-20T00:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
     ]
@@ -144,7 +144,7 @@ describe('workspaceDerivation - 今日注意力分组', () => {
         status: 'TODO',
         dueDate: new Date('2026-06-13T23:59:59+08:00'), // 昨天
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
     ]
@@ -163,7 +163,7 @@ describe('workspaceDerivation - 今日注意力分组', () => {
         status: 'TODO',
         dueDate: new Date('2026-06-14T18:00:00+08:00'), // 今天下午6点
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
     ]
@@ -182,7 +182,7 @@ describe('workspaceDerivation - 今日注意力分组', () => {
         status: 'PAUSED',
         dueDate: new Date('2026-06-13T18:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
       {
@@ -191,7 +191,7 @@ describe('workspaceDerivation - 今日注意力分组', () => {
         status: 'PAUSED',
         dueDate: new Date('2026-06-14T18:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
       {
@@ -201,7 +201,7 @@ describe('workspaceDerivation - 今日注意力分组', () => {
         plannedStartAt: new Date('2026-06-10T09:00:00+08:00'),
         dueDate: new Date('2026-06-20T18:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
     ]
@@ -222,7 +222,27 @@ describe('workspaceDerivation - 今日注意力分组', () => {
         plannedStartAt: new Date('2026-06-10T00:00:00+08:00'),
         dueDate: new Date('2026-06-20T00:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
+        showInTimeline: false,
+      },
+    ]
+
+    const groups = deriveTodayAttentionGroups(tasks, now)
+
+    expect(groups.ongoing).toHaveLength(1)
+    expect(groups.ongoing[0].id).toBe('t1')
+  })
+
+  test('将 IN_PROGRESS 任务的计划时间修改到明天后，今天依旧显示在持续推进列表中', () => {
+    const tasks: Task[] = [
+      {
+        id: 't1',
+        title: '持续推进排期到未来',
+        status: 'IN_PROGRESS',
+        plannedStartAt: new Date('2026-06-15T00:00:00+08:00'), // 明天开始 (未来排期)
+        dueDate: new Date('2026-06-20T00:00:00+08:00'),
+        content: '',
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
     ]
@@ -241,7 +261,7 @@ describe('workspaceDerivation - 今日注意力分组', () => {
         status: 'DONE',
         dueDate: new Date('2026-06-13T00:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
     ]
@@ -268,7 +288,7 @@ describe('workspaceDerivation - 时间展示策略', () => {
       status: 'TODO',
       dueDate: new Date('2026-06-16T00:00:00+08:00'), // 2天后
       content: '',
-      activityLogs: [],
+      activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
       showInTimeline: false,
     }
 
@@ -288,7 +308,7 @@ describe('workspaceDerivation - 时间展示策略', () => {
       status: 'TODO',
       dueDate: new Date('2026-06-20T00:00:00+08:00'), // 6天后
       content: '',
-      activityLogs: [],
+      activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
       showInTimeline: false,
     }
 
@@ -308,7 +328,7 @@ describe('workspaceDerivation - 时间展示策略', () => {
       status: 'TODO',
       dueDate: new Date('2026-06-25T00:00:00+08:00'), // 11天后
       content: '',
-      activityLogs: [],
+      activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
       showInTimeline: false,
     }
 
@@ -327,7 +347,7 @@ describe('workspaceDerivation - 时间展示策略', () => {
       status: 'TODO',
       dueDate: undefined,
       content: '',
-      activityLogs: [],
+      activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
       showInTimeline: false,
     }
 
@@ -351,7 +371,7 @@ describe('workspaceDerivation - 已推进天数计算', () => {
       plannedStartAt: new Date('2026-06-10T00:00:00+08:00'), // 4天前
       dueDate: new Date('2026-06-20T00:00:00+08:00'),
       content: '',
-      activityLogs: [],
+      activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
       showInTimeline: false,
     }
 
@@ -369,7 +389,7 @@ describe('workspaceDerivation - 已推进天数计算', () => {
       status: 'TODO',
       dueDate: new Date('2026-06-20T00:00:00+08:00'),
       content: '',
-      activityLogs: [],
+      activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
       showInTimeline: false,
     }
 
@@ -384,7 +404,7 @@ describe('workspaceDerivation - 已推进天数计算', () => {
 })
 
 describe('workspaceDerivation - 多日任务展开', () => {
-  test('跨天 Todo 不因 dueDate 延展到今日时间线', () => {
+  test('跨天 Todo 因 showInTimeline=true 而延展到今日时间线', () => {
     const now = new Date('2026-06-03T10:00:00+08:00')
     const tasks: Task[] = [
       {
@@ -394,14 +414,16 @@ describe('workspaceDerivation - 多日任务展开', () => {
         plannedStartAt: new Date('2026-06-01T09:00:00+08:00'),
         dueDate: new Date('2026-06-05T18:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: true,
       },
     ]
 
     const agenda = deriveTodayAgenda([], tasks, now)
+    const todoItems = agenda.filter((item) => item.source === 'todo')
 
-    expect(agenda).toEqual([])
+    expect(todoItems).toHaveLength(1)
+    expect(todoItems[0].id).toBe('t1')
   })
 
   test('有 dueDate 的 Todo 只在 plannedStartAt 当天生成一个 timeline item', () => {
@@ -414,7 +436,7 @@ describe('workspaceDerivation - 多日任务展开', () => {
         plannedStartAt: new Date('2026-06-01T09:00:00+08:00'),
         dueDate: new Date('2026-06-05T18:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: true,
       },
     ]
@@ -438,7 +460,7 @@ describe('workspaceDerivation - 多日任务展开', () => {
         plannedStartAt: new Date('2026-06-03T09:00:00+08:00'),
         dueDate: new Date('2026-06-03T18:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: true,
       },
     ]
@@ -459,7 +481,7 @@ describe('workspaceDerivation - 多日任务展开', () => {
         status: 'IN_PROGRESS',
         plannedStartAt: new Date('2026-06-03T09:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: true,
       },
     ]
@@ -481,7 +503,7 @@ describe('workspaceDerivation - 多日任务展开', () => {
         plannedStartAt: new Date('2026-06-01T09:00:00+08:00'),
         dueDate: new Date('2026-06-05T18:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: false,
       },
     ]
@@ -508,7 +530,7 @@ describe('workspaceDerivation - filterAgendaByArea 多日任务', () => {
         plannedStartAt: new Date('2026-06-01T09:00:00+08:00'),
         dueDate: new Date('2026-06-05T18:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: true,
       },
     ]
@@ -532,7 +554,7 @@ describe('workspaceDerivation - filterAgendaByArea 多日任务', () => {
         plannedStartAt: new Date('2026-06-01T09:00:00+08:00'),
         dueDate: new Date('2026-06-05T18:00:00+08:00'),
         content: '',
-        activityLogs: [],
+        activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }],
         showInTimeline: true,
       },
     ]
@@ -567,8 +589,8 @@ describe('filterByArea - 通用领域过滤', () => {
 
   test('filterTasksByArea ALL 返回全部 tasks', () => {
     const tasks: Task[] = [
-      { id: 't1', title: 'T1', content: '', status: 'TODO', linkedGoalId: 'g1', activityLogs: [], showInTimeline: false },
-      { id: 't2', title: 'T2', content: '', status: 'TODO', linkedGoalId: 'g2', activityLogs: [], showInTimeline: false },
+      { id: 't1', title: 'T1', content: '', status: 'TODO', linkedGoalId: 'g1', activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }], showInTimeline: false },
+      { id: 't2', title: 'T2', content: '', status: 'TODO', linkedGoalId: 'g2', activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }], showInTimeline: false },
     ]
     const goals: GoalCard[] = [
       { id: 'g1', title: 'G1', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
@@ -580,9 +602,9 @@ describe('filterByArea - 通用领域过滤', () => {
 
   test('filterTasksByArea 按领域过滤 tasks', () => {
     const tasks: Task[] = [
-      { id: 't1', title: 'T1', content: '', status: 'TODO', linkedGoalId: 'g1', activityLogs: [], showInTimeline: false },
-      { id: 't2', title: 'T2', content: '', status: 'TODO', linkedGoalId: 'g2', activityLogs: [], showInTimeline: false },
-      { id: 't3', title: 'T3', content: '', status: 'TODO', activityLogs: [], showInTimeline: false },
+      { id: 't1', title: 'T1', content: '', status: 'TODO', linkedGoalId: 'g1', activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }], showInTimeline: false },
+      { id: 't2', title: 'T2', content: '', status: 'TODO', linkedGoalId: 'g2', activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }], showInTimeline: false },
+      { id: 't3', title: 'T3', content: '', status: 'TODO', activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }], showInTimeline: false },
     ]
     const goals: GoalCard[] = [
       { id: 'g1', title: 'G1', area: 'Work', status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },
@@ -595,9 +617,9 @@ describe('filterByArea - 通用领域过滤', () => {
 
   test('filterTasksByArea 未分类包含无关联 tasks', () => {
     const tasks: Task[] = [
-      { id: 't1', title: 'Unlinked', content: '', status: 'TODO', activityLogs: [], showInTimeline: false },
-      { id: 't2', title: 'Uncategorized goal task', content: '', status: 'TODO', linkedGoalId: 'g1', activityLogs: [], showInTimeline: false },
-      { id: 't3', title: 'Work task', content: '', status: 'TODO', linkedGoalId: 'g2', activityLogs: [], showInTimeline: false },
+      { id: 't1', title: 'Unlinked', content: '', status: 'TODO', activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }], showInTimeline: false },
+      { id: 't2', title: 'Uncategorized goal task', content: '', status: 'TODO', linkedGoalId: 'g1', activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }], showInTimeline: false },
+      { id: 't3', title: 'Work task', content: '', status: 'TODO', linkedGoalId: 'g2', activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10T00:00:00+08:00') }], showInTimeline: false },
     ]
     const goals: GoalCard[] = [
       { id: 'g1', title: 'G1', area: UNCATEGORIZED_AREA_TITLE, status: 'ACTIVE', description: '', progress: 0, nextTodo: '', taskCount: 0 },

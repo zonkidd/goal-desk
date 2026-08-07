@@ -7,7 +7,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     id: 't1',
     title: 'Task',
     content: '',
-    status: 'IN_PROGRESS',
+    status: 'TODO',
     activityLogs: [],
     showInTimeline: false,
     ...overrides,
@@ -59,5 +59,14 @@ describe('isTaskInActiveDateRange', () => {
   it('returns false when no start boundary at all', () => {
     const task = makeTask({})
     expect(isTaskInActiveDateRange(task, today)).toBe(false)
+  })
+
+  it('prioritizes STARTED activity log over plannedStartAt for IN_PROGRESS tasks', () => {
+    const task = makeTask({
+      status: 'IN_PROGRESS',
+      plannedStartAt: new Date('2026-06-25T00:00:00'), // Future date
+      activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-20T00:00:00') }],
+    })
+    expect(isTaskInActiveDateRange(task, today)).toBe(true)
   })
 })

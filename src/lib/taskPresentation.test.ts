@@ -110,6 +110,17 @@ describe('getTaskTimeInfo', () => {
     const result = getTaskTimeInfo(task, now)
     expect(result.daysElapsed).toBe(5)
   })
+
+  it('should prioritize STARTED activity log over plannedStartAt for IN_PROGRESS task to compute daysElapsed', () => {
+    const now = new Date('2026-06-15')
+    const task = makeTask({
+      status: 'IN_PROGRESS',
+      plannedStartAt: new Date('2026-06-18'), // Future
+      activityLogs: [{ action: 'STARTED', timestamp: new Date('2026-06-10') }], // Past
+    })
+    const result = getTaskTimeInfo(task, now)
+    expect(result.daysElapsed).toBe(5)
+  })
 })
 
 describe('getTaskStatusActions', () => {

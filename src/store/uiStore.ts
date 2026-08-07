@@ -57,7 +57,7 @@ export const useUiStore = create<UiStoreState>((set, get) => ({
   currentView: 'inbox',
   activeArea: 'ALL',
   showCompletedTodos: false,
-  theme: typeof window !== 'undefined' ? (localStorage.getItem('kairos-theme') as 'wabi-sabi' | 'liquid-glass') || 'wabi-sabi' : 'wabi-sabi',
+  theme: typeof window !== 'undefined' && typeof window.localStorage !== 'undefined' ? (localStorage.getItem('kairos-theme') as 'wabi-sabi' | 'liquid-glass') || 'wabi-sabi' : 'wabi-sabi',
   isLoading: true,
   statusMessage: '',
   activeDrawer: null,

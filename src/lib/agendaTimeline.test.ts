@@ -75,7 +75,7 @@ describe('computeImportedRangeTimeline', () => {
     expect(timeline).toEqual([])
   })
 
-  it('does not carry a planned-start Todo across later due dates in the range timeline', () => {
+  it('carries a planned-start Todo across later due dates in the range timeline if showInTimeline is true', () => {
     const task: Task = {
       id: 'planned-yesterday',
       title: 'Started yesterday',
@@ -87,15 +87,23 @@ describe('computeImportedRangeTimeline', () => {
       activityLogs: [],
     }
 
+    const rangeStart = new Date('2026-06-20T00:00:00+08:00')
+    const rangeEnd = new Date('2026-06-20T23:59:59+08:00')
+
     const timeline = computeImportedRangeTimeline({
       calendarEvents: [],
       reminders: [],
       tasks: [task],
-      rangeStart: new Date('2026-06-20T00:00:00+08:00'),
-      rangeEnd: new Date('2026-06-20T23:59:59+08:00'),
+      rangeStart,
+      rangeEnd,
     })
 
-    expect(timeline).toEqual([])
+    expect(timeline).toHaveLength(1)
+    expect(timeline[0]).toMatchObject({
+      id: 'planned-yesterday',
+      source: 'todo',
+      occurrenceDate: startOfDay(rangeStart),
+    })
   })
 })
 

@@ -37,7 +37,15 @@ export interface TaskTimeInfo {
 
 export function getTaskTimeInfo(task: Task, now = new Date()): TaskTimeInfo {
   const today = startOfDay(now)
-  const startDate = task.plannedStartAt || task.createdAt || now
+  let startDate = task.createdAt || now
+  const startedLog = task.activityLogs.find((log) => log.action === 'STARTED')
+
+  if (task.status === 'IN_PROGRESS' || task.status === 'PAUSED' || task.status === 'DONE' || startedLog) {
+    if (startedLog) startDate = startedLog.timestamp
+  } else if (task.plannedStartAt) {
+    startDate = task.plannedStartAt
+  }
+
   const startDay = startOfDay(startDate)
 
   // 计算已推进天数

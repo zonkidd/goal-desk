@@ -20,6 +20,7 @@ export function addDays(date: Date, days: number): Date {
  */
 export function isTaskInActiveDateRange(
   task: {
+    status?: string
     plannedStartAt?: Date
     dueDate?: Date
     createdAt?: Date
@@ -28,7 +29,16 @@ export function isTaskInActiveDateRange(
   now: Date,
 ): boolean {
   const today = startOfDay(now)
-  const startBoundary = task.plannedStartAt || task.createdAt || task.activityLogs?.find((log) => log.action === 'CREATED')?.timestamp
+  
+  let startBoundary: Date | undefined
+  const startedLog = task.activityLogs?.find((log) => log.action === 'STARTED')?.timestamp
+
+  if (task.status === 'IN_PROGRESS' || task.status === 'PAUSED' || startedLog) {
+    startBoundary = startedLog || task.createdAt || task.activityLogs?.find((log) => log.action === 'CREATED')?.timestamp
+  } else {
+    startBoundary = task.plannedStartAt || task.createdAt || task.activityLogs?.find((log) => log.action === 'CREATED')?.timestamp
+  }
+
   if (!startBoundary) return false
 
   const startDay = startOfDay(startBoundary)

@@ -47,7 +47,17 @@ export function computeAgendaTimeline({
     if (!taskStartAt) continue
 
     const startDay = startOfDay(taskStartAt)
-    if (startDay.getTime() < rangeStartDate.getTime() || startDay.getTime() > rangeEndDate.getTime()) {
+    const isExactDay = startDay.getTime() >= rangeStartDate.getTime() && startDay.getTime() <= rangeEndDate.getTime()
+    
+    let isSpanning = false
+    if (!isExactDay && task.showInTimeline && task.dueDate) {
+      const dueDay = startOfDay(task.dueDate)
+      if (startDay.getTime() <= rangeEndDate.getTime() && dueDay.getTime() >= rangeStartDate.getTime()) {
+        isSpanning = true
+      }
+    }
+
+    if (!isExactDay && !isSpanning) {
       continue
     }
 
@@ -60,6 +70,7 @@ export function computeAgendaTimeline({
       done: false,
       sourceLabel: task.linkedGoalLabel || 'Desk Task',
       startsAt: taskStartAt,
+      occurrenceDate: isSpanning ? rangeStartDate : undefined,
       linkedGoalId: task.linkedGoalId,
     })
   }
