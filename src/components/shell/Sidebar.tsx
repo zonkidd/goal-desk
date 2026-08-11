@@ -46,8 +46,8 @@ export function Sidebar() {
 
   return (
     <aside className="glass-panel relative z-20 flex h-full w-[260px] shrink-0 flex-col justify-between border-r border-white/15">
-      <div className="px-6 pb-4 pt-8">
-        <div className="mb-1 flex items-center gap-3">
+      <div className="px-6 pb-4 pt-10" data-tauri-drag-region>
+        <div className="mb-1 flex items-center gap-3 pointer-events-none">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-theme-accent shadow-sm transition-colors">
             <Workflow className="h-4 w-4 text-white" />
           </div>

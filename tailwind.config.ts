@@ -24,7 +24,7 @@ export default {
         }
       },
       boxShadow: {
-        glass: 'var(--panel-shadow)',
+        glass: '0 8px 32px 0 rgba(0, 0, 0, 0.08), inset 0 1px 1px 0 rgba(255, 255, 255, 0.15)',
         card: 'var(--card-shadow)',
       },
       keyframes: {

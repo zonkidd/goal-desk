@@ -24,7 +24,7 @@ export function AppShell() {
   const isLoading = useUiStore((state) => state.isLoading)
 
   return (
-    <main className="mesh-bg relative flex h-screen overflow-hidden select-none text-theme-primary transition-colors">
+    <main className="relative flex h-screen overflow-hidden select-none bg-theme-bg/40 backdrop-blur-3xl text-theme-primary transition-colors">
       <Sidebar />
 
       <section className="relative flex flex-1 flex-col overflow-y-auto">

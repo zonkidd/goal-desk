@@ -1,5 +1,5 @@
 import { CalendarDays, Clock, Inbox, Info, PlusCircle, Target } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, LayoutGroup, AnimatePresence } from 'framer-motion'
 import { type ReactNode, useState, memo } from 'react'
 import type { Task } from '../../types/task'
 import type { GoalCard, TimelineItem, ReminderItem } from '../../types/app'
@@ -163,14 +163,16 @@ export function TodayView() {
                   {overdue.length + dueToday.length}
                 </span>
               </div>
-              <div className="space-y-3">
-                {overdue.map((task) => (
-                  <OngoingTaskRow key={task.id} task={task} onClick={() => openDrawer('task', task.id)} />
-                ))}
-                {dueToday.map((task) => (
-                  <OngoingTaskRow key={task.id} task={task} onClick={() => openDrawer('task', task.id)} />
-                ))}
-              </div>
+              <LayoutGroup>
+                <AnimatePresence>
+                  {overdue.map((task) => (
+                    <OngoingTaskRow key={task.id} task={task} onClick={() => openDrawer('task', task.id)} />
+                  ))}
+                  {dueToday.map((task) => (
+                    <OngoingTaskRow key={task.id} task={task} onClick={() => openDrawer('task', task.id)} />
+                  ))}
+                </AnimatePresence>
+              </LayoutGroup>
             </GlassPanel>
           )}
 
@@ -183,9 +185,13 @@ export function TodayView() {
               <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-600">{ongoingTasks.length}</span>
             </div>
             <div className="space-y-3">
-              {ongoingTasks.map((task) => (
-                <OngoingTaskRow key={task.id} task={task} onClick={() => openDrawer('task', task.id)} />
-              ))}
+              <LayoutGroup>
+                <AnimatePresence>
+                  {ongoingTasks.map((task) => (
+                    <OngoingTaskRow key={task.id} task={task} onClick={() => openDrawer('task', task.id)} />
+                  ))}
+                </AnimatePresence>
+              </LayoutGroup>
               {ongoingTasks.length === 0 && systemReminders.length === 0 && (
                 <GuidedEmptyState
                   icon={<PlusCircle className="h-4 w-4" />}
@@ -336,8 +342,17 @@ const OngoingTaskRow = memo(function OngoingTaskRow({ task, onClick }: { task: T
   const urgencyIcon = getUrgencyIcon(timeInfo.urgency)
 
   return (
-    <div className="group relative">
-      <button
+    <motion.div 
+      layout 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.2 }}
+      className="group relative"
+    >
+      <motion.button
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.98 }}
         type="button"
         onClick={onClick}
         className="glass-card flex w-full items-center justify-between rounded-2xl p-4 text-left transition-transform hover:-translate-y-0.5"
@@ -404,7 +419,7 @@ const OngoingTaskRow = memo(function OngoingTaskRow({ task, onClick }: { task: T
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }, (prev, next) => prev.task === next.task)
 

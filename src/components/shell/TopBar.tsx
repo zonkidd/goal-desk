@@ -21,8 +21,8 @@ export function TopBar() {
   const setTheme = useUiStore((state) => state.setTheme)
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-white/20 bg-theme-panel/30 px-10 backdrop-blur-md transition-colors">
-      <h2 className="text-sm font-bold text-theme-primary tracking-wide transition-colors">{titles[currentView]}</h2>
+    <header data-tauri-drag-region className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-white/20 bg-theme-panel/30 px-10 backdrop-blur-md transition-colors">
+      <h2 className="text-sm font-bold text-theme-primary tracking-wide transition-colors pointer-events-none">{titles[currentView]}</h2>
       <div className="flex items-center gap-3">
         <button
           onClick={() => setTheme(theme === 'wabi-sabi' ? 'liquid-glass' : 'wabi-sabi')}
