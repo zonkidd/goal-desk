@@ -250,3 +250,15 @@ export async function getDailyReviewTimeline(limit?: number, beforeDate?: string
   const items = await invoke<RustDailyReviewItem[]>('get_daily_review_timeline', { limit, beforeDate })
   return DailyReviewCodec.fromRustArray(items)
 }
+
+// ============================================================================
+// System Commands
+// ============================================================================
+
+export async function exportDatabase(targetPath: string): Promise<void> {
+  return invoke('export_database', { targetPath })
+}
+
+export async function importDatabase(sourcePath: string): Promise<void> {
+  return invoke('import_database', { sourcePath })
+}

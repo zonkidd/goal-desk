@@ -55,6 +55,9 @@ describe('ValidatingMutationAdapter', () => {
       updateDailyReviewItem: vi.fn(),
       deleteDailyReviewItem: vi.fn(),
       getDailyReviewTimeline: vi.fn(),
+      exportDatabase: vi.fn(),
+      importDatabase: vi.fn(),
+      pickDirectory: vi.fn(),
     } as MutationAdapter
     validatingAdapter = new ValidatingMutationAdapter(innerAdapter)
   })

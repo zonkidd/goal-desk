@@ -132,4 +132,16 @@ export class ValidatingMutationAdapter implements MutationAdapter {
   async getDailyReviewTimeline(limit?: number, beforeDate?: string): Promise<import('../types/dailyReview').DailyReviewItem[]> {
     return this.inner.getDailyReviewTimeline(limit, beforeDate)
   }
+
+  async exportDatabase(targetPath?: string): Promise<{ statusMessage?: string; success: boolean }> {
+    return this.inner.exportDatabase(targetPath)
+  }
+
+  async importDatabase(defaultPath?: string): Promise<{ statusMessage?: string; success: boolean }> {
+    return this.inner.importDatabase(defaultPath)
+  }
+
+  async pickDirectory(): Promise<string | null> {
+    return this.inner.pickDirectory()
+  }
 }

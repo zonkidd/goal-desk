@@ -9,6 +9,7 @@ import {
   Trash2,
   Workflow,
   BookOpen,
+  Settings,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "../../lib/cn";
@@ -37,6 +38,7 @@ export function Sidebar() {
   const setView = useUiStore((state) => state.setView);
   const setActiveArea = useUiStore((state) => state.setActiveArea);
   const openQuickCapture = useUiStore((state) => state.openQuickCapture);
+  const openSettings = useUiStore((state) => state.openSettings);
   const goals = useGoalStore((state) => state.baseGoals);
   const { inbox, today } = useWorkspaceDerived();
   const inboxCount = inbox.activeTasks.length;
@@ -157,15 +159,24 @@ export function Sidebar() {
         <EventKitStatusCard />
       </nav>
 
-      <button
-        onClick={openQuickCapture}
-        className="mx-4 mb-6 flex items-center justify-between rounded-2xl border border-white/10 bg-theme-card/30 p-4 text-xs font-semibold text-theme-secondary shadow-sm backdrop-blur-md transition-all hover:bg-theme-card/65 hover:text-theme-primary"
-      >
-        <span>全局速记</span>
-        <kbd className="rounded-md border border-white/10 bg-theme-card/45 px-1.5 py-0.5 font-mono text-[10px] text-theme-secondary transition-colors">
-          ⌥ Space
-        </kbd>
-      </button>
+      <div className="mx-4 mb-6 flex items-center gap-2">
+        <button
+          onClick={openQuickCapture}
+          className="flex flex-1 items-center justify-between rounded-2xl border border-white/10 bg-theme-card/30 p-4 text-xs font-semibold text-theme-secondary shadow-sm backdrop-blur-md transition-all hover:bg-theme-card/65 hover:text-theme-primary"
+        >
+          <span>全局速记</span>
+          <kbd className="rounded-md border border-white/10 bg-theme-card/45 px-1.5 py-0.5 font-mono text-[10px] text-theme-secondary transition-colors">
+            ⌥ Space
+          </kbd>
+        </button>
+        <button
+          onClick={openSettings}
+          className="flex items-center justify-center rounded-2xl border border-white/10 bg-theme-card/30 p-4 text-theme-secondary shadow-sm backdrop-blur-md transition-all hover:bg-theme-card/65 hover:text-theme-primary"
+          title="Settings 设置"
+        >
+          <Settings className="h-4 w-4" />
+        </button>
+      </div>
     </aside>
   );
 }

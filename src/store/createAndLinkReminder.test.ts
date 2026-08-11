@@ -30,6 +30,9 @@ function createMockAdapter(): MutationAdapter {
       updateDailyReviewItem: vi.fn(),
       deleteDailyReviewItem: vi.fn(),
       getDailyReviewTimeline: vi.fn(),
+      exportDatabase: vi.fn(),
+      importDatabase: vi.fn(),
+      pickDirectory: vi.fn(),
   }
 }
 

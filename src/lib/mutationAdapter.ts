@@ -83,4 +83,10 @@ export interface DailyReviewMutation {
   getDailyReviewTimeline(limit?: number, beforeDate?: string): Promise<DailyReviewItem[]>
 }
 
-export type MutationAdapter = TaskMutation & GoalMutation & AreaMutation & DailyReviewMutation & QueryAdapter
+export interface SystemMutation {
+  exportDatabase(targetPath?: string): Promise<{ statusMessage?: string; success: boolean }>
+  importDatabase(defaultPath?: string): Promise<{ statusMessage?: string; success: boolean }>
+  pickDirectory(): Promise<string | null>
+}
+
+export type MutationAdapter = TaskMutation & GoalMutation & AreaMutation & DailyReviewMutation & QueryAdapter & SystemMutation

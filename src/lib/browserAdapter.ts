@@ -1,6 +1,6 @@
 import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
 import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
-import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
+import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult, SystemMutation } from './mutationAdapter'
 import { loadBrowserTasks } from './browserCodec'
 import { UNCATEGORIZED_AREA_TITLE } from './constants'
 import { validateTaskTitle, validateGoalInput, validateAreaTitle } from './validation'
@@ -90,7 +90,7 @@ function syncAreaStatsFromGoals(): void {
   saveToLocalStorage(BROWSER_STORAGE_AREAS, areas)
 }
 
-export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation, QueryAdapter {
+export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation, QueryAdapter, SystemMutation {
   async createTask(title: string): Promise<TaskResult> {
     const validated = validateTaskTitle(title)
     if (!validated) return {}
@@ -519,5 +519,17 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     }
 
     return items
+  }
+
+  async exportDatabase(targetPath?: string): Promise<{ statusMessage?: string; success: boolean }> {
+    return { success: false, statusMessage: 'Database backup is not supported in browser preview' }
+  }
+
+  async importDatabase(defaultPath?: string): Promise<{ statusMessage?: string; success: boolean }> {
+    return { success: false, statusMessage: 'Database restore is not supported in browser preview' }
+  }
+
+  async pickDirectory(): Promise<string | null> {
+    return null
   }
 }

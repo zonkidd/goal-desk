@@ -1,3 +1,4 @@
+pub mod backup;
 pub mod bear;
 pub mod domain;
 pub mod eventkit;
@@ -745,11 +746,31 @@ mod commands {
     ) -> Result<Vec<crate::domain::DailyReviewItem>, String> {
         svc.daily_review.get_timeline(limit, offset)
     }
+
+    #[tauri::command]
+    pub fn export_database(app: AppHandle, target_path: String) -> Result<(), String> {
+        let db_path = workspace_repository(&app)?.path().to_path_buf();
+        
+        if let Some(parent) = std::path::Path::new(&target_path).parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create backup directory: {}", e))?;
+        }
+
+        std::fs::copy(&db_path, &target_path).map_err(|e| format!("Failed to export database: {}", e))?;
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub fn import_database(app: AppHandle, source_path: String) -> Result<(), String> {
+        let db_path = workspace_repository(&app)?.path().to_path_buf();
+        std::fs::copy(&source_path, &db_path).map_err(|e| format!("Failed to import database: {}", e))?;
+        Ok(())
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -766,6 +787,17 @@ pub fn run() {
                 .app_local_data_dir()
                 .map_err(|error| error.to_string())?
                 .join("goal-desk.sqlite");
+                
+            let backup_app_handle = app.handle().clone();
+            let backup_db_path = path.clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    crate::backup::perform_auto_backup(&backup_app_handle, backup_db_path.clone());
+                    // Sleep for 1 hour
+                    tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+                }
+            });
+
             let repo = SqliteRepository::new(path);
             let app_service = AppService::new(repo);
             app_service.initialize().map_err(|e| e.to_string())?;
@@ -846,7 +878,9 @@ pub fn run() {
             commands::create_daily_review_item,
             commands::update_daily_review_item,
             commands::delete_daily_review_item,
-            commands::get_daily_review_timeline
+            commands::get_daily_review_timeline,
+            commands::export_database,
+            commands::import_database
         ])
         .build(tauri::generate_context!())
         .expect("error while running Kairos")

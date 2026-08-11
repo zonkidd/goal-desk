@@ -98,7 +98,8 @@ function MainApp() {
           statusMessage: getRuntimeModeStatusMessage(true),
         })
 
-        // 初始化 allAreas
+        // 初始化 allAreas 和 backup directory
+        void useUiStore.getState().initBackupDirectory()
         return useAreaStore.getState().loadAreas()
       })
       .catch((error) => {

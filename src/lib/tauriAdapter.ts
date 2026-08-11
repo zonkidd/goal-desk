@@ -1,3 +1,4 @@
+import { save, open } from '@tauri-apps/plugin-dialog'
 import {
   addTaskNote as persistTaskNote,
   captureTask,
@@ -23,13 +24,15 @@ import {
   updateDailyReviewItem as persistUpdateDailyReviewItem,
   deleteDailyReviewItem as persistDeleteDailyReviewItem,
   getDailyReviewTimeline as persistGetDailyReviewTimeline,
+  exportDatabase as persistExportDatabase,
+  importDatabase as persistImportDatabase,
 } from './tauriCommands'
 import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
 import type { Task, TaskStatus } from '../types/task'
-import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
+import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult, SystemMutation } from './mutationAdapter'
 import { validateTaskTitle, validateGoalInput, validateAreaTitle } from './validation'
 
-export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, QueryAdapter {
+export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, QueryAdapter, SystemMutation {
   async createTask(title: string): Promise<TaskResult> {
     const validated = validateTaskTitle(title)
     if (!validated) return {}
@@ -232,5 +235,54 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
 
   async getDailyReviewTimeline(limit?: number, beforeDate?: string): Promise<import('../types/dailyReview').DailyReviewItem[]> {
     return persistGetDailyReviewTimeline(limit, beforeDate)
+  }
+
+  async exportDatabase(targetPath?: string): Promise<{ statusMessage?: string; success: boolean }> {
+    try {
+      let finalPath = targetPath;
+      if (!finalPath) {
+        const selected = await save({
+          title: 'Export Database Backup',
+          defaultPath: 'goal-desk-backup.sqlite',
+          filters: [{ name: 'SQLite Database', extensions: ['sqlite'] }]
+        })
+        if (!selected) return { success: false, statusMessage: 'Backup cancelled' }
+        finalPath = selected;
+      }
+      
+      await persistExportDatabase(finalPath)
+      return { success: true, statusMessage: 'Database backup exported successfully' }
+    } catch (e: any) {
+      return { success: false, statusMessage: `Backup export failed: ${e}` }
+    }
+  }
+
+  async importDatabase(defaultPath?: string): Promise<{ statusMessage?: string; success: boolean }> {
+    try {
+      const sourcePath = await open({
+        title: 'Restore Database Backup',
+        multiple: false,
+        defaultPath: defaultPath,
+        filters: [{ name: 'SQLite Database', extensions: ['sqlite'] }]
+      })
+      if (!sourcePath || Array.isArray(sourcePath)) return { success: false, statusMessage: 'Restore cancelled' }
+      await persistImportDatabase(sourcePath)
+      return { success: true, statusMessage: 'Database restored successfully' }
+    } catch (e: any) {
+      return { success: false, statusMessage: `Restore failed: ${e}` }
+    }
+  }
+
+  async pickDirectory(): Promise<string | null> {
+    try {
+      const dir = await open({
+        directory: true,
+        multiple: false,
+        title: 'Select Backup Directory'
+      })
+      return typeof dir === 'string' ? dir : null;
+    } catch {
+      return null;
+    }
   }
 }

@@ -14,6 +14,7 @@ import { GoalDrawer } from '../drawer/GoalDrawer'
 import { CalendarEventDrawer } from '../drawer/CalendarEventDrawer'
 import { SystemReminderDrawer } from '../drawer/SystemReminderDrawer'
 import { QuickCaptureModal } from '../modal/QuickCaptureModal'
+import { SettingsModal } from '../modal/SettingsModal'
 import { getRuntimeAdapter } from '../../lib/runtimeAdapter'
 import { useUiStore } from '../../store/uiStore'
 
@@ -57,6 +58,7 @@ export function AppShell() {
       <CalendarEventDrawer />
       <SystemReminderDrawer />
       <QuickCaptureModal />
+      <SettingsModal />
     </main>
   )
 }

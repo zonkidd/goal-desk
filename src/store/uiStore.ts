@@ -20,6 +20,10 @@ export interface UiStoreState {
   theme: 'wabi-sabi' | 'liquid-glass'
   setTheme: (theme: 'wabi-sabi' | 'liquid-glass') => void
 
+  // 备份目录
+  backupDirectory: string | null
+  setBackupDirectory: (dir: string | null) => void
+
   // 加载和状态消息
   isLoading: boolean
   statusMessage: string
@@ -29,6 +33,9 @@ export interface UiStoreState {
 
   // 快速捕获
   isQuickCaptureOpen: boolean
+
+  // 设置弹窗
+  isSettingsOpen: boolean
 
   // Actions - 视图
   setView: (view: ViewKey) => void
@@ -50,6 +57,11 @@ export interface UiStoreState {
   // Actions - 快速捕获
   openQuickCapture: () => void
   closeQuickCapture: () => void
+
+  // Actions - 设置
+  openSettings: () => void
+  closeSettings: () => void
+  initBackupDirectory: () => Promise<void>
 }
 
 export const useUiStore = create<UiStoreState>((set, get) => ({
@@ -58,10 +70,12 @@ export const useUiStore = create<UiStoreState>((set, get) => ({
   activeArea: 'ALL',
   showCompletedTodos: false,
   theme: typeof window !== 'undefined' && typeof window.localStorage !== 'undefined' ? (localStorage.getItem('kairos-theme') as 'wabi-sabi' | 'liquid-glass') || 'wabi-sabi' : 'wabi-sabi',
+  backupDirectory: typeof window !== 'undefined' && typeof window.localStorage !== 'undefined' ? localStorage.getItem('kairos-backup-dir') : null,
   isLoading: true,
   statusMessage: '',
   activeDrawer: null,
   isQuickCaptureOpen: false,
+  isSettingsOpen: false,
 
   // 视图操作
   setView: (view) => set({ currentView: view }),
@@ -72,6 +86,14 @@ export const useUiStore = create<UiStoreState>((set, get) => ({
       localStorage.setItem('kairos-theme', theme)
     }
     set({ theme })
+  },
+
+  setBackupDirectory: (dir) => {
+    if (typeof window !== 'undefined') {
+      if (dir) localStorage.setItem('kairos-backup-dir', dir)
+      else localStorage.removeItem('kairos-backup-dir')
+    }
+    set({ backupDirectory: dir })
   },
 
   // 状态操作
@@ -106,4 +128,32 @@ export const useUiStore = create<UiStoreState>((set, get) => ({
     set({ isQuickCaptureOpen: true })
   },
   closeQuickCapture: () => set({ isQuickCaptureOpen: false }),
+
+  // 设置操作
+  openSettings: () => set({ isSettingsOpen: true }),
+  closeSettings: () => set({ isSettingsOpen: false }),
+
+  initBackupDirectory: async () => {
+    const runtime = getRuntimeAdapter()
+    if (!runtime.isTauri()) return
+
+    const stored = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined' ? localStorage.getItem('kairos-backup-dir') : null
+    if (stored) {
+      set({ backupDirectory: stored })
+      return
+    }
+
+    try {
+      const { homeDir, join } = await import('@tauri-apps/api/path')
+      const home = await homeDir()
+      const defaultDir = await join(home, '.kairos', 'backup')
+      
+      if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+        localStorage.setItem('kairos-backup-dir', defaultDir)
+      }
+      set({ backupDirectory: defaultDir })
+    } catch (e) {
+      console.error('Failed to initialize default backup directory', e)
+    }
+  },
 }))
