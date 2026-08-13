@@ -24,6 +24,7 @@ export function loadBrowserTasks(): Task[] {
           deserializeDates(log as any, ['timestamp'])
         }
       }
+      task.checklists = task.checklists ?? []
     }
     return tasks
   } catch {

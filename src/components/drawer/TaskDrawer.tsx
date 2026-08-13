@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlignLeft, BookOpen, Calendar, CheckCircle, Clock, ExternalLink, Folder, KeyRound, Link2, RefreshCw, Send, Trash2, Unlink, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { getRuntimeAdapter } from '../../lib/runtimeAdapter'
 import { openTaskInBear } from '../../lib/tauriCommands'
@@ -8,6 +8,7 @@ import { getEventKitAdapter } from '../../lib/workspaceMutations'
 import { useTodoEditingSession } from '../../lib/todoEditing'
 import { formatDateTimeLabel } from '../../lib/dateUtils'
 import { ActivityLogTimeline } from './ActivityLogTimeline'
+import { DrawerSection, DrawerStack, drawerBackdropClassName, drawerBackdropMotion, drawerPaperVariants } from './drawerMotion'
 import { MarkdownContent } from './MarkdownContent'
 import { StatusMachineButtons } from './StatusMachineButtons'
 import { DateTimePickerPopover } from './DateTimePickerPopover'
@@ -21,7 +22,7 @@ import { useAreaStore } from '../../store/areaStore'
 import { useBearNoteStore } from '../../store/bearNoteStore'
 import { useUiStore } from '../../store/uiStore'
 import { useBearNoteEvents } from '../../hooks/useBearNoteEvents'
-import type { Task, TaskStatus } from '../../types/task'
+import type { Task, TaskChecklistItem, TaskStatus } from '../../types/task'
 import type { GoalCard } from '../../types/app'
 
 function useTaskDrawerData() {
@@ -54,8 +55,6 @@ function useTaskDrawerData() {
     createGoal, goals, allAreas, createArea, systemReminders,
   }
 }
-
-const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
 
 export function TaskDrawer() {
   useBearNoteEvents()
@@ -170,26 +169,26 @@ export function TaskDrawer() {
           <motion.button
             type="button"
             aria-label="Close drawer backdrop"
-            className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            className={drawerBackdropClassName}
+            {...drawerBackdropMotion}
             onClick={closeDrawer}
           />
           <motion.aside
-            className="glass-panel fixed bottom-4 right-4 top-4 z-50 flex w-[600px] flex-col rounded-3xl border border-white bg-white/95 shadow-2xl outline-none"
-            initial={{ x: '120%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '120%' }}
-            transition={drawerTransition}
+            data-testid="todo-drawer-paper"
+            data-surface="opaque-paper"
+            className="fixed bottom-4 right-4 top-4 z-50 flex w-[600px] origin-center flex-col rounded-3xl border border-theme-paper-line bg-theme-paper text-theme-primary shadow-[0_18px_48px_rgba(0,0,0,0.16)] outline-none"
+            variants={drawerPaperVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
           >
-            <header className="flex shrink-0 items-center justify-between rounded-t-3xl border-b border-slate-100 bg-slate-50/50 p-6">
+            <header className="flex shrink-0 items-center justify-between rounded-t-3xl border-b border-theme-paper-line bg-theme-paper-muted p-6">
               <StatusMachineButtons status={task.status} statusActions={statusActions} onAction={setPendingStatus} />
               <div className="flex items-center gap-2">
                 {canEditFields && (
                   <button
                     onClick={() => setDeleteConfirmOpen(true)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-theme-paper-line bg-theme-paper text-theme-secondary transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600"
                     title="删除"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -197,7 +196,7 @@ export function TaskDrawer() {
                 )}
                 <button
                   onClick={closeDrawer}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:border-slate-300"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-theme-paper-line bg-theme-paper text-theme-secondary transition-colors hover:bg-theme-paper-muted hover:text-theme-primary"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -205,8 +204,8 @@ export function TaskDrawer() {
             </header>
 
             {pendingStatus && canChangeStatus && (
-              <div className="border-b border-slate-100 bg-white/80 px-6 py-3">
-                <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">{promptText}</p>
+              <div className="border-b border-theme-paper-line bg-theme-paper-muted px-6 py-3">
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-theme-secondary">{promptText}</p>
                 <div className="flex items-center gap-3">
                   <input
                     autoFocus
@@ -219,7 +218,7 @@ export function TaskDrawer() {
                         setStatusNote('')
                       }
                     }}
-                    className="h-9 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20"
+                    className="h-9 flex-1 rounded-xl border border-theme-paper-line bg-theme-paper px-3 text-sm outline-none transition-all focus:border-theme-accent focus:ring-4 focus:ring-theme-accent/20"
                     placeholder="写一句，后续回看会轻松很多... (按回车确认)"
                   />
                   <button
@@ -228,7 +227,7 @@ export function TaskDrawer() {
                       setPendingStatus(null)
                       setStatusNote('')
                     }}
-                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 transition-colors"
+                    className="rounded-xl bg-theme-accent px-4 py-2 text-sm font-bold text-white hover:opacity-90 transition-colors"
                   >
                     确认
                   </button>
@@ -236,18 +235,18 @@ export function TaskDrawer() {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-8 pb-4">
+            <DrawerStack className="flex-1 overflow-y-auto">
+              <DrawerSection className="p-8 pb-4">
                   {canEditFields ? (
                     <input
                       type="text"
                       value={draft.title}
                       onChange={(event) => editingSession.actions.setTitle(event.target.value)}
                       onBlur={() => void editingSession.actions.saveFields()}
-                      className="mb-4 w-full border-none bg-transparent p-0 text-2xl font-black text-slate-900 outline-none focus:ring-0"
+                      className="mb-4 w-full border-none bg-transparent p-0 text-2xl font-black text-theme-primary outline-none focus:ring-0"
                     />
                   ) : (
-                    <h2 className="mb-4 text-2xl font-black text-slate-900">{draft.title}</h2>
+                    <h2 className="mb-4 text-2xl font-black text-theme-primary">{draft.title}</h2>
                   )}
 
                   <div className="space-y-3 text-sm font-medium">
@@ -322,8 +321,8 @@ export function TaskDrawer() {
                         <label
                           className={`inline-flex w-fit cursor-pointer items-center gap-2 rounded-full px-3 py-2 text-xs font-bold transition-all ${
                             draft.showInTimelineDraft
-                              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15'
-                              : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+                              ? 'bg-theme-accent text-white shadow-sm'
+                              : 'bg-theme-paper-muted text-theme-secondary hover:text-theme-primary'
                           }`}
                         >
                           <input
@@ -334,14 +333,14 @@ export function TaskDrawer() {
                           />
                           <span
                             className={`h-2 w-2 rounded-full transition-colors ${
-                              draft.showInTimelineDraft ? 'bg-indigo-200' : 'bg-slate-300'
+                              draft.showInTimelineDraft ? 'bg-white/80' : 'bg-theme-secondary/40'
                             }`}
                           />
                           <span>在时间轴显示</span>
                         </label>
                       </>
                     ) : (
-                      <div className="flex flex-wrap gap-4 text-slate-500">
+                      <div className="flex flex-wrap gap-4 text-theme-secondary">
                         {draft.plannedStartAtDraft && (
                           <ReadOnlyFact icon={<Clock className="h-3.5 w-3.5" />} text={`开始 ${formatDateTimeLabel(draft.plannedStartAtDraft)}`} />
                         )}
@@ -354,63 +353,67 @@ export function TaskDrawer() {
                       </div>
                     )}
                   </div>
-                </div>
+                </DrawerSection>
 
-              <div className="mx-8 my-2 h-px bg-slate-100" />
+              <DrawerSection>
+              <TaskChecklistSection task={task} canEditFields={canEditFields} />
+              </DrawerSection>
 
-              <div className="px-8 py-4">
-                {task.systemReminderId && (
-                  <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <div className="text-xs">
-                        {linkedReminder ? (
-                          <>
-                            <span className="font-bold text-green-800">已关联:</span>
-                            <span className="text-slate-700"> {linkedReminder.title}{linkedReminder.dueAt ? ` · ${formatReminderDate(linkedReminder.dueAt)}` : ''}</span>
-                          </>
-                        ) : (
-                          <span className="font-bold text-green-800">已关联系统提醒（提醒可能已被外部删除）</span>
+              {task.systemReminderId && (
+                <DrawerSection>
+                  <SectionRule />
+                  <div className="px-8 py-3">
+                    <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <div className="text-xs">
+                          {linkedReminder ? (
+                            <>
+                              <span className="font-bold text-green-800">已关联:</span>
+                              <span className="text-slate-700"> {linkedReminder.title}{linkedReminder.dueAt ? ` · ${formatReminderDate(linkedReminder.dueAt)}` : ''}</span>
+                            </>
+                          ) : (
+                            <span className="font-bold text-green-800">已关联系统提醒（提醒可能已被外部删除）</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 underline hover:text-green-900"
+                          onClick={handleOpenLinkedReminder}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          打开
+                        </button>
+                        {canEditFields && (
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-theme-secondary underline hover:text-slate-700"
+                            onClick={() => setUnlinkConfirmOpen(true)}
+                          >
+                            解除关联
+                          </button>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 underline hover:text-green-900"
-                        onClick={handleOpenLinkedReminder}
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        打开
-                      </button>
-                      {canEditFields && (
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-slate-500 underline hover:text-slate-700"
-                          onClick={() => setUnlinkConfirmOpen(true)}
-                        >
-                          解除关联
-                        </button>
-                      )}
-                    </div>
                   </div>
-                )}
-              </div>
-
-              <div className="mx-8 my-2 h-px bg-slate-100" />
+                </DrawerSection>
+              )}
 
               <BearNoteSection task={task} canEditFields={canEditFields} />
 
-              <div className="mx-8 my-2 h-px bg-slate-100" />
+              <DrawerSection>
+              <SectionRule />
 
-              <div className="p-8 pt-4">
+              <div className="px-8 py-3">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+                    <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-theme-secondary">
                       <AlignLeft className="h-4 w-4" />
                       Notes (Markdown)
                     </h3>
                     {canEditFields && (
-                      <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-0.5">
+                      <div className="inline-flex rounded-full border border-theme-paper-line bg-theme-paper-muted p-0.5">
                         {([
                           ['preview', '预览'],
                           ['edit', '编辑'],
@@ -423,7 +426,7 @@ export function TaskDrawer() {
                               type="button"
                               onClick={() => editingSession.actions.setMarkdownMode(mode)}
                               className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
-                                isActive ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'
+                                isActive ? 'bg-theme-accent text-white' : 'text-theme-secondary hover:text-theme-primary'
                               }`}
                             >
                               {label}
@@ -434,33 +437,29 @@ export function TaskDrawer() {
                     )}
                   </div>
                   {!canEditFields || draft.markdownMode === 'preview' ? (
-                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm min-h-[280px]">
-                      {draft.content.trim() ? (
+                    draft.content.trim() ? (
+                      <div className="rounded-xl border border-theme-paper-line bg-theme-paper-muted px-4 py-3">
                         <MarkdownContent content={draft.content} />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                          <AlignLeft className="mb-3 h-8 w-8 text-slate-300" />
-                          <p className="text-sm font-medium text-slate-400">还没有笔记</p>
-                          <p className="mt-1 text-xs text-slate-400">点击「编辑」开始记录想法、步骤或参考链接</p>
-                          {canEditFields && (
-                            <button
-                              type="button"
-                              onClick={() => editingSession.actions.setMarkdownMode('edit')}
-                              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 transition-colors"
-                            >
-                              开始写笔记
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    ) : canEditFields ? (
+                      <button
+                        type="button"
+                        onClick={() => editingSession.actions.setMarkdownMode('edit')}
+                        className="w-full rounded-xl border border-dashed border-theme-paper-line px-4 py-2.5 text-left text-sm text-theme-secondary transition-colors hover:border-theme-accent/40 hover:text-theme-primary"
+                      >
+                        添加笔记
+                      </button>
+                    ) : (
+                      <p className="px-1 text-sm text-theme-secondary">暂无笔记</p>
+                    )
                   ) : draft.markdownMode === 'edit' ? (
                     <textarea
                       value={draft.content}
                       onChange={(event) => editingSession.actions.setContent(event.target.value)}
                       onBlur={() => void editingSession.actions.saveContentIfChanged()}
                       autoFocus
-                      className="min-h-[280px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20"
+                      rows={Math.max(3, draft.content.split('\n').length)}
+                      className="w-full rounded-xl border border-theme-paper-line bg-theme-paper-muted px-4 py-3 text-sm outline-none transition-all focus:border-theme-accent focus:ring-4 focus:ring-theme-accent/20"
                     />
                   ) : (
                     <div className="grid gap-3 lg:grid-cols-2">
@@ -468,32 +467,34 @@ export function TaskDrawer() {
                         value={draft.content}
                         onChange={(event) => editingSession.actions.setContent(event.target.value)}
                         onBlur={() => void editingSession.actions.saveContentIfChanged()}
-                        className="min-h-[280px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20"
+                        rows={Math.max(3, draft.content.split('\n').length)}
+                        className="w-full rounded-xl border border-theme-paper-line bg-theme-paper-muted px-4 py-3 text-sm outline-none transition-all focus:border-theme-accent focus:ring-4 focus:ring-theme-accent/20"
                       />
-                      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm min-h-[280px]">
+                      <div className="rounded-xl border border-theme-paper-line bg-theme-paper-muted px-4 py-3">
                         <MarkdownContent content={draft.content} />
                       </div>
                     </div>
                   )}
                 </div>
+              </DrawerSection>
 
-              <div className="min-h-[200px] border-t border-slate-100 bg-slate-50/80 p-8">
+              <DrawerSection className="border-t border-theme-paper-line bg-theme-paper-muted p-8">
                 <div>
-                  <h3 className="mb-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+                  <h3 className="mb-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-theme-secondary">
                     ACTIVITY & UPDATES
                   </h3>
                   <ActivityLogTimeline logs={task.activityLogs} />
 
                   {canEditFields && (
-                    <div className="mt-4 border-t border-slate-200 pt-4">
+                    <div className="mt-4 border-t border-theme-paper-line pt-4">
                       <div className="flex gap-2">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600">Me</div>
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-theme-accent-light text-[10px] font-bold text-theme-accent">Me</div>
                         <div className="relative flex-1">
                           <textarea
                             rows={2}
                             value={logNote}
                             onChange={(event) => setLogNote(event.target.value)}
-                            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                            className="w-full resize-none rounded-lg border border-theme-paper-line bg-theme-paper px-3 py-2 text-xs transition-all focus:border-theme-accent focus:ring-2 focus:ring-theme-accent/20"
                             placeholder="添加进度记录..."
                           />
                           <button
@@ -502,7 +503,7 @@ export function TaskDrawer() {
                               void addTaskNote(task.id, logNote)
                               setLogNote('')
                             }}
-                            className="absolute bottom-2 right-2 text-slate-300 transition-colors hover:text-indigo-500"
+                            className="absolute bottom-2 right-2 text-theme-secondary transition-colors hover:text-theme-accent"
                           >
                             <Send className="h-3.5 w-3.5" />
                           </button>
@@ -511,8 +512,8 @@ export function TaskDrawer() {
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
+              </DrawerSection>
+            </DrawerStack>
           </motion.aside>
         </>
       )}
@@ -551,7 +552,9 @@ function BearNoteSection({ task, canEditFields }: { task: Task; canEditFields: b
   }
 
   return (
-    <section className="px-8 py-4">
+    <>
+    <SectionRule />
+    <section className="px-8 py-3">
       <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-700">
@@ -589,14 +592,14 @@ function BearNoteSection({ task, canEditFields }: { task: Task; canEditFields: b
                     aria-label="Bear API Token"
                     value={tokenDraft}
                     onChange={(event) => setTokenDraft(event.target.value)}
-                    className="mt-2 h-9 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                    className="mt-2 h-9 w-full rounded-lg border border-white/10 px-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
                   />
                 </label>
                 <div className="mt-3 flex justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => setTokenPanelOpen(false)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50"
+                    className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-theme-secondary hover:bg-slate-50"
                   >
                     取消
                   </button>
@@ -614,9 +617,9 @@ function BearNoteSection({ task, canEditFields }: { task: Task; canEditFields: b
         ) : task.bearNoteId ? (
           <div className="space-y-3">
             {preview ? (
-              <div className="rounded-lg border border-amber-100 bg-white px-3 py-3">
+              <div className="rounded-lg border border-amber-200/40 bg-theme-paper-muted px-3 py-3">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="text-sm font-black text-slate-900">Bear · {preview.title}</h4>
+                  <h4 className="text-sm font-black text-theme-primary">Bear · {preview.title}</h4>
                   <span className="text-[11px] font-semibold text-slate-400">
                     {preview.fetchedAt.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}
                   </span>
@@ -653,7 +656,7 @@ function BearNoteSection({ task, canEditFields }: { task: Task; canEditFields: b
                     type="button"
                     disabled={isLoading}
                     onClick={() => void unlink()}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-60"
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white px-3 py-2 text-xs font-bold text-theme-secondary hover:bg-slate-50 disabled:opacity-60"
                   >
                     <Unlink className="h-3.5 w-3.5" />
                     解除 Bear 关联
@@ -676,6 +679,136 @@ function BearNoteSection({ task, canEditFields }: { task: Task; canEditFields: b
 
         {errorMessage && <p className="mt-3 text-xs font-semibold text-red-600">{errorMessage}</p>}
       </div>
+    </section>
+    </>
+  )
+}
+
+function SectionRule() {
+  return <div data-testid="todo-section-rule" className="mx-8 my-2 h-px bg-theme-paper-line" />
+}
+
+function newChecklistItem(title: string, sortOrder: number): TaskChecklistItem {
+  const id = crypto.randomUUID()
+  return { id, title, completed: false, sortOrder }
+}
+
+function persistableChecklists(items: TaskChecklistItem[]) {
+  return items
+    .map((item) => ({ ...item, title: item.title.trim() }))
+    .filter((item) => item.title.length > 0)
+    .map((item, index) => ({ ...item, sortOrder: index }))
+}
+
+function TaskChecklistSection({ task, canEditFields }: { task: Task; canEditFields: boolean }) {
+  const updateTaskChecklists = useTaskStore((state) => state.updateTaskChecklists)
+  const [localItems, setLocalItems] = useState<TaskChecklistItem[]>(task.checklists ?? [])
+  const [draft, setDraft] = useState('')
+  const [focusId, setFocusId] = useState<string | null>(null)
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const localItemsRef = useRef(localItems)
+  localItemsRef.current = localItems
+
+  useEffect(() => {
+    setLocalItems(task.checklists ?? [])
+    setDraft('')
+    setFocusId(null)
+  }, [task.id])
+
+  useEffect(() => {
+    if (!focusId) return
+    inputRefs.current[focusId]?.focus()
+  }, [focusId, localItems])
+
+  const persist = (next: TaskChecklistItem[]) => {
+    localItemsRef.current = next
+    setLocalItems(next)
+    void updateTaskChecklists(task.id, persistableChecklists(next))
+  }
+
+  if (!canEditFields) {
+    const items = task.checklists ?? []
+    if (items.length === 0) return null
+    return (
+      <section className="px-8 py-3">
+        <ul className="space-y-1">
+          {items.map((item) => (
+            <li key={item.id} className="flex items-center gap-3 py-1 text-sm text-theme-secondary">
+              <span className={`h-4 w-4 rounded-full border ${item.completed ? 'border-theme-accent bg-theme-accent' : 'border-theme-paper-line'}`} />
+              <span className={item.completed ? 'line-through' : ''}>{item.title}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
+  return (
+    <section className="px-8 py-3">
+      <ul className="space-y-1">
+        {localItems.map((item, index) => (
+          <li key={item.id} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              aria-label={`勾选 ${item.title || '步骤'}`}
+              checked={item.completed}
+              onChange={() => {
+                persist(localItems.map((entry) => (
+                  entry.id === item.id ? { ...entry, completed: !entry.completed } : entry
+                )))
+              }}
+              className="h-4 w-4 rounded-full border-theme-paper-line text-theme-accent"
+            />
+            <input
+              ref={(node) => {
+                inputRefs.current[item.id] = node
+              }}
+              value={item.title}
+              onChange={(event) => {
+                const next = localItemsRef.current.map((entry) => (
+                  entry.id === item.id ? { ...entry, title: event.target.value } : entry
+                ))
+                localItemsRef.current = next
+                setLocalItems(next)
+              }}
+              onBlur={() => persist(localItemsRef.current)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  if (!item.title.trim()) return
+                  const nextItem = newChecklistItem('', index + 1)
+                  const next = [...localItems]
+                  next.splice(index + 1, 0, nextItem)
+                  persist(next)
+                  setFocusId(nextItem.id)
+                  return
+                }
+                if (event.key === 'Backspace' && item.title.length === 0) {
+                  event.preventDefault()
+                  const next = localItems.filter((entry) => entry.id !== item.id)
+                  persist(next)
+                  setFocusId(next[index - 1]?.id ?? null)
+                }
+              }}
+              className={`h-8 flex-1 border-none bg-transparent text-sm outline-none ${item.completed ? 'text-theme-secondary line-through' : 'text-theme-primary'}`}
+            />
+          </li>
+        ))}
+      </ul>
+      <input
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter') return
+          event.preventDefault()
+          const title = draft.trim()
+          if (!title) return
+          persist([...localItems, newChecklistItem(title, localItems.length)])
+          setDraft('')
+        }}
+        placeholder="添加步骤"
+        className="mt-1 h-8 w-full border-none bg-transparent text-sm text-theme-primary outline-none placeholder:text-theme-secondary"
+      />
     </section>
   )
 }
@@ -703,7 +836,7 @@ function InlineTimeField({
       aria-label={ariaLabel}
       onClick={onToggle}
       className={`flex items-center gap-2 transition-colors ${
-        isActive ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'
+        isActive ? 'text-theme-accent' : 'text-theme-secondary hover:text-theme-primary'
       }`}
     >
       <span>{icon}</span>
@@ -745,7 +878,7 @@ function InlineGoalField({
       aria-label="编辑所属目标"
       onClick={() => editingSession.actions.setActiveEditor(draft.activeEditor === 'linkedGoal' ? 'none' : 'linkedGoal')}
       className={`flex items-center gap-2 transition-colors ${
-        draft.activeEditor === 'linkedGoal' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'
+        draft.activeEditor === 'linkedGoal' ? 'text-theme-accent' : 'text-theme-secondary hover:text-theme-primary'
       }`}
     >
       <Folder className="h-4 w-4" />

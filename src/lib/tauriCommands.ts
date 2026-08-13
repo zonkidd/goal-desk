@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { AreaWithStats, GoalCard } from '../types/app'
 import type { BearIntegrationStatus, BearNotePreview, RustBearNotePreview } from '../types/bear'
-import type { Task, TaskStatus } from '../types/task'
+import type { Task, TaskChecklistItem, TaskStatus } from '../types/task'
 import { TaskCodec, GoalCodec, type RustTask, type RustGoalCard } from './codecs'
 import { UNCATEGORIZED_AREA_TITLE } from './constants'
 import { coerceTodoFieldPatchInput, toTauriTaskFieldArgs } from './todoFieldPatch'
@@ -51,6 +51,11 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, note?
 
 export async function addTaskNote(taskId: string, note: string): Promise<Task> {
   const task = await invoke<RustTask>('add_task_note', { taskId, note })
+  return TaskCodec.fromRust(task)
+}
+
+export async function updateTaskChecklists(taskId: string, items: TaskChecklistItem[]): Promise<Task> {
+  const task = await invoke<RustTask>('update_task_checklists', { taskId, items })
   return TaskCodec.fromRust(task)
 }
 

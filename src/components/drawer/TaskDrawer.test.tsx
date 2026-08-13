@@ -82,6 +82,8 @@ vi.mock('framer-motion', () => ({
   motion: {
     button: ({ children, ...props }: any) => <button {...stripMotionProps(props)}>{children}</button>,
     aside: ({ children, ...props }: any) => <aside {...stripMotionProps(props)}>{children}</aside>,
+    div: ({ children, ...props }: any) => <div {...stripMotionProps(props)}>{children}</div>,
+    section: ({ children, ...props }: any) => <section {...stripMotionProps(props)}>{children}</section>,
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }))
@@ -329,5 +331,211 @@ describe('TaskDrawer', () => {
     expect(await screen.findByText('Launch Plan')).toBeInTheDocument()
     expect(screen.getByText('Hello Bear')).toBeInTheDocument()
     expect(getBearIntegrationStatus).toHaveBeenCalled()
+  })
+
+  it('renders cascade animation items for smooth reveal (TDD)', () => {
+    render(<TaskDrawer />)
+    const cascadeItems = screen.getAllByTestId('cascade-item')
+    expect(cascadeItems.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('空笔记只留一行入口，不占固定大块高度', () => {
+    render(<TaskDrawer />)
+
+    expect(screen.getByRole('button', { name: '添加笔记' })).toBeInTheDocument()
+    expect(screen.queryByText('还没有笔记')).not.toBeInTheDocument()
+    expect(screen.queryByText(/点击「编辑」开始记录/)).not.toBeInTheDocument()
+  })
+
+  it('有笔记时仍显示 Markdown 内容', () => {
+    useTaskStore.setState({
+      tasks: [
+        {
+          id: 'task-1',
+          title: 'Prepare architecture notes',
+          content: '## Outline\n\n- one',
+          status: 'TODO',
+          showInTimeline: false,
+          activityLogs: [],
+        },
+      ],
+    })
+
+    render(<TaskDrawer />)
+
+    expect(screen.getByText('Outline')).toBeInTheDocument()
+    expect(screen.getByText('one')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '添加笔记' })).not.toBeInTheDocument()
+  })
+
+  it('详情是不透明纸面，系统提醒仍可见', () => {
+    useTaskStore.setState({
+      tasks: [
+        {
+          id: 'task-1',
+          title: 'Prepare architecture notes',
+          content: '',
+          status: 'TODO',
+          showInTimeline: false,
+          systemReminderId: 'rem-1',
+          activityLogs: [],
+        },
+      ],
+    })
+    useEventkitStore.setState({
+      systemReminders: [
+        { id: 'rem-1', title: 'Prepare architecture notes', dueAt: new Date('2026-07-05T09:00:00+08:00'), done: false },
+      ],
+    })
+
+    render(<TaskDrawer />)
+
+    expect(screen.getByTestId('todo-drawer-paper')).toHaveAttribute('data-surface', 'opaque-paper')
+    expect(screen.getByText(/已关联/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '打开' })).toBeInTheDocument()
+    expect(screen.getAllByTestId('todo-section-rule').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('空清单只显示添加步骤，没有空盒子或 3/5', () => {
+    render(<TaskDrawer />)
+
+    expect(screen.getByPlaceholderText('添加步骤')).toBeInTheDocument()
+    expect(screen.queryByText(/3\/5/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/已关联/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Bear 笔记')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('todo-section-rule')).toHaveLength(1)
+  })
+
+  it('回车添加步骤并可以勾选，勾选不改 Todo Status', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(useTaskStore.getState(), 'updateTaskChecklists').mockImplementation(async (_taskId, items) => {
+      const current = useTaskStore.getState().tasks[0]
+      const next = { ...current, checklists: items }
+      useTaskStore.getState().replaceTask(next)
+      return next
+    })
+
+    render(<TaskDrawer />)
+
+    await user.type(screen.getByPlaceholderText('添加步骤'), '写失败测试{Enter}')
+
+    expect(await screen.findByDisplayValue('写失败测试')).toBeInTheDocument()
+    expect(useTaskStore.getState().tasks[0].status).toBe('TODO')
+
+    await user.click(screen.getByRole('checkbox', { name: '勾选 写失败测试' }))
+    expect(useTaskStore.getState().tasks[0].status).toBe('TODO')
+    expect(useTaskStore.getState().tasks[0].checklists?.[0].completed).toBe(true)
+  })
+
+  it('已有步骤上回车会留下下一项并聚焦', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(useTaskStore.getState(), 'updateTaskChecklists').mockImplementation(async (_taskId, items) => {
+      const current = useTaskStore.getState().tasks[0]
+      const next = { ...current, checklists: items }
+      useTaskStore.getState().replaceTask(next)
+      return next
+    })
+    useTaskStore.setState({
+      tasks: [
+        {
+          id: 'task-1',
+          title: 'Prepare architecture notes',
+          content: '',
+          status: 'TODO',
+          showInTimeline: false,
+          activityLogs: [],
+          checklists: [{ id: 'c1', title: 'Existing step', completed: false, sortOrder: 0 }],
+        },
+      ],
+    })
+
+    render(<TaskDrawer />)
+    await user.click(screen.getByDisplayValue('Existing step'))
+    await user.keyboard('{Enter}')
+
+    expect(screen.getByDisplayValue('Existing step')).toBeInTheDocument()
+    expect((document.activeElement as HTMLInputElement).value).toBe('')
+    expect((document.activeElement as HTMLInputElement).placeholder).not.toBe('添加步骤')
+  })
+
+  it('改标题失焦后保存', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(useTaskStore.getState(), 'updateTaskChecklists').mockImplementation(async (_taskId, items) => {
+      const current = useTaskStore.getState().tasks[0]
+      const next = { ...current, checklists: items }
+      useTaskStore.getState().replaceTask(next)
+      return next
+    })
+    useTaskStore.setState({
+      tasks: [
+        {
+          id: 'task-1',
+          title: 'Prepare architecture notes',
+          content: '',
+          status: 'TODO',
+          showInTimeline: false,
+          activityLogs: [],
+          checklists: [{ id: 'c1', title: 'Existing step', completed: false, sortOrder: 0 }],
+        },
+      ],
+    })
+
+    render(<TaskDrawer />)
+    const existing = screen.getByDisplayValue('Existing step')
+    await user.click(existing)
+    await user.clear(existing)
+    await user.type(existing, 'Renamed step')
+    existing.blur()
+    await waitFor(() => {
+      expect(useTaskStore.getState().tasks[0].checklists?.some((item) => item.title === 'Renamed step')).toBe(true)
+    })
+  })
+
+  it('空行退格删除步骤；DONE 清单只读', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(useTaskStore.getState(), 'updateTaskChecklists').mockImplementation(async (_taskId, items) => {
+      const current = useTaskStore.getState().tasks[0]
+      const next = { ...current, checklists: items }
+      useTaskStore.getState().replaceTask(next)
+      return next
+    })
+    useTaskStore.setState({
+      tasks: [
+        {
+          id: 'task-1',
+          title: 'Prepare architecture notes',
+          content: '',
+          status: 'TODO',
+          showInTimeline: false,
+          activityLogs: [],
+          checklists: [{ id: 'c1', title: 'Existing step', completed: false, sortOrder: 0 }],
+        },
+      ],
+    })
+
+    const { unmount } = render(<TaskDrawer />)
+    const titleInput = screen.getByDisplayValue('Existing step')
+    await user.clear(titleInput)
+    await user.type(titleInput, '{Backspace}')
+    expect(screen.queryByDisplayValue('Existing step')).not.toBeInTheDocument()
+    unmount()
+
+    useTaskStore.setState({
+      tasks: [
+        {
+          id: 'task-1',
+          title: 'Completed archive',
+          content: '',
+          status: 'DONE',
+          showInTimeline: false,
+          activityLogs: [],
+          checklists: [{ id: 'c1', title: 'Frozen step', completed: false, sortOrder: 0 }],
+        },
+      ],
+    })
+    render(<TaskDrawer />)
+    expect(screen.getByText('Frozen step')).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('添加步骤')).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: '勾选 Frozen step' })).not.toBeInTheDocument()
   })
 })

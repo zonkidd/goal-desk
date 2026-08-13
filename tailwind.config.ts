@@ -21,6 +21,9 @@ export default {
           'accent-sec-light': 'var(--accent-sec-light)',
           pause: 'var(--pause-color)',
           'pause-light': 'var(--pause-light)',
+          paper: 'var(--paper)',
+          'paper-muted': 'var(--paper-muted)',
+          'paper-line': 'var(--paper-line)',
         }
       },
       boxShadow: {

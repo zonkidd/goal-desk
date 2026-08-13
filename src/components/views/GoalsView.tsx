@@ -10,6 +10,44 @@ import { useGoalStore } from '../../store/goalStore'
 import { filterGoalsByArea } from '../../lib/areaFilter'
 import type { GoalCard, GoalStatus } from '../../types/app'
 
+function ProgressRing({ progress, size = 48, strokeWidth = 4 }: { progress: number, size?: number, strokeWidth?: number }) {
+  const radius = (size - strokeWidth) / 2
+  const circumference = radius * 2 * Math.PI
+  const offset = circumference - (progress / 100) * circumference
+
+  return (
+    <div className="relative inline-flex items-center justify-center">
+      <svg data-testid="svg-progress-ring" width={size} height={size} className="-rotate-90 transform">
+        <circle
+          className="text-white/10"
+          strokeWidth={strokeWidth}
+          stroke="currentColor"
+          fill="transparent"
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+        />
+        <motion.circle
+          className="text-theme-accent drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          stroke="currentColor"
+          fill="transparent"
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ type: "spring", stiffness: 50, damping: 20, delay: 0.2 }}
+        />
+      </svg>
+      <span className="absolute text-[10px] font-black text-theme-primary">{progress}</span>
+    </div>
+  )
+}
+
 const goalStatuses: GoalStatus[] = ['ACTIVE', 'PAUSED', 'READY_TO_COMPLETE', 'COMPLETED', 'ARCHIVED']
 
 const statusColumns: Array<{ title: string; statuses: GoalStatus[]; bg: string; accent: string }> = [
@@ -235,12 +273,13 @@ function GoalBoardCard({ goal, onOpenGoal }: { goal: GoalCard; onOpenGoal: (goal
             <span className="font-bold text-slate-400">Next: </span>{goal.nextTodo}
           </div>
         )}
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/70">
-          <div className="h-1.5 rounded-full bg-indigo-500" style={{ width: `${goal.progress}%` }} />
-        </div>
-        <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-400">
-          <span>{goal.taskCount} 个任务</span>
-          <span className="inline-flex items-center gap-1 text-indigo-500">
+        
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <ProgressRing progress={goal.progress} size={36} strokeWidth={3} />
+            <span className="text-xs font-bold text-slate-400">{goal.taskCount} 个任务</span>
+          </div>
+          <span className="inline-flex items-center gap-1 text-theme-accent">
             打开 <ArrowRight className="h-3 w-3" />
           </span>
         </div>
@@ -261,12 +300,14 @@ function GoalTile({ goal, onOpenGoal }: { goal: GoalCard; onOpenGoal: (goalId: s
           <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-500">{goal.status}</span>
         </div>
         <p className="mb-4 line-clamp-2 min-h-10 text-sm font-medium text-slate-500">{goal.description || '暂无描述'}</p>
-        <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-slate-200/70">
-          <div className="h-2 rounded-full bg-indigo-500" style={{ width: `${goal.progress}%` }} />
-        </div>
-        <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-          <span>{goal.taskCount} 个任务</span>
-          <span>{goal.progress}%</span>
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <ProgressRing progress={goal.progress} size={42} strokeWidth={4} />
+            <div className="text-xs font-semibold text-slate-500">
+              {goal.taskCount} 个任务
+            </div>
+          </div>
         </div>
         <div className="mt-3 text-xs font-bold text-slate-400">Next: {goal.nextTodo}</div>
       </GlassCard>

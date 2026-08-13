@@ -37,6 +37,7 @@ describe('MutationAdapter interface', () => {
       updateTaskStatus: vi.fn().mockResolvedValue({ task: mockTask, statusMessage: 'ok' }),
       updateTaskContent: vi.fn().mockResolvedValue({ task: mockTask, statusMessage: 'ok' }),
       updateTaskFields: vi.fn().mockResolvedValue({ task: mockTask, statusMessage: 'ok' }),
+      updateTaskChecklists: vi.fn().mockResolvedValue({ task: mockTask, statusMessage: 'ok' }),
       listAreas: vi.fn().mockResolvedValue({ areas: [], statusMessage: 'ok' }),
       createArea: vi.fn().mockResolvedValue({ area: { id: 'a1', title: 'Work', goalCount: 0, activeGoalCount: 0, isSystem: false } as AreaWithStats, statusMessage: 'ok' }),
       renameArea: vi.fn().mockResolvedValue({ area: { id: 'a1', title: 'Renamed', goalCount: 0, activeGoalCount: 0, isSystem: false } as AreaWithStats, statusMessage: 'ok' }),
@@ -85,6 +86,14 @@ describe('MutationAdapter interface', () => {
   it('updateTaskStatus returns updated task', async () => {
     const result = await adapter.updateTaskStatus('task-1', 'IN_PROGRESS' as TaskStatus)
     expect(result.task).toBeDefined()
+  })
+
+  it('updateTaskChecklists returns updated task', async () => {
+    const result = await adapter.updateTaskChecklists('task-1', [
+      { id: 'c1', title: 'Step', completed: false, sortOrder: 0 },
+    ])
+    expect(result.task).toBeDefined()
+    expect(adapter.updateTaskChecklists).toHaveBeenCalled()
   })
 
   it('addTaskNote returns updated task', async () => {

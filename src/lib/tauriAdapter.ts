@@ -14,6 +14,7 @@ import {
   updateTaskContent as persistTaskContent,
   updateTaskFields as persistTaskFields,
   updateTaskStatus as persistTaskStatus,
+  updateTaskChecklists as persistTaskChecklists,
   softDeleteTask as persistSoftDeleteTask,
   restoreTask as persistRestoreTask,
   listDeletedTasks as persistListDeletedTasks,
@@ -28,7 +29,7 @@ import {
   importDatabase as persistImportDatabase,
 } from './tauriCommands'
 import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
-import type { Task, TaskStatus } from '../types/task'
+import type { Task, TaskChecklistItem, TaskStatus } from '../types/task'
 import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult, SystemMutation } from './mutationAdapter'
 import { validateTaskTitle, validateGoalInput, validateAreaTitle } from './validation'
 
@@ -106,6 +107,13 @@ export class TauriAdapter implements TaskMutation, GoalMutation, AreaMutation, Q
     return {
       task: await persistTaskContent(taskId, content),
       statusMessage: 'Markdown notes saved',
+    }
+  }
+
+  async updateTaskChecklists(taskId: string, items: TaskChecklistItem[]): Promise<TaskResult> {
+    return {
+      task: await persistTaskChecklists(taskId, items),
+      statusMessage: 'Task checklists saved',
     }
   }
 

@@ -509,6 +509,15 @@ mod commands {
     }
 
     #[tauri::command]
+    pub fn update_task_checklists(
+        svc: State<'_, AppService>,
+        task_id: String,
+        items: Vec<crate::domain::TaskChecklistItem>,
+    ) -> Result<DeskTask, String> {
+        svc.task.update_task_checklists(&task_id, items)
+    }
+
+    #[tauri::command]
     pub fn open_task_in_bear(svc: State<'_, AppService>, task_id: String) -> Result<(), String> {
         let task = svc
             .task
@@ -854,6 +863,7 @@ pub fn run() {
             commands::update_task_fields,
             commands::update_task_status,
             commands::add_task_note,
+            commands::update_task_checklists,
             commands::open_task_in_bear,
             commands::get_bear_integration_status,
             commands::save_bear_api_token,

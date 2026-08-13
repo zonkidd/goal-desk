@@ -1,5 +1,5 @@
 import type { AreaWithStats, GoalCard, GoalStatus } from '../types/app'
-import type { Task, TaskStatus } from '../types/task'
+import type { Task, TaskChecklistItem, TaskStatus } from '../types/task'
 
 export interface TaskResult {
   task?: Task
@@ -44,6 +44,7 @@ export interface TaskMutation {
   softDeleteTask(taskId: string): Promise<void>
   restoreTask(taskId: string): Promise<TaskResult>
   listDeletedTasks(): Promise<Task[]>
+  updateTaskChecklists(taskId: string, items: TaskChecklistItem[]): Promise<TaskResult>
 }
 
 export interface GoalMutation {

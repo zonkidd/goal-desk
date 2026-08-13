@@ -30,6 +30,7 @@ describe('goalStore.refreshGoals', () => {
       addTaskNote: vi.fn(),
       updateTaskStatus: vi.fn(),
       updateTaskContent: vi.fn(),
+      updateTaskChecklists: vi.fn(),
       updateTaskFields: vi.fn(),
       listAreas: vi.fn(),
       createArea: vi.fn(),

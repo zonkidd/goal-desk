@@ -1,5 +1,5 @@
 import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
-import type { Task, TaskActivityAction, TaskStatus } from '../types/task'
+import type { Task, TaskActivityAction, TaskChecklistItem, TaskStatus } from '../types/task'
 import type { TaskMutation, GoalMutation, AreaMutation, QueryAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult, SystemMutation } from './mutationAdapter'
 import { loadBrowserTasks } from './browserCodec'
 import { UNCATEGORIZED_AREA_TITLE } from './constants'
@@ -245,6 +245,30 @@ export class BrowserAdapter implements TaskMutation, GoalMutation, AreaMutation,
     if (idx === -1) return {}
 
     const updatedTask: Task = { ...tasks[idx], content }
+    tasks[idx] = updatedTask
+    saveToLocalStorage(BROWSER_STORAGE_TASKS, tasks)
+
+    return { task: updatedTask, statusMessage: BROWSER_PREVIEW_STATUS }
+  }
+
+  async updateTaskChecklists(taskId: string, items: TaskChecklistItem[]): Promise<TaskResult> {
+    const tasks = loadBrowserTasks()
+    const idx = tasks.findIndex(t => t.id === taskId)
+    if (idx === -1) return {}
+    if (tasks[idx].status === 'DONE') {
+      return { task: tasks[idx], statusMessage: BROWSER_PREVIEW_STATUS }
+    }
+
+    const updatedTask: Task = {
+      ...tasks[idx],
+      checklists: items
+        .map((item, index) => ({
+          ...item,
+          title: item.title.trim(),
+          sortOrder: index,
+        }))
+        .filter((item) => item.title.length > 0),
+    }
     tasks[idx] = updatedTask
     saveToLocalStorage(BROWSER_STORAGE_TASKS, tasks)
 

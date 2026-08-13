@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { getWorkspaceMutationAdapter } from '../lib/workspaceMutations'
 import { executeMutation } from './mutationHelper'
 import { upsertById } from './upsertById'
-import type { Task, TaskStatus } from '../types/task'
+import type { Task, TaskChecklistItem, TaskStatus } from '../types/task'
 import type { GoalCard } from '../types/app'
 import type { MutationAdapter, TaskResult } from '../lib/mutationAdapter'
 
@@ -35,6 +35,7 @@ export interface TaskStoreState {
   softDeleteTask: (taskId: string) => Promise<void>
   restoreTask: (taskId: string) => Promise<Task | null>
   loadDeletedTasks: () => Promise<void>
+  updateTaskChecklists: (taskId: string, items: TaskChecklistItem[]) => Promise<Task | null>
 }
 
 async function runTaskMutation(
@@ -80,6 +81,10 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
 
   updateTaskContent: async (taskId, content) => {
     return runTaskMutation(get, (a) => a.updateTaskContent(taskId, content))
+  },
+
+  updateTaskChecklists: async (taskId, items) => {
+    return runTaskMutation(get, (a) => a.updateTaskChecklists(taskId, items))
   },
 
   updateTaskFields: async (taskId, input, availableGoals) => {

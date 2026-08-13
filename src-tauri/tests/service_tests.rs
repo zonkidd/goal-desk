@@ -1,6 +1,6 @@
 use goal_desk_tauri::bear::BearCallbackNote;
 use goal_desk_tauri::domain::DeskTask;
-use goal_desk_tauri::domain::{GoalStatus, TaskStatus};
+use goal_desk_tauri::domain::{GoalStatus, TaskChecklistItem, TaskStatus};
 use goal_desk_tauri::repository::SqliteRepository;
 use goal_desk_tauri::service::{
     AppService, AreaService, GoalLink, GoalService, NullableFieldPatch, TaskFieldPatch, TaskService,
@@ -1557,4 +1557,50 @@ fn goal_service_soft_delete_and_restore() {
     // Should not appear in deleted list
     let deleted = service.list_deleted_goals().unwrap();
     assert!(deleted.is_empty());
+}
+
+#[test]
+fn update_task_checklists_does_not_change_status_or_activity() {
+    let repo = temp_repo("task_checklists");
+    let service = TaskService::new(repo);
+    let task = service.capture_task("Ship checklist").unwrap();
+    let original_logs = task.activity_logs.clone();
+
+    let updated = service
+        .update_task_checklists(
+            &task.id.to_string(),
+            vec![
+                TaskChecklistItem {
+                    id: Uuid::new_v4(),
+                    title: "Write failing test".to_string(),
+                    completed: true,
+                    sort_order: 0,
+                },
+                TaskChecklistItem {
+                    id: Uuid::new_v4(),
+                    title: "Make it pass".to_string(),
+                    completed: false,
+                    sort_order: 1,
+                },
+            ],
+        )
+        .unwrap();
+
+    assert_eq!(updated.status, TaskStatus::Todo);
+    assert_eq!(updated.activity_logs, original_logs);
+    assert_eq!(updated.checklists.len(), 2);
+    assert!(updated.checklists[0].completed);
+    assert!(!updated.checklists[1].completed);
+
+    let completed = service
+        .update_task_status(&task.id.to_string(), TaskStatus::Done, None)
+        .unwrap();
+    assert_eq!(completed.status, TaskStatus::Done);
+    assert!(!completed.checklists[1].completed);
+    assert_eq!(completed.activity_logs.len(), original_logs.len() + 1);
+
+    let error = service
+        .update_task_checklists(&task.id.to_string(), vec![])
+        .unwrap_err();
+    assert!(error.contains("Completed"));
 }

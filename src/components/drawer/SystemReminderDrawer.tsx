@@ -4,8 +4,8 @@ import { useEventkitStore } from '../../store/eventkitStore'
 import { useUiStore } from '../../store/uiStore'
 import { getEventKitAdapter } from '../../lib/workspaceMutations'
 import { getSystemReminderCapabilities } from '../../lib/reminderCapabilityPolicy'
+import { DrawerSection, DrawerStack, drawerBackdropClassName, drawerBackdropMotion, drawerPaperVariants } from './drawerMotion'
 
-const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
 const accessLabel = {
   granted: 'Granted',
   denied: 'Denied',
@@ -56,18 +56,16 @@ export function SystemReminderDrawer() {
           <motion.button
             type="button"
             aria-label="Close drawer backdrop"
-            className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            className={drawerBackdropClassName}
+            {...drawerBackdropMotion}
             onClick={onClose}
           />
           <motion.aside
-            className="glass-panel fixed bottom-4 right-4 top-4 z-50 flex w-[600px] flex-col rounded-3xl border border-white bg-white/95 shadow-2xl outline-none"
-            initial={{ x: '120%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '120%' }}
-            transition={drawerTransition}
+            className="glass-panel fixed bottom-4 right-4 top-4 z-50 flex w-[600px] origin-center flex-col rounded-3xl border border-white bg-white/95 shadow-2xl outline-none"
+            variants={drawerPaperVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
           >
             {/* Header */}
             <header className="flex shrink-0 items-center justify-between rounded-t-3xl border-b border-slate-100 bg-slate-50/50 p-6">
@@ -91,8 +89,8 @@ export function SystemReminderDrawer() {
             </header>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-8">
+            <DrawerStack className="flex-1 overflow-y-auto">
+              <DrawerSection className="p-8">
                 <div className="mb-6 rounded-2xl border border-orange-100 bg-orange-50/60 p-5">
                   <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-orange-600">
                     Reminder
@@ -177,10 +175,9 @@ export function SystemReminderDrawer() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </DrawerSection>
 
-              {/* Action Area */}
-              <div className="border-t border-slate-100 bg-slate-50/80 p-8">
+              <DrawerSection className="border-t border-slate-100 bg-slate-50/80 p-8">
                 <div className="flex justify-end">
                   <button
                     type="button"
@@ -195,8 +192,8 @@ export function SystemReminderDrawer() {
                 <p className="mt-3 text-center text-xs text-slate-500">
                   {capabilities.unavailableReason || '将跳转到系统提醒事项应用查看完整详情'}
                 </p>
-              </div>
-            </div>
+              </DrawerSection>
+            </DrawerStack>
           </motion.aside>
         </>
       )}

@@ -20,6 +20,10 @@ _Avoid_: tag, folder
 A concrete action the user can complete, schedule, and optionally attach to one Goal. A Todo may also exist without any Goal.
 _Avoid_: Goal, reminder, note
 
+**Todo Checklist Item**:
+A checkable step that belongs only to one Todo. It has a title, a completed flag, and a sort order. It is not a Todo, has no Todo Status, and never appears on Inbox, Today Workbench, Goal Board, or Today Timeline as its own object.
+_Avoid_: Todo, subtask, Goal, Reminder
+
 **Todo Status**:
 The lifecycle state of a Todo. A new Todo starts as `TODO` (not started), moves to `IN_PROGRESS` only through Start, moves back to `IN_PROGRESS` from `PAUSED` only through Resume, and may complete from any active state.
 _Avoid_: phase, goal status

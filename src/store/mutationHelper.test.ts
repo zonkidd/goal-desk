@@ -10,6 +10,7 @@ function createMockAdapter(overrides: Partial<MutationAdapter> = {}): MutationAd
     updateTaskStatus: vi.fn().mockResolvedValue({}),
     updateTaskContent: vi.fn().mockResolvedValue({}),
     updateTaskFields: vi.fn().mockResolvedValue({}),
+    updateTaskChecklists: vi.fn().mockResolvedValue({}),
     createGoal: vi.fn().mockResolvedValue({ goal: { id: 'g1', title: 'Test Goal' }, openGoalWorkspace: true }),
     updateGoalFields: vi.fn().mockResolvedValue({}),
     updateGoalStatus: vi.fn().mockResolvedValue({}),

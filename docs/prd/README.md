@@ -1,7 +1,7 @@
 # Kairos · 见独 — 功能 PRD/Spec 索引
 
-**更新日期**: 2026-06-14  
-**文档版本**: v1.0
+**更新日期**: 2026-08-13  
+**文档版本**: v1.1
 
 ---
 
@@ -183,6 +183,18 @@
 - `src/components/views/RemindersView.tsx` - 提醒看板
 - `src/lib/calendarUtils.ts` - 日历分组计算
 - `src/lib/reminderUtils.ts` - 提醒分组计算
+
+---
+
+### 8. 壳层减负与 Todo 内部清单 📋
+
+**文档路径**: [`docs/prd/2026-08-13-shell-chrome-and-todo-checklist.md`](./2026-08-13-shell-chrome-and-todo-checklist.md)  
+**功能状态**: 计划中 📋  
+**最后更新**: 2026-08-13  
+**Issue**: [`docs/issues/025-shell-chrome-and-todo-checklist.md`](../issues/025-shell-chrome-and-todo-checklist.md)
+
+**功能概述**：
+去掉全局 TopBar，主题进设置，失败才 toast；侧栏速记与滚动区留空。Todo 详情改为不透明纸面，并落地 Todo Checklist Item（内部步骤，非子待办）。
 
 ---
 

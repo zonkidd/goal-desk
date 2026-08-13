@@ -11,6 +11,7 @@ function createMockAdapter(): MutationAdapter {
     updateTaskStatus: vi.fn().mockResolvedValue({ task: undefined, statusMessage: 'ok' }),
     updateTaskContent: vi.fn().mockResolvedValue({ task: undefined, statusMessage: 'ok' }),
     updateTaskFields: vi.fn().mockResolvedValue({ task: undefined, statusMessage: 'ok' }),
+    updateTaskChecklists: vi.fn().mockResolvedValue({ task: undefined, statusMessage: 'ok' }),
     createGoal: vi.fn().mockResolvedValue({ goal: undefined, statusMessage: 'ok', openGoalWorkspace: false }),
     updateGoalFields: vi.fn().mockResolvedValue({ goal: undefined, statusMessage: 'ok' }),
     updateGoalStatus: vi.fn().mockResolvedValue({ goal: undefined, statusMessage: 'ok' }),

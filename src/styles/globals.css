@@ -7,7 +7,7 @@
 ------------------------------------------------------- */
 
 :root {
-  /* Wabi-Sabi Wood theme variables (Option A) - Warm Oatmeal & Moss */
+  /* Wabi-Sabi Wood theme variables - Light Mode */
   --bg-base: #F6F3EB;
   --bg-gradient: radial-gradient(at 0% 0%, rgba(224, 216, 204, 0.3) 0px, transparent 60%),
                  radial-gradient(at 80% 20%, rgba(95, 112, 101, 0.08) 0px, transparent 50%),
@@ -33,8 +33,52 @@
   --accent-sec-light: #F9F3EE;  /* Muted Clay Tint */
   --pause-color: #D4A373;      /* Muted Straw Yellow */
   --pause-light: #FAF5EF;      /* Muted Straw Tint */
+
+  --paper: #F7F2E8;
+  --paper-muted: #EFE8DC;
+  --paper-line: rgba(44, 45, 43, 0.08);
   
   --scrollbar-thumb: rgba(110, 114, 110, 0.2);
+}
+
+[data-theme="liquid-glass"] {
+  /* Aurora Glass theme variables - Dark Mode */
+  --bg-base: #0B0E14;
+  --bg-gradient: radial-gradient(circle at 15% 30%, rgba(99, 102, 241, 0.35) 0px, transparent 65%),
+                 radial-gradient(circle at 85% 15%, rgba(236, 72, 153, 0.3) 0px, transparent 60%),
+                 radial-gradient(circle at 50% 85%, rgba(6, 182, 212, 0.35) 0px, transparent 70%),
+                 radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.25) 0px, transparent 65%);
+                 
+  --panel-bg: rgba(16, 21, 35, 0.55);
+  --panel-border: rgba(255, 255, 255, 0.15);
+  --panel-shadow: 0 24px 64px rgba(0, 0, 0, 0.4), 
+                  inset 0 1px 1px rgba(255, 255, 255, 0.25),
+                  inset 0 -1px 2px rgba(0, 0, 0, 0.2);
+                  
+  --card-bg: rgba(255, 255, 255, 0.08);
+  --card-border: rgba(255, 255, 255, 0.12);
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.2), 
+                 inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  --card-hover-border: rgba(255, 255, 255, 0.25);
+  --card-hover-shadow: 0 12px 32px rgba(6, 182, 212, 0.15), 
+                       0 2px 8px rgba(0, 0, 0, 0.4),
+                       inset 0 1px 1px rgba(255, 255, 255, 0.2);
+
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  
+  --accent: #06B6D4;           /* Electric Cyan */
+  --accent-light: rgba(6, 182, 212, 0.15);
+  --accent-secondary: #EC4899;  /* Electric Pink */
+  --accent-sec-light: rgba(236, 72, 153, 0.15);
+  --pause-color: #F59E0B;      /* Cyber Amber */
+  --pause-light: rgba(245, 158, 11, 0.15);
+
+  --paper: #151B26;
+  --paper-muted: #1C2430;
+  --paper-line: rgba(255, 255, 255, 0.08);
+  
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
 }
 
 [data-theme="liquid-glass"] {
@@ -69,6 +113,10 @@
   --accent-sec-light: rgba(236, 72, 153, 0.12);
   --pause-color: #F59E0B;      /* Cyber Amber */
   --pause-light: rgba(245, 158, 11, 0.12);
+
+  --paper: #151B26;
+  --paper-muted: #1C2430;
+  --paper-line: rgba(255, 255, 255, 0.08);
   
   --scrollbar-thumb: rgba(255, 255, 255, 0.1);
 }
@@ -88,6 +136,14 @@
   border-radius: 99px;
 }
 
+html,
+body,
+#app {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
@@ -97,9 +153,12 @@ body {
   transition: background-color 0.5s ease, color 0.5s ease;
 }
 
-html, body, #app {
-  background: transparent;
-}
+.bg-theme-paper { background-color: var(--paper); }
+.bg-theme-paper-muted { background-color: var(--paper-muted); }
+.bg-theme-paper-line { background-color: var(--paper-line); }
+.border-theme-paper-line { border-color: var(--paper-line); }
+
+
 
 /* ----------------------------------------------------
    Backgrounds & Panels (Theme-Aware)
@@ -136,11 +195,11 @@ html, body, #app {
 
 .glass-card {
   background: var(--card-bg);
-  backdrop-filter: blur(16px) saturate(125%);
-  -webkit-backdrop-filter: blur(16px) saturate(125%);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
   border: 1px solid var(--card-border);
   box-shadow: var(--card-shadow);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-card:hover {

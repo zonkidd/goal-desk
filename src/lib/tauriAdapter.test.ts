@@ -77,6 +77,15 @@ vi.mock('./tauriCommands', () => ({
     showInTimeline: false,
     activityLogs: [],
   }),
+  updateTaskChecklists: vi.fn().mockResolvedValue({
+    id: 'task-1',
+    title: 'Test Task',
+    content: '',
+    status: 'TODO',
+    showInTimeline: false,
+    activityLogs: [],
+    checklists: [{ id: 'c1', title: 'Step', completed: false, sortOrder: 0 }],
+  }),
   updateTaskFields: vi.fn().mockResolvedValue({
     id: 'task-1',
     title: 'Updated Task',

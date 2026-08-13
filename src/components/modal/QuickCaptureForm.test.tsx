@@ -23,4 +23,10 @@ describe('QuickCaptureForm', () => {
 
     expect(onSubmit).toHaveBeenCalledWith()
   })
+
+  it('renders dynamic neon container (TDD)', () => {
+    render(<QuickCaptureForm value="" onChange={vi.fn()} onSubmit={vi.fn()} />)
+    const container = screen.getByTestId('qc-container')
+    expect(container).toBeInTheDocument()
+  })
 })

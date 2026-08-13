@@ -14,6 +14,13 @@ export interface TaskActivityLog {
   timestamp: Date
 }
 
+export interface TaskChecklistItem {
+  id: string
+  title: string
+  completed: boolean
+  sortOrder: number
+}
+
 export interface Task {
   id: string
   title: string
@@ -30,4 +37,5 @@ export interface Task {
   updatedAt?: Date
   deletedAt?: Date
   activityLogs: TaskActivityLog[]
+  checklists?: TaskChecklistItem[]
 }

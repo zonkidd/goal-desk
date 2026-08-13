@@ -27,20 +27,23 @@ function GuidedActionButton({
   ariaLabel?: string
 }) {
   return (
-    <button
+    <motion.button
       type="button"
       aria-label={ariaLabel}
       onClick={onClick}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-colors',
         variant === 'primary'
-          ? 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700'
-          : 'border border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600',
+          ? 'bg-theme-accent text-white shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:bg-cyan-400'
+          : 'border border-white/10 bg-white/5 text-theme-secondary hover:border-theme-accent/50 hover:text-theme-accent',
       )}
     >
       {icon}
       {children}
-    </button>
+    </motion.button>
   )
 }
 
@@ -58,18 +61,22 @@ function GuidedEmptyState({
   className?: string
 }) {
   return (
-    <div className={cn('rounded-2xl border border-dashed border-indigo-200 bg-white/50 px-4 py-6', className)}>
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className={cn('rounded-2xl border border-white/10 bg-white/5 px-4 py-6 shadow-xl backdrop-blur-md', className)}>
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-indigo-500/20 text-indigo-400 shadow-inner">
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-slate-900">{title}</h3>
-          <p className="mt-1 text-sm font-medium text-slate-500">{description}</p>
+          <h3 className="text-sm font-bold text-theme-primary">{title}</h3>
+          <p className="mt-1 text-sm font-medium text-theme-secondary">{description}</p>
           <div className="mt-4 flex flex-wrap gap-2">{children}</div>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -79,17 +86,17 @@ function getTimelineStyles(source: 'todo' | 'reminder' | 'calendar') {
   const styles = {
     todo: {
       dot: 'bg-amber-500',
-      card: 'border-l-4 border-l-amber-500 bg-amber-50/30',
+      card: 'border-l-4 border-l-amber-500 bg-amber-500/10',
       label: 'text-amber-600',
     },
     reminder: {
-      dot: 'bg-indigo-500',
-      card: 'border-l-4 border-l-indigo-500 bg-indigo-50/30',
-      label: 'text-indigo-600',
+      dot: 'bg-indigo-500/200',
+      card: 'border-l-4 border-l-indigo-500 bg-indigo-500/10',
+      label: 'text-indigo-400',
     },
     calendar: {
       dot: 'bg-emerald-500',
-      card: 'border-l-4 border-l-emerald-500 bg-emerald-50/30',
+      card: 'border-l-4 border-l-emerald-500 bg-emerald-500/10',
       label: 'text-emerald-600',
     },
   }
@@ -145,21 +152,21 @@ export function TodayView() {
     <section id="today" className="screen active">
       <div className="mb-8 flex items-end justify-between animate-spring">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">今日焦点</h1>
-          <p className="mt-2 font-medium text-slate-500">在时间流中推进你的顶层目标。</p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-theme-primary">今日焦点</h1>
+          <p className="mt-2 font-medium text-theme-secondary">在时间流中推进你的顶层目标。</p>
         </div>
       </div>
 
       <div className="grid grid-cols-[1fr_400px] gap-8">
         <div className="flex flex-col gap-6">
           {(overdue.length > 0 || dueToday.length > 0) && (
-            <GlassPanel className="relative z-10 rounded-3xl p-6 border-red-100 bg-red-50/10">
+            <GlassPanel className="relative z-10 rounded-3xl p-6 border-red-500/20 bg-red-500/10">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-red-700">截止与逾期</h2>
-                  <p className="mt-1 text-sm font-medium text-slate-500">需要立即处理的紧急待办。</p>
+                  <h2 className="text-lg font-bold text-red-400">截止与逾期</h2>
+                  <p className="mt-1 text-sm font-medium text-theme-secondary">需要立即处理的紧急待办。</p>
                 </div>
-                <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-600">
+                <span className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-black text-red-400">
                   {overdue.length + dueToday.length}
                 </span>
               </div>
@@ -179,10 +186,10 @@ export function TodayView() {
           <GlassPanel className="relative z-10 rounded-3xl p-6">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">今日持续推进</h2>
-                <p className="mt-1 text-sm font-medium text-slate-500">开始时间与截止时间覆盖今天，且仍在推进中的待办。</p>
+                <h2 className="text-lg font-bold text-theme-primary">今日持续推进</h2>
+                <p className="mt-1 text-sm font-medium text-theme-secondary">开始时间与截止时间覆盖今天，且仍在推进中的待办。</p>
               </div>
-              <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-600">{ongoingTasks.length}</span>
+              <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-black text-indigo-400">{ongoingTasks.length}</span>
             </div>
             <div className="space-y-3">
               <LayoutGroup>
@@ -209,7 +216,7 @@ export function TodayView() {
               {systemReminders.length > 0 && (
                 <>
                   {ongoingTasks.length > 0 && (
-                    <div className="pt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">系统提醒</div>
+                    <div className="pt-2 text-[10px] font-bold uppercase tracking-widest text-theme-secondary">系统提醒</div>
                   )}
                   {systemReminders.map((reminder) => (
                     <SystemReminderRow key={reminder.id} reminder={reminder} onClick={() => openDrawer('reminder', reminder.id)} />
@@ -219,13 +226,13 @@ export function TodayView() {
             </div>
           </GlassPanel>
 
-          <GlassPanel className="rounded-3xl border border-indigo-100 bg-indigo-50/30 p-6">
+          <GlassPanel className="rounded-3xl border border-indigo-100 bg-indigo-500/10 p-6">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">今日目标看点</h2>
-                <p className="mt-1 text-sm font-medium text-slate-500">仅展示由持续推进待办牵引的目标。</p>
+                <h2 className="text-lg font-bold text-theme-primary">今日目标看点</h2>
+                <p className="mt-1 text-sm font-medium text-theme-secondary">仅展示由持续推进待办牵引的目标。</p>
               </div>
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-600">{todayRelevantGoals.length}</span>
+              <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-black text-indigo-400">{todayRelevantGoals.length}</span>
             </div>
 
             <div className="space-y-3">
@@ -238,7 +245,7 @@ export function TodayView() {
                   icon={<Target className="h-4 w-4" />}
                   title="今天还没有目标被待办牵引"
                   description="把待办关联到目标后，这里会显示目标进度和下一步。"
-                  className="bg-white/60"
+                  className="bg-white/5/60"
                 >
                   <GuidedActionButton icon={<Target className="h-3.5 w-3.5" />} onClick={() => setView('goals')} variant="primary">
                     查看目标
@@ -257,7 +264,7 @@ export function TodayView() {
         </div>
 
         <GlassPanel className="relative rounded-3xl p-8">
-          <h2 className="mb-6 flex items-center gap-2 text-xl font-bold text-slate-900">
+          <h2 className="mb-6 flex items-center gap-2 text-xl font-bold text-theme-primary">
             <Clock className="h-5 w-5 text-indigo-500" />
             今日时间轴
           </h2>
@@ -265,10 +272,10 @@ export function TodayView() {
           {shouldShowBanner && (
             <div className="glass-card mb-4 rounded-2xl border-l-4 border-l-indigo-500 bg-indigo-50/50 p-4">
               <div className="flex items-start gap-3">
-                <Info className="h-5 w-5 shrink-0 text-indigo-600" />
+                <Info className="h-5 w-5 shrink-0 text-indigo-400" />
                 <div className="flex-1">
-                  <h3 className="text-sm font-bold text-slate-900">集成系统日历和提醒</h3>
-                  <p className="mt-1 text-xs text-slate-600">获得锁屏通知和跨应用同步能力</p>
+                  <h3 className="text-sm font-bold text-theme-primary">集成系统日历和提醒</h3>
+                  <p className="mt-1 text-xs text-theme-secondary">获得锁屏通知和跨应用同步能力</p>
                   <div className="mt-3 flex gap-2">
                     {eventkitPermissions.calendar === 'not_determined' && (
                       <button
@@ -291,7 +298,7 @@ export function TodayView() {
                     <button
                       type="button"
                       onClick={handleDismiss}
-                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-theme-secondary hover:bg-slate-50"
                     >
                       暂不需要
                     </button>
@@ -301,7 +308,7 @@ export function TodayView() {
             </div>
           )}
 
-          <div className="timeline-line relative space-y-6">
+          <div className="timeline-line relative space-y-6 before:absolute before:left-[23px] before:top-4 before:bottom-[-16px] before:w-[2px] before:bg-gradient-to-b before:from-indigo-500/50 before:to-transparent">
             {timeline.map((item) => (
               <TimelineItemRow
                 key={item.id}
@@ -319,7 +326,7 @@ export function TodayView() {
                 icon={<CalendarDays className="h-4 w-4" />}
                 title={timelineGuidanceTitle}
                 description={timelineGuidanceDescription}
-                className="bg-white/55"
+                className="bg-white/5/5"
               >
                 <GuidedActionButton icon={<PlusCircle className="h-3.5 w-3.5" />} onClick={openQuickCapture} variant="primary">
                   添加时间事项
@@ -344,25 +351,25 @@ const OngoingTaskRow = memo(function OngoingTaskRow({ task, onClick }: { task: T
   return (
     <motion.div 
       layout 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, scale: 0.95, y: 15 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.2 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 25 }}
       className="group relative"
     >
       <motion.button
-        whileHover={{ scale: 1.01 }}
+        whileHover={{ scale: 1.01, boxShadow: '0 12px 32px rgba(6, 182, 212, 0.15)' }}
         whileTap={{ scale: 0.98 }}
         type="button"
         onClick={onClick}
-        className="glass-card flex w-full items-center justify-between rounded-2xl p-4 text-left transition-transform hover:-translate-y-0.5"
+        className="glass-card flex w-full items-center justify-between rounded-2xl p-4 text-left transition-colors"
       >
         <div>
-          <div className="text-sm font-bold text-slate-900">{task.title}</div>
-          <div className="mt-1 text-xs font-semibold text-slate-500">{task.linkedGoalLabel || '独立待办'}</div>
+          <div className="text-sm font-bold text-theme-primary">{task.title}</div>
+          <div className="mt-1 text-xs font-semibold text-theme-secondary">{task.linkedGoalLabel || '独立待办'}</div>
         </div>
         <div className="text-right text-xs font-bold">
-          <div className="text-slate-500 mb-0.5">已推进 {timeInfo.daysElapsed}天</div>
+          <div className="text-theme-secondary mb-0.5">已推进 {timeInfo.daysElapsed}天</div>
           <div className={`flex items-center justify-end gap-1 ${urgencyColor}`}>
             {timeInfo.daysRemaining !== null ? (
               <>
@@ -377,11 +384,11 @@ const OngoingTaskRow = memo(function OngoingTaskRow({ task, onClick }: { task: T
             )}
           </div>
         </div>
-      </button>
+      </motion.button>
 
       {/* Tooltip */}
       <div className="pointer-events-none absolute right-0 top-full z-[9999] mt-2 hidden group-hover:block">
-        <div className="rounded-xl bg-slate-900 px-4 py-3 text-white shadow-2xl" style={{ minWidth: '200px' }}>
+        <div className="rounded-xl bg-slate-900/90 backdrop-blur-md px-4 py-3 text-white shadow-2xl border border-white/10" style={{ minWidth: '200px' }}>
           <div className="mb-2 text-[10px] font-bold text-slate-400">完整时间线</div>
           <div className="space-y-1 text-xs font-semibold">
             <div className="flex justify-between">
@@ -425,62 +432,96 @@ const OngoingTaskRow = memo(function OngoingTaskRow({ task, onClick }: { task: T
 
 const SystemReminderRow = memo(function SystemReminderRow({ reminder, onClick }: { reminder: ReminderItem; onClick: () => void }) {
   return (
-    <div className="group relative">
-      <button
+    <motion.div 
+      layout
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+      className="group relative"
+    >
+      <motion.button
+        whileHover={{ scale: 1.01, boxShadow: '0 8px 30px rgba(99,102,241,0.2)' }}
+        whileTap={{ scale: 0.98 }}
         type="button"
         onClick={onClick}
-        className="glass-card flex w-full items-center justify-between rounded-2xl border-l-4 border-l-indigo-500 bg-indigo-50/30 p-4 text-left transition-transform hover:-translate-y-0.5"
+        className="glass-card flex w-full items-center justify-between rounded-2xl border-l-4 border-l-indigo-500 bg-indigo-500/10 p-4 text-left transition-colors"
       >
         <div>
-          <div className="text-sm font-bold text-slate-900">{reminder.title}</div>
-          <div className="mt-1 text-xs font-semibold text-slate-500">{reminder.listTitle || 'Apple Reminders'}</div>
+          <div className="text-sm font-bold text-theme-primary">{reminder.title}</div>
+          <div className="mt-1 text-xs font-semibold text-theme-secondary">{reminder.listTitle || 'Apple Reminders'}</div>
         </div>
-        <div className="text-right text-xs font-bold text-indigo-600">
+        <div className="text-right text-xs font-bold text-indigo-400">
           {reminder.dueAt?.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}
         </div>
-      </button>
-    </div>
+      </motion.button>
+    </motion.div>
   )
 }, (prev, next) => prev.reminder === next.reminder)
 
 const RelevantGoalRow = memo(function RelevantGoalRow({ goal, onClick }: { goal: TodayRelevantGoal; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="block w-full text-left">
+    <motion.button 
+      layout
+      whileHover={{ scale: 1.01 }}
+      whileTap={{ scale: 0.98 }}
+      type="button" 
+      onClick={onClick} 
+      className="block w-full text-left"
+    >
       <GlassCard className="rounded-2xl p-4">
         <div className="mb-3 flex items-start justify-between gap-4">
           <div>
-            <span className="rounded bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase text-indigo-700">{goal.area}</span>
-            <h3 className="mt-2 text-sm font-bold text-slate-900">{goal.title}</h3>
-            <p className="mt-1 text-xs font-semibold text-slate-500">{goal.todayTaskCount} 个持续推进待办覆盖今天</p>
+            <span className="rounded bg-indigo-500/20 px-2 py-0.5 text-[10px] font-black uppercase text-indigo-300">{goal.area}</span>
+            <h3 className="mt-2 text-sm font-bold text-theme-primary">{goal.title}</h3>
+            <p className="mt-1 text-xs font-semibold text-theme-secondary">{goal.todayTaskCount} 个持续推进待办覆盖今天</p>
           </div>
-          <span className="text-xl font-black text-indigo-600">{goal.progress}%</span>
+          <span className="text-xl font-black text-indigo-400">{goal.progress}%</span>
         </div>
 
-        <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-slate-200/60">
-          <div className="progress-bar h-2 rounded-full bg-indigo-500" style={{ width: `${goal.progress}%` }} />
+        <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-slate-700/60">
+          <motion.div 
+            initial={{ width: 0 }}
+            animate={{ width: `${goal.progress}%` }}
+            transition={{ type: 'spring', stiffness: 50, damping: 15, delay: 0.2 }}
+            className="h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
+          />
         </div>
 
-        <div className="rounded-xl bg-white/70 p-3">
-          <div className="text-xs font-black uppercase text-slate-400">Next</div>
-          <div className="mt-1 text-sm font-bold text-slate-800">{goal.nextTodo}</div>
+        <div className="rounded-xl bg-white/5 p-3 border border-white/5">
+          <div className="text-xs font-black uppercase text-theme-secondary">Next</div>
+          <div className="mt-1 text-sm font-bold text-theme-primary">{goal.nextTodo}</div>
         </div>
       </GlassCard>
-    </button>
+    </motion.button>
   )
 }, (prev, next) => prev.goal === next.goal)
 
 const TimelineItemRow = memo(function TimelineItemRow({ item, onClick }: { item: TimelineItem; onClick: () => void }) {
   const styles = getTimelineStyles(item.source)
   return (
-    <motion.div className="relative z-10 flex gap-4" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+    <motion.div 
+      layout
+      className="relative z-10 flex gap-4" 
+      initial={{ opacity: 0, x: -20 }} 
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+    >
       <div className="w-12 shrink-0 text-right">
         <span className={`text-xs font-black ${styles.label}`}>{item.timeLabel}</span>
       </div>
-      <div className={`mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white ${styles.dot}`} />
-      <button
+      <motion.div 
+        animate={{ scale: [1, 1.2, 1] }}
+        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+        className={`mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white/20 ${styles.dot}`} 
+      />
+      <motion.button
+        whileHover={{ scale: 1.01, x: 4 }}
+        whileTap={{ scale: 0.98 }}
         type="button"
         onClick={onClick}
-        className={`flex-1 rounded-xl p-3 text-left glass-card ${styles.card} transition-transform hover:-translate-y-0.5`}
+        className={`flex-1 rounded-xl p-3 text-left glass-card ${styles.card} transition-colors`}
       >
         <div className={`mb-1 text-[10px] font-bold uppercase ${styles.label}`}>
           {item.source === 'todo'
@@ -489,8 +530,8 @@ const TimelineItemRow = memo(function TimelineItemRow({ item, onClick }: { item:
               ? item.sourceLabel || 'Apple Reminders'
               : item.sourceLabel || 'Calendar Event'}
         </div>
-        <div className={`text-sm font-bold ${item.done ? 'text-slate-600 line-through' : 'text-slate-800'}`}>{item.title}</div>
-      </button>
+        <div className={`text-sm font-bold ${item.done ? 'text-theme-secondary line-through' : 'text-theme-primary'}`}>{item.title}</div>
+      </motion.button>
     </motion.div>
   )
 }, (prev, next) => prev.item === next.item)

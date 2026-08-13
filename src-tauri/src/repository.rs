@@ -1,7 +1,7 @@
 use crate::bear::BearNotePreview;
 use crate::domain::{
     Area, DeskTask, Goal, GoalStatus, Project, Reminder, TaskActivityAction, TaskActivityLog,
-    TaskStatus, WorkspaceSnapshot, UNCATEGORIZED_AREA_ID,
+    TaskChecklistItem, TaskStatus, WorkspaceSnapshot, UNCATEGORIZED_AREA_ID,
 };
 use chrono::{DateTime, Local};
 use rusqlite::{params, Connection};
@@ -167,6 +167,15 @@ impl SqliteRepository {
                 note TEXT NULL,
                 timestamp TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS desk_task_checklists (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                completed INTEGER NOT NULL,
+                sort_order INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_desk_task_checklists_task
+                ON desk_task_checklists (task_id, sort_order);
             CREATE TABLE IF NOT EXISTS app_settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
@@ -374,6 +383,7 @@ impl SqliteRepository {
 
         transaction.execute_batch(
             "
+            DELETE FROM desk_task_checklists;
             DELETE FROM desk_task_activity_logs;
             DELETE FROM desk_tasks;
             ",
@@ -406,6 +416,19 @@ impl SqliteRepository {
                         task_activity_action_as_str(log.action),
                         log.note.as_deref(),
                         log.timestamp.to_rfc3339()
+                    ],
+                )?;
+            }
+
+            for (index, item) in task.checklists.iter().enumerate() {
+                transaction.execute(
+                    "INSERT INTO desk_task_checklists (id, task_id, title, completed, sort_order) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![
+                        item.id.to_string(),
+                        task.id.to_string(),
+                        item.title.as_str(),
+                        item.completed as i64,
+                        item.sort_order.max(index as i32)
                     ],
                 )?;
             }
@@ -890,6 +913,11 @@ pub trait TaskRepository {
     fn soft_delete(&self, id: Uuid) -> Result<(), RepositoryError>;
     fn restore(&self, id: Uuid) -> Result<(), RepositoryError>;
     fn list_deleted(&self) -> Result<Vec<DeskTask>, RepositoryError>;
+    fn replace_checklists(
+        &self,
+        task_id: Uuid,
+        items: &[TaskChecklistItem],
+    ) -> Result<(), RepositoryError>;
 }
 
 struct TaskAggregateWriter<'transaction, 'connection> {
@@ -904,6 +932,7 @@ impl<'transaction, 'connection> TaskAggregateWriter<'transaction, 'connection> {
     fn insert(&self, task: &DeskTask) -> Result<(), RepositoryError> {
         self.insert_task_row(task)?;
         self.insert_activity_logs(task)?;
+        self.insert_checklists(task)?;
         Ok(())
     }
 
@@ -918,6 +947,8 @@ impl<'transaction, 'connection> TaskAggregateWriter<'transaction, 'connection> {
 
         self.delete_activity_logs(task.id)?;
         self.insert_activity_logs(task)?;
+        self.delete_checklists(task.id)?;
+        self.insert_checklists(task)?;
         Ok(())
     }
 
@@ -981,6 +1012,30 @@ impl<'transaction, 'connection> TaskAggregateWriter<'transaction, 'connection> {
                     task_activity_action_as_str(log.action),
                     log.note.as_deref(),
                     log.timestamp.to_rfc3339()
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn delete_checklists(&self, task_id: Uuid) -> Result<(), RepositoryError> {
+        self.transaction.execute(
+            "DELETE FROM desk_task_checklists WHERE task_id = ?1",
+            params![task_id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn insert_checklists(&self, task: &DeskTask) -> Result<(), RepositoryError> {
+        for (index, item) in task.checklists.iter().enumerate() {
+            self.transaction.execute(
+                "INSERT INTO desk_task_checklists (id, task_id, title, completed, sort_order) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    item.id.to_string(),
+                    task.id.to_string(),
+                    item.title.as_str(),
+                    item.completed as i64,
+                    if item.sort_order == 0 { index as i32 } else { item.sort_order }
                 ],
             )?;
         }
@@ -1061,6 +1116,10 @@ impl TaskRepository for SqliteRepository {
             "DELETE FROM desk_task_activity_logs WHERE task_id = ?1",
             params![id.to_string()],
         )?;
+        transaction.execute(
+            "DELETE FROM desk_task_checklists WHERE task_id = ?1",
+            params![id.to_string()],
+        )?;
 
         transaction.execute(
             "DELETE FROM desk_tasks WHERE id = ?1",
@@ -1100,6 +1159,34 @@ impl TaskRepository for SqliteRepository {
             "WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
             &[],
         )
+    }
+
+    fn replace_checklists(
+        &self,
+        task_id: Uuid,
+        items: &[TaskChecklistItem],
+    ) -> Result<(), RepositoryError> {
+        let mut guard = self.cached_connection()?;
+        let connection = guard.as_mut().unwrap();
+        let transaction = connection.transaction()?;
+        transaction.execute(
+            "DELETE FROM desk_task_checklists WHERE task_id = ?1",
+            params![task_id.to_string()],
+        )?;
+        for (index, item) in items.iter().enumerate() {
+            transaction.execute(
+                "INSERT INTO desk_task_checklists (id, task_id, title, completed, sort_order) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    item.id.to_string(),
+                    task_id.to_string(),
+                    item.title.as_str(),
+                    item.completed as i64,
+                    index as i32
+                ],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(())
     }
 }
 
@@ -1234,6 +1321,46 @@ fn load_activity_logs_for_tasks(
     Ok(logs_by_task_id)
 }
 
+fn load_checklists_for_tasks(
+    connection: &Connection,
+    task_ids: &[String],
+) -> Result<HashMap<String, Vec<TaskChecklistItem>>, RepositoryError> {
+    let mut items_by_task_id: HashMap<String, Vec<TaskChecklistItem>> = HashMap::new();
+    if task_ids.is_empty() {
+        return Ok(items_by_task_id);
+    }
+
+    for chunk in task_ids.chunks(900) {
+        let placeholders = std::iter::repeat("?")
+            .take(chunk.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "SELECT id, task_id, title, completed, sort_order FROM desk_task_checklists WHERE task_id IN ({placeholders}) ORDER BY sort_order ASC"
+        );
+        let mut statement = connection.prepare(&sql)?;
+        let params = chunk
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect::<Vec<_>>();
+        let mut rows = statement.query(params.as_slice())?;
+
+        while let Some(row) = rows.next()? {
+            let item_id: String = row.get(0)?;
+            let task_id: String = row.get(1)?;
+            let item = TaskChecklistItem {
+                id: parse_uuid(item_id)?,
+                title: row.get(2)?,
+                completed: row.get::<_, i64>(3)? != 0,
+                sort_order: row.get(4)?,
+            };
+            items_by_task_id.entry(task_id).or_default().push(item);
+        }
+    }
+
+    Ok(items_by_task_id)
+}
+
 const TASK_COLUMNS: &str = "id, title, content, status, planned_start_at, due_at, linked_goal_id, linked_goal_label, bear_note_id, system_reminder_id, show_in_timeline, deleted_at";
 
 struct TaskRow {
@@ -1272,6 +1399,7 @@ impl TaskRow {
     fn into_task(
         self,
         logs_by_task_id: &mut HashMap<String, Vec<TaskActivityLog>>,
+        checklists_by_task_id: &mut HashMap<String, Vec<TaskChecklistItem>>,
     ) -> Result<DeskTask, RepositoryError> {
         Ok(DeskTask {
             id: parse_uuid(self.id.clone())?,
@@ -1286,7 +1414,7 @@ impl TaskRow {
             system_reminder_id: self.system_reminder_id,
             show_in_timeline: self.show_in_timeline != 0,
             activity_logs: logs_by_task_id.remove(&self.id).unwrap_or_default(),
-            checklists: vec![],
+            checklists: checklists_by_task_id.remove(&self.id).unwrap_or_default(),
             deleted_at: parse_optional_datetime(self.deleted_at)?,
         })
     }
@@ -1316,10 +1444,11 @@ fn load_tasks_with_filter(
         .map(|task| task.id.clone())
         .collect::<Vec<_>>();
     let mut logs_by_task_id = load_activity_logs_for_tasks(connection, &task_ids)?;
+    let mut checklists_by_task_id = load_checklists_for_tasks(connection, &task_ids)?;
 
     task_rows
         .into_iter()
-        .map(|task| task.into_task(&mut logs_by_task_id))
+        .map(|task| task.into_task(&mut logs_by_task_id, &mut checklists_by_task_id))
         .collect()
 }
 

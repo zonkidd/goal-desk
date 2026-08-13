@@ -10,8 +10,7 @@ import { useTaskStore } from '../../store/taskStore'
 import { useAreaStore } from '../../store/areaStore'
 import { useUiStore } from '../../store/uiStore'
 import type { GoalStatus } from '../../types/app'
-
-const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
+import { DrawerSection, DrawerStack, drawerBackdropClassName, drawerBackdropMotion, drawerPaperVariants } from './drawerMotion'
 
 const statusActions: Array<{ status: GoalStatus; label: string; icon: typeof Play }> = [
   { status: 'ACTIVE', label: '开启', icon: Play },
@@ -68,18 +67,16 @@ export function GoalDrawer() {
           <motion.button
             type="button"
             aria-label="Close goal drawer backdrop"
-            className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            className={drawerBackdropClassName}
+            {...drawerBackdropMotion}
             onClick={closeDrawer}
           />
           <motion.aside
-            className="glass-panel fixed bottom-4 right-4 top-4 z-50 flex w-[560px] flex-col rounded-3xl border border-white bg-white/95 shadow-2xl outline-none"
-            initial={{ x: '120%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '120%' }}
-            transition={drawerTransition}
+            className="glass-panel fixed bottom-4 right-4 top-4 z-50 flex w-[560px] origin-center flex-col rounded-3xl border border-white bg-white/95 shadow-2xl outline-none"
+            variants={drawerPaperVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
           >
             <header className="flex items-start justify-between gap-4 rounded-t-3xl border-b border-slate-100 bg-slate-50/50 p-6">
               <div className="space-y-3">
@@ -123,8 +120,8 @@ export function GoalDrawer() {
               </div>
             </header>
 
-            <div className="flex-1 space-y-6 overflow-y-auto p-8">
-              <div className="space-y-3">
+            <DrawerStack className="flex-1 space-y-6 overflow-y-auto p-8">
+              <DrawerSection className="space-y-3">
                 <input
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
@@ -163,8 +160,9 @@ export function GoalDrawer() {
                   rows={4}
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20"
                 />
-              </div>
+              </DrawerSection>
 
+              <DrawerSection>
               <GlassCard className="rounded-3xl p-5">
                 <div className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">快速添加任务</div>
                 <div className="flex gap-3">
@@ -191,8 +189,9 @@ export function GoalDrawer() {
                   </button>
                 </div>
               </GlassCard>
+              </DrawerSection>
 
-              <div>
+              <DrawerSection>
                 <div className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">关联任务</div>
                 <div className="space-y-2">
                   {linkedTasks.map((task) => (
@@ -207,8 +206,8 @@ export function GoalDrawer() {
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
+              </DrawerSection>
+            </DrawerStack>
           </motion.aside>
         </>
       )}

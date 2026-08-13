@@ -3,13 +3,22 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Download, Upload, X, Check, Loader2 } from 'lucide-react'
 import { useUiStore } from '../../store/uiStore'
 import { createWorkspaceMutationAdapter } from '../../lib/workspaceMutations'
+import { getRuntimeAdapter } from '../../lib/runtimeAdapter'
+
+function isUserCancelledMessage(message?: string) {
+  return message === 'Backup cancelled' || message === 'Restore cancelled'
+}
 
 export function SettingsModal() {
   const isOpen = useUiStore((state) => state.isSettingsOpen)
   const closeSettings = useUiStore((state) => state.closeSettings)
   const setStatusMessage = useUiStore((state) => state.setStatusMessage)
+  const showErrorToast = useUiStore((state) => state.showErrorToast)
+  const theme = useUiStore((state) => state.theme)
+  const setTheme = useUiStore((state) => state.setTheme)
   const backupDirectory = useUiStore((state) => state.backupDirectory)
   const setBackupDirectory = useUiStore((state) => state.setBackupDirectory)
+  const isBrowserPreview = !getRuntimeAdapter().isTauri()
   
   const [isExporting, setIsExporting] = useState(false)
   const [exportSuccess, setExportSuccess] = useState(false)
@@ -34,10 +43,12 @@ export function SettingsModal() {
       }
       const result = await mutations.exportDatabase(targetPath)
       if (result.statusMessage) setStatusMessage(result.statusMessage)
-      
+
       if (result.success) {
         setExportSuccess(true)
         setTimeout(() => setExportSuccess(false), 2000)
+      } else if (result.statusMessage && !isUserCancelledMessage(result.statusMessage)) {
+        showErrorToast(result.statusMessage)
       }
     } finally {
       setIsExporting(false)
@@ -50,13 +61,16 @@ export function SettingsModal() {
     try {
       const result = await mutations.importDatabase(backupDirectory ?? undefined)
       if (result.statusMessage) setStatusMessage(result.statusMessage)
-      
+
       if (result.success) {
         setImportSuccess(true)
         setTimeout(() => {
           window.location.reload()
         }, 1500)
       } else {
+        if (result.statusMessage && !isUserCancelledMessage(result.statusMessage)) {
+          showErrorToast(result.statusMessage)
+        }
         setIsImporting(false)
       }
     } catch {
@@ -91,6 +105,43 @@ export function SettingsModal() {
               </button>
             </div>
             <div className="p-5">
+              <h3 className="mb-3 text-[11px] font-bold uppercase tracking-widest text-theme-secondary">外观</h3>
+              <div className="mb-6 space-y-3">
+                <div className="flex items-center justify-between rounded-xl bg-theme-card/30 p-4 ring-1 ring-white/5">
+                  <div className="mr-4">
+                    <p className="text-sm font-semibold text-theme-primary">主题</p>
+                    <p className="mt-1 text-xs text-theme-secondary">日式原木或液态玻璃，下次打开仍会记住</p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTheme('wabi-sabi')}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                        theme === 'wabi-sabi'
+                          ? 'bg-theme-accent text-white shadow-sm'
+                          : 'border border-white/10 text-theme-secondary hover:bg-theme-card/50 hover:text-theme-primary'
+                      }`}
+                    >
+                      日式原木
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTheme('liquid-glass')}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                        theme === 'liquid-glass'
+                          ? 'bg-theme-accent text-white shadow-sm'
+                          : 'border border-white/10 text-theme-secondary hover:bg-theme-card/50 hover:text-theme-primary'
+                      }`}
+                    >
+                      液态玻璃
+                    </button>
+                  </div>
+                </div>
+                {isBrowserPreview ? (
+                  <p className="px-1 text-xs text-theme-secondary">浏览器预览：操作只改内存演示数据，不含 SQLite。</p>
+                ) : null}
+              </div>
+
               <h3 className="mb-3 text-[11px] font-bold uppercase tracking-widest text-theme-secondary">Data 数据</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between rounded-xl bg-theme-card/30 p-4 ring-1 ring-white/5">

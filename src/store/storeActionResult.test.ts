@@ -20,6 +20,7 @@ vi.mock('../lib/workspaceMutations', () => ({
     updateTaskStatus: vi.fn().mockResolvedValue({}),
     updateTaskContent: vi.fn().mockResolvedValue({}),
     updateTaskFields: vi.fn().mockResolvedValue({}),
+    updateTaskChecklists: vi.fn().mockResolvedValue({}),
     listAreas: vi.fn().mockResolvedValue({}),
     createArea: vi.fn().mockResolvedValue({}),
     renameArea: vi.fn().mockResolvedValue({}),

@@ -1,7 +1,7 @@
 import { validateRequiredString, validateTaskTitle, validateGoalInput, validateAreaTitle } from './validation'
 import type { MutationAdapter, TaskResult, GoalResult, AreaResult, DeleteAreaResult } from './mutationAdapter'
 import type { GoalCard, GoalStatus, AreaWithStats } from '../types/app'
-import type { Task, TaskStatus } from '../types/task'
+import type { Task, TaskChecklistItem, TaskStatus } from '../types/task'
 
 export class ValidatingMutationAdapter implements MutationAdapter {
   constructor(private inner: MutationAdapter) {}
@@ -50,6 +50,10 @@ export class ValidatingMutationAdapter implements MutationAdapter {
 
   async updateTaskContent(taskId: string, content: string): Promise<TaskResult> {
     return this.inner.updateTaskContent(taskId, content)
+  }
+
+  async updateTaskChecklists(taskId: string, items: TaskChecklistItem[]): Promise<TaskResult> {
+    return this.inner.updateTaskChecklists(taskId, items)
   }
 
   async updateTaskFields(

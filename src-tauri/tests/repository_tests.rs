@@ -1,7 +1,7 @@
 use chrono::{Local, TimeZone};
 use goal_desk_tauri::domain::{
-    Area, DeskTask, Goal, Project, Reminder, TaskActivityAction, TaskActivityLog, TaskStatus,
-    WorkspaceSnapshot,
+    Area, DeskTask, Goal, Project, Reminder, TaskActivityAction, TaskActivityLog,
+    TaskChecklistItem, TaskStatus, WorkspaceSnapshot,
 };
 use goal_desk_tauri::repository::SqliteRepository;
 use uuid::Uuid;
@@ -446,6 +446,77 @@ fn task_repository_update_rejects_missing_task_without_persisting_activity_logs(
             .unwrap();
         assert_eq!(log_count, 0);
     }
+
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn task_repository_persists_checklists_through_find_list_and_restore() {
+    let file_name = format!("goal-desk-task-checklists-{}.sqlite", Uuid::new_v4());
+    let path = std::env::temp_dir().join(file_name);
+    let repository = SqliteRepository::new(path.clone());
+    repository.initialize().unwrap();
+
+    use goal_desk_tauri::repository::TaskRepository;
+
+    let item_one = TaskChecklistItem {
+        id: Uuid::new_v4(),
+        title: "Write failing test".to_string(),
+        completed: true,
+        sort_order: 0,
+    };
+    let item_two = TaskChecklistItem {
+        id: Uuid::new_v4(),
+        title: "Make it pass".to_string(),
+        completed: false,
+        sort_order: 1,
+    };
+    let task = DeskTask {
+        id: Uuid::new_v4(),
+        title: "Ship checklist".to_string(),
+        content: String::new(),
+        status: TaskStatus::Todo,
+        planned_start_at: None,
+        due_at: None,
+        linked_goal_id: None,
+        linked_goal_label: None,
+        bear_note_id: None,
+        system_reminder_id: None,
+        show_in_timeline: false,
+        activity_logs: vec![],
+        checklists: vec![item_one.clone(), item_two.clone()],
+        deleted_at: None,
+    };
+
+    TaskRepository::create(&repository, &task).unwrap();
+
+    let found = TaskRepository::find(&repository, task.id).unwrap().unwrap();
+    assert_eq!(found.checklists, vec![item_one.clone(), item_two.clone()]);
+
+    let listed = TaskRepository::list(&repository).unwrap();
+    assert_eq!(listed[0].checklists, vec![item_one.clone(), item_two.clone()]);
+
+    TaskRepository::replace_checklists(
+        &repository,
+        task.id,
+        &[TaskChecklistItem {
+            id: item_one.id,
+            title: "Write failing test".to_string(),
+            completed: true,
+            sort_order: 0,
+        }],
+    )
+    .unwrap();
+    let replaced = TaskRepository::find(&repository, task.id).unwrap().unwrap();
+    assert_eq!(replaced.checklists.len(), 1);
+    assert_eq!(replaced.checklists[0].title, "Write failing test");
+    assert_eq!(replaced.status, TaskStatus::Todo);
+
+    TaskRepository::soft_delete(&repository, task.id).unwrap();
+    TaskRepository::restore(&repository, task.id).unwrap();
+    let restored = TaskRepository::find(&repository, task.id).unwrap().unwrap();
+    assert_eq!(restored.checklists.len(), 1);
+    assert_eq!(restored.checklists[0].id, item_one.id);
 
     let _ = std::fs::remove_file(path);
 }

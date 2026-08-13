@@ -1,4 +1,4 @@
-use crate::domain::{DeskTask, TaskStatus};
+use crate::domain::{DeskTask, TaskChecklistItem, TaskStatus};
 use crate::repository::{GoalRepository, SqliteRepository, TaskRepository};
 use chrono::{DateTime, Local};
 use uuid::Uuid;
@@ -299,5 +299,43 @@ impl TaskService {
 
     pub fn list_deleted_tasks(&self) -> Result<Vec<DeskTask>, String> {
         TaskRepository::list_deleted(&self.repo).map_err(|e| e.to_string())
+    }
+
+    pub fn update_task_checklists(
+        &self,
+        task_id: &str,
+        items: Vec<TaskChecklistItem>,
+    ) -> Result<DeskTask, String> {
+        let task_uuid = Uuid::parse_str(task_id).map_err(|e| e.to_string())?;
+        let task = TaskRepository::find(&self.repo, task_uuid)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Task not found: {task_id}"))?;
+
+        if task.status == TaskStatus::Done {
+            return Err("Completed todos cannot update checklists".to_string());
+        }
+
+        let normalized: Vec<TaskChecklistItem> = items
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, item)| {
+                let title = item.title.trim().to_string();
+                if title.is_empty() {
+                    return None;
+                }
+                Some(TaskChecklistItem {
+                    id: item.id,
+                    title,
+                    completed: item.completed,
+                    sort_order: index as i32,
+                })
+            })
+            .collect();
+
+        TaskRepository::replace_checklists(&self.repo, task_uuid, &normalized)
+            .map_err(|e| e.to_string())?;
+        TaskRepository::find(&self.repo, task_uuid)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Task not found after checklist update: {task_id}"))
     }
 }

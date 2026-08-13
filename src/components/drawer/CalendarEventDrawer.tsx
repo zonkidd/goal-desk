@@ -4,8 +4,7 @@ import { findCalendarEventAgendaItem } from '../../lib/eventkitTransform'
 import { useUiStore } from '../../store/uiStore'
 import { useEventkitStore } from '../../store/eventkitStore'
 import { getEventKitAdapter } from '../../lib/workspaceMutations'
-
-const drawerTransition = { type: 'spring', stiffness: 240, damping: 28 } as const
+import { DrawerSection, DrawerStack, drawerBackdropClassName, drawerBackdropMotion, drawerPaperVariants } from './drawerMotion'
 
 export function CalendarEventDrawer() {
   const calendarEvents = useEventkitStore((state) => state.rawEventKit.calendarEvents)
@@ -24,18 +23,16 @@ export function CalendarEventDrawer() {
           <motion.button
             type="button"
             aria-label="Close drawer backdrop"
-            className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            className={drawerBackdropClassName}
+            {...drawerBackdropMotion}
             onClick={onClose}
           />
           <motion.aside
-            className="glass-panel fixed bottom-4 right-4 top-4 z-50 flex w-[600px] flex-col rounded-3xl border border-white bg-white/95 shadow-2xl outline-none"
-            initial={{ x: '120%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '120%' }}
-            transition={drawerTransition}
+            className="glass-panel fixed bottom-4 right-4 top-4 z-50 flex w-[600px] origin-center flex-col rounded-3xl border border-white bg-white/95 shadow-2xl outline-none"
+            variants={drawerPaperVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
           >
             {/* Header */}
             <header className="flex shrink-0 items-center justify-between rounded-t-3xl border-b border-slate-100 bg-slate-50/50 p-6">
@@ -59,9 +56,8 @@ export function CalendarEventDrawer() {
             </header>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-8">
-                {/* Event Title */}
+            <DrawerStack className="flex-1 overflow-y-auto">
+              <DrawerSection className="p-8">
                 <h2 className="mb-6 text-2xl font-black text-slate-900">{event.title}</h2>
 
                 {/* Event Details */}
@@ -121,10 +117,9 @@ export function CalendarEventDrawer() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </DrawerSection>
 
-              {/* Action Area */}
-              <div className="border-t border-slate-100 bg-slate-50/80 p-8">
+              <DrawerSection className="border-t border-slate-100 bg-slate-50/80 p-8">
                 <button
                   type="button"
                    onClick={async () => {
@@ -143,8 +138,8 @@ export function CalendarEventDrawer() {
                 <p className="mt-3 text-center text-xs text-slate-500">
                   将跳转到系统日历应用查看完整事件详情
                 </p>
-              </div>
-            </div>
+              </DrawerSection>
+            </DrawerStack>
           </motion.aside>
         </>
       )}

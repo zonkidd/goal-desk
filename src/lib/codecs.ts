@@ -28,6 +28,12 @@ export interface RustTask {
     note: string | null
     timestamp: string
   }>
+  checklists?: Array<{
+    id: string
+    title: string
+    completed: boolean
+    sortOrder: number
+  }>
   deletedAt?: string | null
 }
 
@@ -67,6 +73,12 @@ export class TaskCodec {
         action: log.action as Task['activityLogs'][0]['action'],
         note: log.note ?? undefined,
         timestamp: new Date(log.timestamp),
+      })),
+      checklists: (rust.checklists ?? []).map((item) => ({
+        id: item.id,
+        title: item.title,
+        completed: item.completed,
+        sortOrder: item.sortOrder,
       })),
     }
   }

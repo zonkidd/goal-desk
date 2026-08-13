@@ -16,7 +16,7 @@ function MainApp() {
   const hydrateApp = useAppHydration()
   const receiveExternalTask = useReceiveExternalTask()
   const setLoading = useUiStore((state) => state.setLoading)
-  const setStatusMessage = useUiStore((state) => state.setStatusMessage)
+  const showErrorToast = useUiStore((state) => state.showErrorToast)
   const theme = useUiStore((state) => state.theme)
   useTaskGoalBridge()
   useGoalAreaBridge()
@@ -103,6 +103,7 @@ function MainApp() {
         return useAreaStore.getState().loadAreas()
       })
       .catch((error) => {
+        const statusMessage = `Unable to load workspace · ${error instanceof Error ? error.message : String(error)}`
         hydrateApp({
           tasks: [],
           goals: [],
@@ -111,19 +112,40 @@ function MainApp() {
             calendar: 'error',
             reminders: 'error',
           },
-          statusMessage: `Unable to load workspace · ${error instanceof Error ? error.message : String(error)}`,
+          statusMessage,
         })
+        showErrorToast(statusMessage)
       })
       .finally(() => {
         setLoading(false)
       })
-  }, [hydrateApp, setLoading])
+  }, [hydrateApp, setLoading, showErrorToast])
 
   return <AppShell />
 }
 
 export default function App() {
   const runtime = getRuntimeAdapter()
+
+  useEffect(() => {
+    if (!runtime.isTauri()) return
+
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      // Handle Command+W on macOS or Ctrl+W on Windows/Linux
+      if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
+        e.preventDefault()
+        try {
+          await getCurrentWindow().hide()
+        } catch (error) {
+          console.error('Failed to hide window on Cmd+W', error)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [runtime])
+
   if (runtime.isTauri() && runtime.getWindowLabel() === 'quick-capture') {
     return <QuickCaptureWindow />
   }

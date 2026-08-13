@@ -27,6 +27,7 @@ export interface UiStoreState {
   // 加载和状态消息
   isLoading: boolean
   statusMessage: string
+  errorToast: string | null
 
   // 抽屉状态
   activeDrawer: DrawerState | null
@@ -45,6 +46,8 @@ export interface UiStoreState {
   // Actions - 状态
   setLoading: (value: boolean) => void
   setStatusMessage: (value: string) => void
+  showErrorToast: (message: string) => void
+  dismissErrorToast: () => void
 
   // Actions - 抽屉
   openDrawer: (type: DrawerType, id?: string) => void
@@ -73,6 +76,7 @@ export const useUiStore = create<UiStoreState>((set, get) => ({
   backupDirectory: typeof window !== 'undefined' && typeof window.localStorage !== 'undefined' ? localStorage.getItem('kairos-backup-dir') : null,
   isLoading: true,
   statusMessage: '',
+  errorToast: null,
   activeDrawer: null,
   isQuickCaptureOpen: false,
   isSettingsOpen: false,
@@ -82,7 +86,7 @@ export const useUiStore = create<UiStoreState>((set, get) => ({
   setActiveArea: (area) => set({ activeArea: area }),
   setShowCompletedTodos: (value) => set({ showCompletedTodos: value }),
   setTheme: (theme) => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
       localStorage.setItem('kairos-theme', theme)
     }
     set({ theme })
@@ -99,6 +103,8 @@ export const useUiStore = create<UiStoreState>((set, get) => ({
   // 状态操作
   setLoading: (value) => set({ isLoading: value }),
   setStatusMessage: (value) => set({ statusMessage: value }),
+  showErrorToast: (message) => set({ errorToast: message }),
+  dismissErrorToast: () => set({ errorToast: null }),
 
   // 抽屉操作
   openDrawer: (type, id) => set({ activeDrawer: { type, id } }),
@@ -117,11 +123,13 @@ export const useUiStore = create<UiStoreState>((set, get) => ({
     if (runtime.isTauri() && runtime.getWindowLabel() !== 'quick-capture') {
       void openNativeQuickCaptureWindow()
         .then(() => set({ statusMessage: 'Quick capture ready' }))
-        .catch((error) =>
+        .catch((error) => {
+          const message = `Unable to open quick capture · ${error instanceof Error ? error.message : String(error)}`
           set({
-            statusMessage: `Unable to open quick capture · ${error instanceof Error ? error.message : String(error)}`,
-          }),
-        )
+            statusMessage: message,
+            errorToast: message,
+          })
+        })
       return
     }
 

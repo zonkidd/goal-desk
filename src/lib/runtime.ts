@@ -22,3 +22,11 @@ export async function hideCurrentWindow(): Promise<void> {
   if (!isTauriRuntime()) return
   await getCurrentWindow().hide()
 }
+
+/**
+ * 拖动当前窗口（仅 Tauri 环境）
+ */
+export async function startWindowDrag(): Promise<void> {
+  if (!isTauriRuntime()) return
+  await getCurrentWindow().startDragging()
+}

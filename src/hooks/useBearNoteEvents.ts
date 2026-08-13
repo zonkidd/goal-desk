@@ -23,7 +23,9 @@ export function useBearNoteEvents() {
 
     const error = listen<BearNoteErrorEvent>('bear-note:error', (event) => {
       useBearNoteStore.getState().receiveError(event.payload.message)
-      useUiStore.getState().setStatusMessage(`Bear note failed · ${event.payload.message}`)
+      const message = `Bear note failed · ${event.payload.message}`
+      useUiStore.getState().setStatusMessage(message)
+      useUiStore.getState().showErrorToast(message)
     })
 
     return () => {
