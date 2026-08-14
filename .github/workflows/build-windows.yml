@@ -1,0 +1,36 @@
+name: build-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex-bear-note-linking
+    paths:
+      - ".github/workflows/build-windows.yml"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Windows installer
+        run: npm run tauri -- build --bundles nsis
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kairos-windows-0.1.4
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/goal-desk-tauri.exe

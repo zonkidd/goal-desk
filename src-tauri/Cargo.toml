@@ -18,6 +18,9 @@ tokio = { version = "1", features = ["sync", "macros", "rt", "time"] }
 url = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 
+[target.'cfg(windows)'.dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
 tauri-plugin-deep-link = "2"
 tauri-plugin-global-shortcut = "2.3.2"
